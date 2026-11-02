@@ -228,6 +228,9 @@ class Store {
 
   // --- Medya ---
   async saveMedia(id, mime, buffer) {
+    if (this.sb) {
+      try { await this.sbUpload(id, mime, buffer); return 'storage'; } catch (e) { console.error('[storage]', e.message); }
+    }
     if (this.pg) {
       await this.pg.query(`INSERT INTO ${this.T('media')} (id, mime, data) VALUES ($1,$2,$3)`, [id, mime, buffer]);
       this.mediaBytes = (this.mediaBytes || 0) + buffer.length; this.mediaCount = (this.mediaCount || 0) + 1;
@@ -243,10 +246,62 @@ class Store {
     return 'disk';
   }
 
+  // ---- Supabase Storage (fotoğraf/video/ses ayrı depoda) ----
+  async initStorage() {
+    const url = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
+    const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) return;
+    this.sb = { url, key, bucket: process.env.SUPABASE_BUCKET || 'media' };
+    try {
+      const r = await this.sbFetch('/storage/v1/bucket', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: this.sb.bucket, name: this.sb.bucket, public: false, file_size_limit: 52428800 }) });
+      if (!r.ok && r.status !== 409 && r.status !== 400) throw new Error(`${r.status} ${(await r.text()).slice(0, 160)}`);
+      const t = await this.sbFetch(`/storage/v1/object/list/${this.sb.bucket}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefix: '', limit: 1 }) });
+      if (!t.ok) throw new Error(`${t.status} ${(await t.text()).slice(0, 160)}`);
+      console.log(`[store] Medya deposu: Supabase Storage (kova "${this.sb.bucket}")`);
+      if (this.pg) setTimeout(() => this.moveMediaToStorage().catch((e) => console.error('[storage] taşıma', e.message)), 3000);
+    } catch (e) {
+      console.error('[store] Supabase Storage kullanılamıyor, medya veritabanında kalacak:', e.message);
+      this.storageError = e.message; this.sb = null;
+    }
+  }
+  sbFetch(p, opts = {}) {
+    return fetch(this.sb.url + p, { ...opts, headers: { apikey: this.sb.key, Authorization: `Bearer ${this.sb.key}`, ...(opts.headers || {}) } });
+  }
+  async sbUpload(id, mime, buffer) {
+    const r = await this.sbFetch(`/storage/v1/object/${this.sb.bucket}/${id}`, { method: 'POST', headers: { 'Content-Type': mime, 'x-upsert': 'true', 'cache-control': 'max-age=31536000' }, body: buffer });
+    if (!r.ok) throw new Error(`Storage yükleme ${r.status} ${(await r.text()).slice(0, 160)}`);
+  }
+  // Veritabanındaki eski medyayı Storage'a taşı, ardından veritabanından sil (yer açılır)
+  async moveMediaToStorage() {
+    const T = this.T;
+    const { rows } = await this.pg.query(`SELECT id FROM ${T('media')}`);
+    if (!rows.length) return;
+    let moved = 0; let bytes = 0;
+    for (const { id } of rows) {
+      const r = await this.pg.query(`SELECT mime, data FROM ${T('media')} WHERE id=$1`, [id]);
+      const m = r.rows[0]; if (!m) continue;
+      try {
+        await this.sbUpload(id, m.mime, m.data);
+        await this.pg.query(`DELETE FROM ${T('media')} WHERE id=$1`, [id]);
+        moved++; bytes += m.data.length;
+      } catch (e) { console.error('[storage] taşınamadı', id, e.message); }
+    }
+    this.mediaBytes = Math.max(0, (this.mediaBytes || 0) - bytes); this.mediaCount = Math.max(0, (this.mediaCount || 0) - moved);
+    this.storageMove = { at: Date.now(), moved, mb: +(bytes / 1048576).toFixed(1) };
+    this.put('meta', { id: 'storage_move', ...this.storageMove });
+    console.log(`[storage] Veritabanından Storage'a taşındı: ${moved} dosya (${this.storageMove.mb} MB)`);
+  }
+
   // Medyayı kalıcı olarak sil; boşalan bayt sayısını döndürür
   async deleteMedia(id) {
     if (!/^[\w-]+$/.test(id)) return 0;
     let freed = 0;
+    if (this.sb) {
+      try {
+        const r = await this.sbFetch(`/storage/v1/object/${this.sb.bucket}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: [id] }) });
+        if (r.ok) { const arr = await r.json().catch(() => []); freed += arr.reduce((a, o) => a + (+(o.metadata?.size) || 0), 0); }
+      } catch (e) { console.error('[storage] silme', e.message); }
+    }
     if (this.pg) {
       const r = await this.pg.query(`DELETE FROM ${this.T('media')} WHERE id=$1 RETURNING length(data) AS n`, [id]);
       freed = +(r.rows[0]?.n || 0);
@@ -267,6 +322,12 @@ class Store {
 
   async loadMedia(id) {
     if (!/^[\w-]+$/.test(id)) return null;
+    if (this.sb) {
+      try {
+        const r = await this.sbFetch(`/storage/v1/object/${this.sb.bucket}/${id}`);
+        if (r.ok) return { mime: (r.headers.get('content-type') || 'application/octet-stream').split(';')[0], data: Buffer.from(await r.arrayBuffer()) };
+      } catch (e) { console.error('[storage] okuma', e.message); }
+    }
     if (this.pg) {
       const { rows } = await this.pg.query(`SELECT mime, data FROM ${this.T('media')} WHERE id=$1`, [id]);
       return rows[0] ? { mime: rows[0].mime, data: rows[0].data } : null;

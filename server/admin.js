@@ -782,6 +782,14 @@ module.exports = function mountAdmin(app, ctx) {
       migration: store.get('meta', 'migration'),
       limitMB: store.kind === 'postgres' && /supabase/.test(store.pgHost || '') ? 500 : store.kind === 'redis' ? 25 : null,
     };
+    out.storage = store.sb ? { bucket: store.sb.bucket, limitMB: 1024, move: store.get('meta', 'storage_move') } : null;
+    out.storageError = store.storageError || null;
+    if (store.pg && store.sb) {
+      try {
+        const q = await store.pg.query("select count(*)::int as n, coalesce(sum((metadata->>'size')::bigint),0)::bigint as b from storage.objects where bucket_id = $1", [store.sb.bucket]);
+        out.storage.count = q.rows[0].n; out.storage.mb = +(q.rows[0].b / 1048576).toFixed(1);
+      } catch (e) { out.storage.err = e.message; }
+    }
     if (store.pg) {
       try {
         const t = Date.now();

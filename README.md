@@ -64,6 +64,7 @@ Veriler Supabase PostgreSQL'de, `swipeup` şemasında (`docs` ve `media` tablola
 - `PG_SCHEMA=swipeup`
 - Tablo boşken ilk açılışta `REDIS_URL`'deki tüm veri ve medya otomatik taşınır (`MIGRATE_FROM_REDIS=0` ile kapatılır). PostgreSQL'e ulaşılamazsa uygulama Key Value ile çalışmaya devam eder.
 - Yönetim paneli → Veritabanı: bağlantı durumu, kullanılan alan, tablolar ve JSON yedek indirme.
+- Fotoğraf/video/ses: `SUPABASE_URL` ve `SUPABASE_SECRET_KEY` (Supabase → Project Settings → API Keys → Secret key) verilirse özel `media` kovasına (Supabase Storage, 1 GB ücretsiz) yazılır; veritabanındaki eski medya ilk açılışta oraya taşınıp veritabanından silinir. Anahtar yoksa medya veritabanında kalır.
 
 ## Render'da yayınlama
 

@@ -1578,6 +1578,7 @@ async function ensureFalci() {
 // ================= Başlat =================
 (async () => {
   await store.init();
+  await store.initStorage();
   const meta = store.get('meta', 'secrets') || store.put('meta', {
     id: 'secrets',
     jwt: crypto.randomBytes(32).toString('hex'),
