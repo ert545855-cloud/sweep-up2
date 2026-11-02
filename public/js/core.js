@@ -95,9 +95,13 @@ export function connectSocket() {
   s.on('connect', () => s.emit('visibility', document.visibilityState === 'visible'));
   document.addEventListener('visibilitychange', () => s.emit('visibility', document.visibilityState === 'visible'));
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',
+    'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'people:new', 'likes:new',
+    'call:incoming', 'call:accepted', 'call:ended', 'call:taken', 'call:signal',
     'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended']
     .forEach((ev) => s.on(ev, (d) => emit(ev, d)));
   s.on('presence', (d) => { state.presence.set(d.userId, d); emit('presence', d); });
+  s.on('presence:all', (ids) => { ids.forEach((id) => state.presence.set(id, { userId: id, online: true })); emit('presence', {}); });
+  s.on('connect', () => emit('reconnected'));
   s.on('lives', (l) => { state.lives = l; emit('lives', l); });
   return s;
 }
@@ -174,7 +178,7 @@ export function sheet(title, bodyHtml, { onMount, footer } = {}) {
 // ---- Avatar ----
 export function avatar(u, size = 44, { ring = false, dot = true } = {}) {
   const img = `<img class="av av-${size}" src="${esc(u?.avatar)}" alt="" loading="lazy">`;
-  const inner = ring && u?.live ? `<div class="ring">${img}</div>` : img;
+  const inner = ring && u?.live ? `<div class="ring live">${img}</div>` : img;
   return `<div class="av-wrap" data-presence="${esc(u?.id)}">${inner}${dot && u && isOn(u) ? '<i class="online"></i>' : ''}</div>`;
 }
 
@@ -227,6 +231,73 @@ export async function refreshBadges() {
   try { state.badges = await api('/badges'); emit('badges', state.badges); } catch {}
 }
 
+// ---- Logo ----
+export const logo = () => `<span class="mark">${icon('arrowUp')}</span>swipeup`;
+
+// ---- Engelle / şikayet ----
+const REASONS = [['spam', 'Spam ya da sahte hesap'], ['taciz', 'Taciz veya zorbalık'], ['uygunsuz', 'Uygunsuz fotoğraf ya da içerik'], ['dolandirici', 'Dolandırıcılık'], ['yas', '18 yaşından küçük olabilir'], ['diger', 'Diğer']];
+export function reportUser(u, { ref } = {}) {
+  sheet(`${u.name || u.username} kişisini şikayet et`, `<p class="muted" style="margin:0 16px 12px">Şikayetin gizli tutulur; ${esc(u.name || u.username)} kimin bildirdiğini görmez.</p>
+    <form class="rf"><div class="radio-list">${REASONS.map(([k, l], i) => `<label><input type="radio" name="r" value="${k}" ${i ? '' : 'checked'}>${l}</label>`).join('')}</div>
+    <div style="padding:0 16px 8px"><textarea class="field" name="d" placeholder="Eklemek istediğin bir şey var mı? (isteğe bağlı)" maxlength="1000"></textarea></div>
+    <label class="list-item" style="gap:10px"><input type="checkbox" name="b" checked style="accent-color:var(--uv);width:18px;height:18px">Bu kişiyi engelle</label>
+    <div style="padding:8px 16px 16px"><button class="btn hot block">Şikayet et</button></div></form>`, {
+    onMount(sh, close) {
+      const f = sh.querySelector('form');
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+          await api(`/users/${u.id}/report`, { body: { reason: f.r.value, details: f.d.value, ref } });
+          if (f.b.checked) await api(`/users/${u.id}/block`, { body: {} });
+          close();
+          toast(f.b.checked ? 'Şikayetin alındı ve kişi engellendi.' : 'Şikayetin alındı, teşekkürler.');
+          if (f.b.checked) emit('user:blocked', u.id);
+        } catch (er) { toast(er.message); }
+      };
+    },
+  });
+}
+export async function blockUser(u) {
+  if (!confirm(`${u.name || u.username} engellensin mi? Seni göremez, sana mesaj atamaz; eşleşmeniz ve sohbetiniz silinir.`)) return false;
+  try { await api(`/users/${u.id}/block`, { body: {} }); toast('Engellendi.'); emit('user:blocked', u.id); return true; } catch (e) { toast(e.message); return false; }
+}
+export async function unmatchUser(u) {
+  if (!confirm(`${u.name || u.username} ile eşleşme kaldırılsın mı? Sohbetiniz de silinir.`)) return false;
+  try { await api(`/users/${u.id}/unmatch`, { body: {} }); toast('Eşleşme kaldırıldı.'); return true; } catch (e) { toast(e.message); return false; }
+}
+
+// ---- Ses kaydı ----
+export function audioRecorder() {
+  let rec = null; let chunks = []; let stream = null; let started = 0;
+  const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg'].find((t) => window.MediaRecorder?.isTypeSupported?.(t)) || '';
+  return {
+    supported: !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder),
+    async start() {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      chunks = [];
+      rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+      rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      rec.start(250); started = Date.now();
+    },
+    elapsed: () => (started ? (Date.now() - started) / 1000 : 0),
+    stop(cancel) {
+      return new Promise((resolve) => {
+        if (!rec) return resolve(null);
+        const dur = (Date.now() - started) / 1000;
+        rec.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          const mime = (rec.mimeType || type || 'audio/webm').split(';')[0];
+          const blob = new Blob(chunks, { type: mime });
+          rec = null; started = 0;
+          resolve(cancel || dur < 0.8 ? null : { file: new File([blob], `ses.${mime.includes('mp4') ? 'm4a' : mime.split('/')[1]}`, { type: mime }), duration: dur });
+        };
+        rec.stop();
+      });
+    },
+  };
+}
+export const fmtDur = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
 // ---- Beğeni ----
 export async function toggleLike(post, btn, force) {
   const want = force ?? !post.liked;
@@ -243,8 +314,6 @@ export function paintLike(btn, post) {
   btn.classList.toggle('liked', post.liked);
   const c = btn.querySelector('.cnt');
   if (c) c.textContent = post.likeCount ? num(post.likeCount) : '';
-  const lc = btn.closest('[data-post]')?.querySelector('.like-count');
-  if (lc) lc.textContent = `${num(post.likeCount)} beğenme`;
 }
 export function heartBurst(container) {
   const h = el(`<div class="big-heart">${icon('heart')}</div>`);

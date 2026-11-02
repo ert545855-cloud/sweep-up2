@@ -5,7 +5,7 @@ import {
 import { notifSettings } from './profile.js';
 
 const href = (n) => ({
-  match: '#/chats', live: `#/live/${n.fromId}`, follow: `#/u/${n.from?.username}`, super: '#/swipe',
+  match: '#/chats', live: `#/live/${n.fromId}`, follow: `#/u/${n.from?.username}`, super: '#/likes', liked: '#/likes', group: '#/chats', missed: '#/chats',
 }[n.type] || `#/p/${n.ref}`);
 
 export default async function notifications(view) {
@@ -21,15 +21,16 @@ export default async function notifications(view) {
   const following = new Set((await api(`/users/${state.me.id}/following`)).map((u) => u.id));
 
   const row = (n) => `<a class="notif ${n.read ? '' : 'unread'}" href="${esc(href(n))}">
-      ${avatar(n.from, 44, { ring: true })}
+      ${n.from ? avatar(n.from, 44, { ring: true }) : `<span class="ic">${icon('heart', '', 'fill="currentColor"')}</span>`}
       <div class="t">${esc(n.text)} <span class="muted">${ago(n.at)}</span></div>
       ${n.type === 'follow' && n.from && !following.has(n.from.id) ? `<button class="btn primary fb" data-id="${esc(n.from.id)}">Takip et</button>` : ''}
-      ${n.type === 'match' ? `<span style="color:var(--red)">${icon('heart', '', 'fill="currentColor"')}</span>` : ''}
-      ${n.type === 'live' ? `<span style="color:var(--red)">${icon('live')}</span>` : ''}
+      ${n.type === 'match' ? `<span style="color:var(--hot)">${icon('heart', '', 'fill="currentColor"')}</span>` : ''}
+      ${n.type === 'live' ? `<span style="color:var(--hot)">${icon('live')}</span>` : ''}
+      ${n.type === 'missed' ? `<span style="color:var(--hot)">${icon('phone')}</span>` : ''}
     </a>`;
   const paint = () => {
     if (!list.length) {
-      nl.innerHTML = `<div class="empty"><div class="big">${icon('heart')}</div><h2>Gönderilerindeki etkileşimler</h2>Biri seni beğendiğinde, takip ettiğinde ya da eşleştiğinde burada görürsün.</div>`;
+      nl.innerHTML = `<div class="empty"><div class="big">${icon('bell')}</div><h2>Henüz bildirim yok</h2>Biri seni beğendiğinde, takip ettiğinde ya da eşleştiğinde burada görürsün.</div>`;
       return;
     }
     const day = Date.now() - 86400000;

@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  api, toast, pickFile, compressImage, uploadFile, esc,
+  api, toast, pickFile, compressImage, uploadFile, esc, state,
 } from '../core.js';
 
 // Videodan kapak karesi üret
@@ -24,17 +24,19 @@ function posterFrom(file) {
 }
 
 export default function create(view, kind) {
-  let mode = kind === 'reel' ? 'reel' : 'image';
+  let mode = ['reel', 'story'].includes(kind) ? kind : 'image';
+  const TITLES = { image: 'Yeni gönderi', reel: 'Yeni reels', story: 'Yeni hikaye' };
   let file = null;
 
   view.innerHTML = `<header class="topbar bordered">
       <button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Kapat">${icon('close')}</button>
-      <div class="center">Yeni ${mode === 'reel' ? 'reels' : 'gönderi'}</div>
+      <div class="center">${TITLES[mode]}</div>
       <button class="link go" style="padding:0 6px" disabled>Paylaş</button>
     </header>
     <div class="create">
       <div class="seg" role="tablist">
         <button data-m="image" class="${mode === 'image' ? 'on' : ''}">Gönderi</button>
+        <button data-m="story" class="${mode === 'story' ? 'on' : ''}">Hikaye</button>
         <button data-m="reel" class="${mode === 'reel' ? 'on' : ''}">Reels</button>
         <button data-m="live">Canlı</button>
       </div>
@@ -48,15 +50,16 @@ export default function create(view, kind) {
   const title = view.querySelector('.center');
   const goBtns = view.querySelectorAll('.go, .go2');
   const paintPicker = () => {
-    picker.className = `picker ${mode === 'reel' ? 'reel' : ''}`;
-    title.textContent = `Yeni ${mode === 'reel' ? 'reels' : 'gönderi'}`;
+    picker.className = `picker ${mode !== 'image' ? 'reel' : ''}`;
+    title.textContent = TITLES[mode];
+    view.querySelector('.cap').hidden = mode === 'story';
     if (file) {
       const url = URL.createObjectURL(file);
       picker.innerHTML = file.type.startsWith('video') ? `<video src="${url}" autoplay muted loop playsinline></video>` : `<img src="${url}" alt="Önizleme">`;
     } else {
       picker.innerHTML = `<div>${icon(mode === 'reel' ? 'video' : 'image', '', 'style="width:56px;height:56px;margin:0 auto 10px"')}
-        <div class="b" style="color:var(--text)">${mode === 'reel' ? 'Video seç' : 'Fotoğraf seç'}</div>
-        <div>${mode === 'reel' ? 'Dikey video önerilir, en fazla 40 MB' : 'Galeriden seç ya da fotoğraf çek'}</div></div>`;
+        <div class="b" style="color:var(--text)">${{ reel: 'Video seç', story: 'Fotoğraf ya da video seç', image: 'Fotoğraf seç' }[mode]}</div>
+        <div>${{ reel: 'Dikey video önerilir, en fazla 40 MB', story: '24 saat sonra kendiliğinden kaybolur', image: 'Galeriden seç ya da fotoğraf çek' }[mode]}</div></div>`;
     }
     goBtns.forEach((b) => { b.disabled = !file; });
   };
@@ -70,7 +73,7 @@ export default function create(view, kind) {
     paintPicker();
   };
   picker.onclick = async () => {
-    const f = await pickFile(mode === 'reel' ? 'video/*' : 'image/*');
+    const f = await pickFile({ reel: 'video/*', story: 'image/*,video/*', image: 'image/*' }[mode]);
     if (!f) return;
     if (f.size > 40 * 1024 * 1024) return toast('Dosya en fazla 40 MB olabilir.');
     file = f; paintPicker();
@@ -88,7 +91,14 @@ export default function create(view, kind) {
         const pf = await posterFrom(file);
         if (pf) poster = (await uploadFile(pf)).url;
       }
-      const up = await uploadFile(mode === 'image' ? await compressImage(file) : file, (p) => { fill.style.width = `${Math.round(p * 100)}%`; });
+      const isImg = file.type.startsWith('image/');
+      const up = await uploadFile(isImg ? await compressImage(file) : file, (p) => { fill.style.width = `${Math.round(p * 100)}%`; });
+      if (mode === 'story') {
+        await api('/stories', { body: { media: up.url, mediaType: isImg ? 'image' : 'video' } });
+        toast('Hikayen paylaşıldı.');
+        location.hash = `#/stories/${state.me.id}`;
+        return;
+      }
       const p = await api('/posts', { body: { type: mode, media: up.url, poster, caption: view.querySelector('.cap').value } });
       toast(mode === 'reel' ? 'Reels paylaşıldı.' : 'Gönderi paylaşıldı.');
       location.hash = mode === 'reel' ? `#/reels/${p.id}` : '#/me';

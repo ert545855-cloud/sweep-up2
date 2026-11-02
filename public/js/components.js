@@ -1,30 +1,29 @@
 import { icon } from './icons.js';
 import {
-  esc, ago, num, avatar, toggleLike, heartBurst, onDoubleTap, openComments, sharePost, saved, sheet, api, toast, state, isVideo,
+  esc, ago, num, avatar, reportUser, toggleLike, heartBurst, onDoubleTap, openComments, sharePost, saved, sheet, api, toast, state, isVideo,
 } from './core.js';
 
 export function postCard(p) {
   const vid = p.type === 'reel' || isVideo(p.media);
   return `<article class="post" data-post="${esc(p.id)}">
     <header class="post-h">
-      <a href="#/u/${esc(p.user.username)}" class="row grow" style="gap:10px">${avatar(p.user, 32, { ring: true })}
-        <span class="grow ellipsis"><span class="u">${esc(p.user.username)}</span> <span class="muted">• ${ago(p.createdAt)}</span></span></a>
+      <a href="#/u/${esc(p.user.username)}" class="row grow" style="gap:10px">${avatar(p.user, 40, { ring: true })}
+        <span class="grow" style="line-height:1.25"><span class="u ellipsis" style="display:block">${esc(p.user.name)}</span><span class="muted" style="font-size:13px">@${esc(p.user.username)} · ${ago(p.createdAt)}</span></span></a>
       <button class="more" aria-label="Diğer seçenekler">${icon('more')}</button>
     </header>
     <div class="post-media">${vid
     ? `<video src="${esc(p.media)}" ${p.poster ? `poster="${esc(p.poster)}"` : ''} muted loop playsinline preload="metadata"></video>`
     : `<img src="${esc(p.media)}" alt="${esc(p.caption || 'Gönderi')}" loading="lazy">`}</div>
     <div class="post-actions">
-      <button class="like ${p.liked ? 'liked' : ''}" aria-label="Beğen">${icon('heart')}</button>
-      <button class="cm" aria-label="Yorum yap">${icon('comment')}</button>
+      <button class="like ${p.liked ? 'liked' : ''}" aria-label="Beğen">${icon('heart')}<span class="cnt">${p.likeCount ? num(p.likeCount) : ''}</span></button>
+      <button class="cm" aria-label="Yorum yap">${icon('comment')}<span>${p.commentCount ? num(p.commentCount) : ''}</span></button>
       <button class="sh" aria-label="Paylaş">${icon('send')}</button>
       <span class="sp"></span>
       <button class="sv" aria-label="Kaydet">${icon('bookmark', '', saved.has(p.id) ? 'fill="currentColor"' : '')}</button>
     </div>
     <div class="post-body">
-      <span class="b like-count">${num(p.likeCount)} beğenme</span>
-      ${p.caption ? `<div><a class="b" href="#/u/${esc(p.user.username)}">${esc(p.user.username)}</a> ${esc(p.caption)}</div>` : ''}
-      ${p.commentCount ? `<button class="muted cm2" style="text-align:left">${p.commentCount} yorumun tümünü gör</button>` : '<button class="muted cm2" style="text-align:left">Yorum ekle...</button>'}
+      ${p.caption ? `<div>${esc(p.caption)}</div>` : ''}
+      ${p.commentCount ? `<button class="muted cm2" style="text-align:left">${p.commentCount} yorumu gör</button>` : ''}
     </div>
   </article>`;
 }
@@ -51,7 +50,7 @@ export function wirePost(root, p, onRemove) {
       <button data-a="share">${icon('share')}Paylaş</button>
       <button data-a="link">${icon('link')}Bağlantıyı kopyala</button>
       <button data-a="profile">${icon('person')}Profile git</button>
-      ${mine ? `<button data-a="del" class="danger">${icon('trash')}Sil</button>` : ''}
+      ${mine ? `<button data-a="del" class="danger">${icon('trash')}Sil</button>` : `<button data-a="report" class="danger">${icon('flag')}Şikayet et</button>`}
     </div>`, {
       onMount(sh, close) {
         sh.querySelector('.menu').onclick = async (e) => {
@@ -60,6 +59,7 @@ export function wirePost(root, p, onRemove) {
           if (a === 'share') sharePost(p);
           if (a === 'link') { await navigator.clipboard?.writeText(`${location.origin}/#/p/${p.id}`); toast('Bağlantı kopyalandı.'); }
           if (a === 'profile') location.hash = `#/u/${p.user.username}`;
+          if (a === 'report') reportUser(p.user, { ref: p.id });
           if (a === 'del') {
             if (!confirm('Bu gönderi silinsin mi?')) return;
             try { await api(`/posts/${p.id}`, { method: 'DELETE' }); root.remove(); onRemove?.(); toast('Gönderi silindi.'); } catch (er) { toast(er.message); }

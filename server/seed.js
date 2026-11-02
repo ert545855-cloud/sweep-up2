@@ -4,6 +4,10 @@
 const bcrypt = require('bcryptjs');
 const { nanoid } = require('nanoid');
 
+const CITY = {
+  'İstanbul': [41.01, 28.98], Ankara: [39.93, 32.86], 'İzmir': [38.42, 27.14], Antalya: [36.9, 30.7],
+  Bursa: [40.19, 29.06], 'Eskişehir': [39.78, 30.52], Trabzon: [41.0, 39.72],
+};
 const avatar = (seed, bg) => `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(seed)}&backgroundColor=${bg}`;
 const photo = (seed, w = 1080, h = 1350) => `https://picsum.photos/seed/${seed}/${w}/${h}`;
 const V = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/';
@@ -82,8 +86,11 @@ async function seed(store) {
       createdAt: now - i * 3600000 * 7,
     });
   });
+  users.slice(0, 5).forEach((u, i) => store.put('stories', {
+    id: nanoid(12), userId: u.id, media: photo(`${u.username}-story`, 720, 1280), mediaType: 'image', at: now - i * 3600000, viewers: [],
+  }));
   store.put('meta', { id: 'seed', at: now });
   console.log('[seed] örnek içerik eklendi');
 }
 
-module.exports = { seed };
+module.exports = { seed, CITY };

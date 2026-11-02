@@ -1,25 +1,68 @@
-import { api, setSession, esc } from '../core.js';
+import { api, setSession, esc, logo, state, toast } from '../core.js';
 import { icon } from '../icons.js';
 
-export default function auth(view, mode) {
-  const reg = mode === 'register';
+function codeScreen(view, code, next) {
   view.innerHTML = `<section class="auth">
-    <div class="wordmark">SwipeUp</div>
-    <p class="tagline">${reg ? 'Kaydır, eşleş, reels izle ve canlı yayında buluş.' : 'Tekrar hoş geldin.'}</p>
+    <div class="wordmark">${logo()}</div>
+    <h2 style="text-align:center;margin:16px 0 6px;font-size:24px">Kurtarma kodun</h2>
+    <p class="tagline" style="margin-bottom:18px">Şifreni unutursan hesabına bu kodla dönebilirsin. Ekran görüntüsü al ya da bir yere not et; bir daha gösterilmeyecek.</p>
+    <div class="code-box">${esc(code)}</div>
+    <div style="display:grid;gap:10px;margin-top:18px">
+      <button class="btn outline block cp">${icon('copy')} Kodu kopyala</button>
+      <button class="btn primary block go">Kaydettim, devam et</button>
+    </div></section>`;
+  view.querySelector('.cp').onclick = async () => { await navigator.clipboard?.writeText(code); toast('Kod kopyalandı.'); };
+  view.querySelector('.go').onclick = next;
+}
+
+function forgot(view) {
+  const emailOn = state.config?.emailReset;
+  view.innerHTML = `<section class="auth">
+    <div class="wordmark">${logo()}</div>
+    <h2 style="text-align:center;margin:16px 0 6px;font-size:24px">Şifreni sıfırla</h2>
+    <p class="tagline">${emailOn ? 'Kullanıcı adını ya da e-postanı yaz. Hesabına bağlı e-postaya 6 haneli bir kod göndereceğiz. Kurtarma kodunu da kullanabilirsin.' : 'Kayıt olurken aldığın 12 karakterlik kurtarma kodunu gir.'}</p>
     <form novalidate>
-      ${reg ? '<input class="field" name="name" placeholder="Ad Soyad" autocomplete="name" maxlength="40">' : ''}
-      <input class="field" name="username" placeholder="Kullanıcı adı" autocomplete="username" autocapitalize="none" spellcheck="false" required>
-      <input class="field" name="password" type="password" placeholder="Şifre" autocomplete="${reg ? 'new-password' : 'current-password'}" required>
-      <button class="btn primary block" style="margin-top:8px">${reg ? 'Kaydol' : 'Giriş yap'}</button>
+      <input class="field" name="login" placeholder="Kullanıcı adı veya e-posta" autocapitalize="none" spellcheck="false" required>
+      ${emailOn ? '<button type="button" class="btn outline block send">E-postama kod gönder</button>' : ''}
+      <input class="field" name="code" placeholder="${emailOn ? 'E-postadaki kod ya da kurtarma kodu' : 'Kurtarma kodu (ör. ABCD-EFGH-JKLM)'}" autocapitalize="characters" autocomplete="one-time-code">
+      <input class="field" name="password" type="password" placeholder="Yeni şifre" autocomplete="new-password">
+      <button class="btn primary block">Şifreyi değiştir</button>
       <div class="err" role="alert"></div>
     </form>
-    <div class="switch">${reg ? 'Hesabın var mı? <a class="link" href="#/login">Giriş yap</a>' : 'Hesabın yok mu? <a class="link" href="#/register">Kaydol</a>'}</div>
-    <div class="promo">
-      <div>${icon('flame')}Kaydır ve eşleş</div>
-      <div>${icon('reels')}Reels izle</div>
-      <div>${icon('live')}Canlı yayın aç</div>
-      <div>${icon('send')}Anında mesajlaş</div>
-    </div>
+    <div class="switch"><a class="link" href="#/login">Girişe dön</a></div></section>`;
+  const f = view.querySelector('form'); const err = view.querySelector('.err');
+  view.querySelector('.send')?.addEventListener('click', async () => {
+    err.textContent = '';
+    if (!f.login.value.trim()) { err.textContent = 'Önce kullanıcı adını ya da e-postanı yaz.'; return; }
+    try { await api('/auth/forgot', { body: { login: f.login.value } }); toast('Hesabında e-posta kayıtlıysa kod gönderildi. Gereksiz klasörünü de kontrol et.', { ms: 5000 }); f.code.focus(); } catch (e) { err.textContent = e.message; }
+  });
+  f.onsubmit = async (e) => {
+    e.preventDefault(); err.textContent = '';
+    try {
+      const r = await api('/auth/reset', { body: { login: f.login.value, code: f.code.value, password: f.password.value } });
+      setSession(r.token, r.user);
+      const done = () => { location.hash = '#/'; location.reload(); };
+      if (r.recoveryCode) codeScreen(view, r.recoveryCode, done); else { toast('Şifren değişti.'); done(); }
+    } catch (er) { err.textContent = er.message; }
+  };
+}
+
+export default function auth(view, mode) {
+  if (mode === 'forgot') return forgot(view);
+  const reg = mode === 'register';
+  view.innerHTML = `<section class="auth">
+    <div class="wordmark">${logo()}</div>
+    <p class="tagline">${reg ? 'Kaydır, eşleş, reels izle, canlı yayında buluş.' : 'Kaydırmaya kaldığın yerden devam et.'}</p>
+    <form novalidate>
+      ${reg ? '<input class="field" name="name" placeholder="Adın" autocomplete="name" maxlength="40">' : ''}
+      <input class="field" name="username" placeholder="${reg ? 'Kullanıcı adı' : 'Kullanıcı adı veya e-posta'}" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      ${reg ? '<input class="field" name="email" type="email" placeholder="E-posta (şifre sıfırlama için, isteğe bağlı)" autocomplete="email">' : ''}
+      <input class="field" name="password" type="password" placeholder="Şifre" autocomplete="${reg ? 'new-password' : 'current-password'}" required>
+      <button class="btn primary block" style="margin-top:6px">${reg ? 'Hesap oluştur' : 'Giriş yap'}</button>
+      <div class="err" role="alert"></div>
+    </form>
+    ${reg ? '' : '<div class="forgot"><a class="muted" href="#/forgot">Şifreni mi unuttun?</a></div>'}
+    <div class="switch">${reg ? 'Hesabın var mı? <a class="link" href="#/login">Giriş yap</a>' : 'Yeni misin? <a class="link" href="#/register">Hesap oluştur</a>'}</div>
   </section>`;
   const f = view.querySelector('form');
   const err = view.querySelector('.err');
@@ -28,17 +71,16 @@ export default function auth(view, mode) {
     const btn = f.querySelector('button');
     btn.disabled = true; err.textContent = '';
     try {
-      const body = { username: f.username.value, password: f.password.value, ...(reg ? { name: f.name.value } : {}) };
+      const body = { username: f.username.value, password: f.password.value, ...(reg ? { name: f.name.value, email: f.email.value } : {}) };
       const r = await api(reg ? '/auth/register' : '/auth/login', { body });
       setSession(r.token, r.user);
-      location.hash = reg ? '#/edit' : '#/';
-      location.reload();
+      const go = () => { location.hash = reg ? '#/edit' : '#/'; location.reload(); };
+      if (r.recoveryCode) codeScreen(view, r.recoveryCode, go); else go();
     } catch (er) {
       err.textContent = er.message;
       btn.disabled = false;
     }
   };
-  f.username.addEventListener('input', () => { f.username.value = f.username.value.toLowerCase().replace(/\s/g, ''); });
+  f.username.addEventListener('input', () => { if (reg) f.username.value = f.username.value.toLowerCase().replace(/\s/g, ''); });
   return null;
 }
-export { esc };

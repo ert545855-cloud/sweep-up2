@@ -2,7 +2,6 @@ import { icon } from '../icons.js';
 import {
   state, api, esc, toast, pickFile, compressImage, uploadFile,
 } from '../core.js';
-import { notifSettings, themeMenu } from './profile.js';
 
 export default function edit(view) {
   const me = state.me;
@@ -33,10 +32,6 @@ export default function edit(view) {
       </div>
       <label>İlgi alanları<input class="field" name="interests" value="${esc((me.interests || []).join(', '))}" placeholder="Müzik, Kahve, Seyahat"></label>
       <div><div class="b" style="font-size:13px;margin-bottom:6px">Kaydırma fotoğrafları</div><div class="photos-edit"></div></div>
-      <div>
-        <div class="toggle-row"><span class="grow">Bildirimler</span><button type="button" class="btn nt">Ayarla</button></div>
-        <div class="toggle-row"><span class="grow">Görünüm</span><button type="button" class="btn th">Değiştir</button></div>
-      </div>
       <button class="btn primary block">Kaydet</button>
     </form>`;
 
@@ -62,8 +57,6 @@ export default function edit(view) {
       avatarUrl = up.url; view.querySelector('.avatar-edit img').src = avatarUrl;
     } catch (er) { toast(er.message); }
   };
-  view.querySelector('.nt').onclick = notifSettings;
-  view.querySelector('.th').onclick = themeMenu;
 
   const save = async (e) => {
     e?.preventDefault();

@@ -27,7 +27,9 @@ export default async function search(view) {
     }, 180);
   };
 
-  const posts = await api('/explore');
-  ex.innerHTML = `<div class="grid explore">${posts.map(gridTile).join('')}</div>`;
+  const [posts, people] = await Promise.all([api('/explore'), api('/people')]);
+  ex.innerHTML = `${people.length ? `<div class="section-t"><span>Kişiler</span></div>${people.slice(0, 8).map((u) => `<a class="list-item" href="#/u/${esc(u.username)}">${avatar(u, 44, { ring: true })}
+      <div class="grow"><div class="b">${esc(u.name)}</div><div class="sub">@${esc(u.username)}${u.online ? ' · çevrimiçi' : ''}</div></div></a>`).join('')}` : ''}
+    <div class="section-t"><span>Keşfet</span></div><div class="grid explore">${posts.map(gridTile).join('')}</div>`;
   return null;
 }

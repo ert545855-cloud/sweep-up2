@@ -1,5 +1,5 @@
 // SwipeUp service worker: anlık bildirimler + çevrimdışı kabuk
-const CACHE = 'swipeup-v2';
+const CACHE = 'swipeup-v3';
 const SHELL = ['/', '/css/app.css', '/js/app.js', '/js/core.js', '/js/icons.js', '/js/components.js', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
@@ -32,7 +32,8 @@ self.addEventListener('push', (e) => {
     tag: d.tag,
     renotify: !!d.tag,
     data: { url: d.url || '/' },
-    vibrate: [40, 30, 40],
+    vibrate: d.call ? [400, 200, 400, 200, 400] : [40, 30, 40],
+    requireInteraction: !!d.call,
   }));
 });
 

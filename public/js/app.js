@@ -1,24 +1,30 @@
 import { icon } from './icons.js';
 import {
-  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, avatar,
+  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el,
 } from './core.js';
+import { initCalls } from './calls.js';
 
 const routes = [
   [/^\/?$/, 'feed', { tab: 'home' }],
   [/^\/search$/, 'search', { tab: 'home' }],
   [/^\/reels(?:\/([\w-]+))?$/, 'reels', { tab: 'reels', dark: true }],
   [/^\/swipe$/, 'swipe', { tab: 'swipe' }],
+  [/^\/likes$/, 'likes', { tab: 'swipe' }],
   [/^\/chats$/, 'chats', { tab: 'chats' }],
   [/^\/chat\/([\w-]+)$/, 'chat', { tabs: false }],
+  [/^\/chat\/([\w-]+)\/info$/, 'chatinfo', { tabs: false }],
+  [/^\/group\/new$/, 'groupnew', { tabs: false }],
   [/^\/live$/, 'live', { tabs: false }],
   [/^\/live\/([\w-]+)$/, 'live', { tabs: false }],
+  [/^\/stories\/([\w-]+)$/, 'stories', { tabs: false }],
   [/^\/notifications$/, 'notifications', { tab: 'home' }],
   [/^\/me$/, 'profile', { tab: 'me' }],
   [/^\/u\/([\w.]+)$/, 'profile', { tab: 'me' }],
   [/^\/edit$/, 'edit', { tabs: false }],
+  [/^\/settings$/, 'settings', { tabs: false }],
   [/^\/create(?:\/(\w+))?$/, 'create', { tabs: false }],
   [/^\/p\/([\w-]+)$/, 'post', { tab: 'home' }],
-  [/^\/(login|register)$/, 'auth', { tabs: false, public: true }],
+  [/^\/(login|register|forgot)$/, 'auth', { tabs: false, public: true }],
 ];
 
 const view = document.getElementById('view');
@@ -29,13 +35,13 @@ let navToken = 0;
 function renderTabbar(active) {
   const b = state.badges;
   const tabs = [
-    ['home', '#/', icon(active === 'home' ? 'homeFill' : 'home'), 'Ana sayfa'],
-    ['reels', '#/reels', icon('reels'), 'Reels'],
-    ['swipe', '#/swipe', icon('flame'), 'Keşfet ve eşleş'],
-    ['chats', '#/chats', `<span style="position:relative;display:grid">${icon('send')}${b.messages ? `<span class="num-badge">${b.messages}</span>` : ''}</span>`, 'Mesajlar'],
-    ['me', '#/me', `<img class="me-av" src="${esc(state.me?.avatar)}" alt="">${b.notifications ? '<i class="dot-badge"></i>' : ''}`, 'Profil'],
+    ['home', '#/', icon(active === 'home' ? 'homeFill' : 'home'), 'Ana sayfa', ''],
+    ['reels', '#/reels', icon('reels'), 'Reels', ''],
+    ['swipe', '#/swipe', `<span class="center">${icon('flame')}${b.likes ? `<span class="num-badge">${b.likes > 99 ? '99+' : b.likes}</span>` : ''}</span>`, 'Kaydır ve eşleş', 'mid'],
+    ['chats', '#/chats', `<span style="position:relative;display:grid">${icon('send')}${b.messages ? `<span class="num-badge">${b.messages}</span>` : ''}</span>`, 'Mesajlar', ''],
+    ['me', '#/me', `<img class="me-av" src="${esc(state.me?.avatar)}" alt="">${b.notifications ? '<i class="dot-badge"></i>' : ''}`, 'Profil', ''],
   ];
-  tabbar.innerHTML = tabs.map(([k, href, ic, label]) => `<a href="${href}" class="${k === active ? 'on' : ''}" aria-label="${label}"><span class="pill">${ic}</span></a>`).join('');
+  tabbar.innerHTML = tabs.map(([k, href, ic, label, cls]) => `<a href="${href}" class="${k === active ? 'on' : ''} ${cls}" aria-label="${label}">${ic}</a>`).join('');
 }
 on('badges', () => renderTabbar(tabbar.dataset.active));
 
@@ -57,7 +63,7 @@ async function router() {
   tabbar.dataset.active = match.opts.tab || '';
   if (state.me) renderTabbar(match.opts.tab);
   view.innerHTML = '';
-  view.scrollTop = 0; window.scrollTo(0, 0);
+  window.scrollTo(0, 0);
   try {
     const mod = await import(`./views/${match.name}.js`);
     if (my !== navToken) return;
@@ -66,29 +72,35 @@ async function router() {
     cleanup = c || null;
   } catch (e) {
     console.error(e);
-    view.innerHTML = `<div class="empty"><h2>Bu sayfa açılamadı</h2>${esc(e.message)}<p><a class="link" href="#/">Ana sayfaya dön</a></p></div>`;
+    view.innerHTML = `<div class="empty"><div class="big">${icon('close')}</div><h2>Bu sayfa açılamadı</h2>${esc(e.message)}<p><a class="btn primary" href="#/">Ana sayfaya dön</a></p></div>`;
   }
 }
 
 // ---- Global gerçek zamanlı olaylar ----
 function wireRealtime() {
   connectSocket();
+  initCalls();
   on('notification', (n) => {
     state.badges.notifications++; emit('badges', state.badges);
-    if (location.hash !== '#/notifications') {
-      const href = n.type === 'match' ? '#/chats' : n.type === 'live' ? `#/live/${n.fromId}` : n.type === 'follow' ? `#/u/${n.from?.username}` : `#/p/${n.ref}`;
-      toast(n.text, { title: n.from?.name, img: n.from?.avatar, href });
-    }
+    if (location.hash === '#/notifications') return;
+    const href = {
+      match: '#/chats', live: `#/live/${n.fromId}`, follow: `#/u/${n.from?.username}`, super: '#/likes', liked: '#/likes', group: '#/chats', missed: '#/chats',
+    }[n.type] || `#/p/${n.ref}`;
+    toast(n.text, { title: n.type === 'liked' ? 'Yeni beğeni' : n.from?.name, img: n.type === 'liked' ? null : n.from?.avatar, href });
   });
+  on('likes:new', () => refreshBadges());
   on('message', (m) => {
-    if (m.from === state.me.id) return;
+    if (m.from === state.me.id || m.system) return;
     const inChat = location.hash === `#/chat/${m.chatId}` && document.visibilityState === 'visible';
     if (!inChat) {
       refreshBadges();
-      api(`/users/${m.from}`).then((u) => toast(m.text || '📷 Fotoğraf', { title: u.name, img: u.avatar, href: `#/chat/${m.chatId}` })).catch(() => {});
+      if (location.hash === '#/chats') return;
+      api(`/users/${m.from}`).then((u) => toast(m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf'), { title: u.name, img: u.avatar, href: `#/chat/${m.chatId}` })).catch(() => {});
     }
   });
   on('match', ({ user, chatId }) => showMatch(user, chatId));
+  on('blocked', () => { refreshBadges(); });
+  on('reconnected', refreshBadges);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshBadges(); });
 }
 
@@ -98,7 +110,7 @@ export function showMatch(user, chatId) {
       <div class="title">Eşleştiniz!</div>
       <p>Sen ve ${esc(user.name)} birbirinizi beğendiniz.</p>
       <div class="pair"><img src="${esc(state.me.avatar)}" alt=""><img src="${esc(user.avatar)}" alt=""></div>
-      <a class="btn primary block" href="#/chat/${esc(chatId)}">Mesaj gönder</a>
+      <a class="btn primary block" href="#/chat/${esc(chatId)}" style="background:#fff;color:#2a1a8a">Mesaj gönder</a>
       <button class="btn block" style="background:transparent;color:#fff">Kaydırmaya devam et</button>
     </div></div>`);
   m.querySelector('button').onclick = () => m.remove();
@@ -114,14 +126,15 @@ async function boot() {
   navigator.serviceWorker?.addEventListener('message', (e) => {
     if (e.data?.type === 'navigate' && e.data.url) location.href = e.data.url;
   });
-  state.config = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
   if (state.token) {
     try {
-      state.me = await api('/me');
+      const [cfg, me] = await Promise.all([api('/config'), api('/me')]);
+      state.config = cfg; state.me = me;
       wireRealtime();
       refreshBadges();
     } catch { state.token = null; }
   }
+  if (!state.config) state.config = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
   window.addEventListener('hashchange', router);
   router();
 }

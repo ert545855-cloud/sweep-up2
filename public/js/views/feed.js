@@ -1,46 +1,74 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, isOn, toast, enablePush, pushSupported, pushEnabled, pushHint,
+  state, api, esc, on, isOn, toast, enablePush, pushSupported, pushEnabled, pushHint, logo, openChatWith,
 } from '../core.js';
 import { postCard, wirePost, autoplay } from '../components.js';
 
 export default async function feed(view) {
   view.innerHTML = `
     <header class="topbar">
-      <div class="wordmark">SwipeUp</div>
+      <div class="wordmark">${logo()}</div>
       <a class="ib" href="#/search" aria-label="Ara">${icon('search')}</a>
       <a class="ib" href="#/create" aria-label="Oluştur">${icon('plusSq')}</a>
-      <a class="ib" href="#/notifications" aria-label="Bildirimler">${icon('heart')}<i class="dot-badge nb" style="top:6px;right:6px;${state.badges.notifications ? '' : 'display:none'}"></i></a>
+      <a class="ib" href="#/notifications" aria-label="Bildirimler">${icon('bell')}<i class="dot-badge nb" style="top:8px;right:8px;${state.badges.notifications ? '' : 'display:none'}"></i></a>
     </header>
-    <div class="stories" aria-label="Canlı yayınlar ve çevrimiçi kişiler"></div>
+    <div class="stories" aria-label="Hikayeler ve canlı yayınlar"></div>
     <div class="push-slot"></div>
+    <div class="people"></div>
     <div class="posts"><div class="spinner"></div></div>`;
 
   const offs = [];
   const storiesEl = view.querySelector('.stories');
+  const peopleEl = view.querySelector('.people');
+  let stories = [];
   let people = [];
 
   const paintStories = () => {
     const lives = state.lives.filter((l) => l.userId !== state.me.id);
-    const myLive = state.lives.find((l) => l.userId === state.me.id);
+    const mine = stories.find((g) => g.user.id === state.me.id);
+    const others = stories.filter((g) => g.user.id !== state.me.id);
     const liveIds = new Set(lives.map((l) => l.userId));
-    const onlinePeople = people.filter((u) => !liveIds.has(u.id) && isOn(u));
-    const rest = people.filter((u) => !liveIds.has(u.id) && !isOn(u)).slice(0, 12);
     storiesEl.innerHTML = `
+      <a class="story" href="${mine ? `#/stories/${state.me.id}` : '#/create/story'}">
+        <div class="${mine ? 'ring' : 'plain'}"><img src="${esc(state.me.avatar)}" alt=""></div>
+        ${mine ? '' : `<span class="add">${icon('plus')}</span>`}
+        <span class="name">Hikayen</span></a>
       <a class="story" href="#/live">
-        <div class="plain"><img class="av" src="${esc(state.me.avatar)}" alt=""></div>
-        <span class="add">${icon('plus')}</span>
-        <span class="name">${myLive ? 'Yayındasın' : 'Canlı yayın'}</span></a>
+        <div class="plain"><span style="width:64px;height:64px;border-radius:30%;background:var(--surface);display:grid;place-items:center;color:var(--hot)">${icon('live')}</span></div>
+        <span class="name">Canlı yayın</span></a>
       ${lives.map((l) => `<a class="story" href="#/live/${esc(l.userId)}">
-        <div class="ring"><img class="av" src="${esc(l.user.avatar)}" alt=""></div>
+        <div class="ring live"><img src="${esc(l.user.avatar)}" alt=""></div>
         <span class="live-tag">CANLI</span><span class="name">${esc(l.user.username)}</span></a>`).join('')}
-      ${[...onlinePeople, ...rest].map((u) => `<a class="story" href="#/u/${esc(u.username)}">
-        <div class="ring seen"><img class="av" src="${esc(u.avatar)}" alt=""></div>
-        ${isOn(u) ? '<i class="online"></i>' : ''}<span class="name">${esc(u.username)}</span></a>`).join('')}`;
+      ${others.filter((g) => !liveIds.has(g.user.id)).map((g) => `<a class="story" href="#/stories/${esc(g.user.id)}">
+        <div class="ring ${g.allSeen ? 'seen' : ''}"><img src="${esc(g.user.avatar)}" alt=""></div>
+        ${isOn(g.user) ? '<i class="online"></i>' : ''}<span class="name">${esc(g.user.username)}</span></a>`).join('')}`;
   };
 
+  const paintPeople = () => {
+    const real = people.filter((u) => !u.isBot);
+    const list = (real.length ? [...real, ...people.filter((u) => u.isBot && isOn(u))] : people).slice(0, 20);
+    if (!list.length) { peopleEl.innerHTML = ''; return; }
+    const onlineCount = list.filter(isOn).length;
+    peopleEl.innerHTML = `<div class="section-t"><span>${onlineCount ? `Şu an çevrimiçi · ${onlineCount}` : 'Yeni üyeler'}</span><a href="#/search">Tümü</a></div>
+      <div class="people-row">${list.map((u) => `<div class="person-card">
+        ${!u.isBot && Date.now() - (u.createdAt || 0) < 3 * 86400000 ? '<span class="new">YENİ</span>' : ''}
+        <a href="#/u/${esc(u.username)}" class="av-wrap" data-presence="${esc(u.id)}"><img class="av av-56" src="${esc(u.avatar)}" alt="">${isOn(u) ? '<i class="online"></i>' : ''}</a>
+        <a href="#/u/${esc(u.username)}" class="n ellipsis">${esc(u.name)}</a>
+        <span class="s ellipsis">${isOn(u) ? 'çevrimiçi' : '@' + esc(u.username)}</span>
+        <button class="btn primary sm msg" data-id="${esc(u.id)}">Mesaj</button></div>`).join('')}</div>`;
+  };
+  peopleEl.addEventListener('click', (e) => {
+    const b = e.target.closest('.msg'); if (b) openChatWith(b.dataset.id).catch((er) => toast(er.message));
+  });
+
+  const loadStories = async () => { stories = await api('/stories').catch(() => []); paintStories(); };
+  const loadPeople = async () => { people = await api('/people').catch(() => []); paintPeople(); };
+
   offs.push(on('lives', paintStories));
-  offs.push(on('presence', paintStories));
+  offs.push(on('presence', () => { paintStories(); paintPeople(); }));
+  offs.push(on('stories:update', loadStories));
+  offs.push(on('people:new', loadPeople));
+  offs.push(on('reconnected', () => { loadStories(); loadPeople(); }));
   offs.push(on('badges', (b) => { view.querySelector('.nb').style.display = b.notifications ? '' : 'none'; }));
 
   // Bildirim izni kartı
@@ -51,8 +79,8 @@ export default async function feed(view) {
     const slot = view.querySelector('.push-slot');
     const hint = pushHint();
     slot.innerHTML = `<div class="push-card">${icon('bell')}<div class="grow"><b>Bildirimleri aç</b>
-      <p>${esc(hint || 'Mesaj, eşleşme ve canlı yayınlardan anında haberin olsun.')}</p></div>
-      ${hint ? '' : '<button class="btn primary on-push">Aç</button>'}<button class="ib x" aria-label="Kapat" style="width:28px">${icon('close')}</button></div>`;
+      <p>${esc(hint || 'Mesaj, arama, eşleşme ve canlı yayınlardan anında haberin olsun.')}</p></div>
+      ${hint ? '' : '<button class="btn primary sm on-push">Aç</button>'}<button class="x" aria-label="Kapat" style="width:28px;display:grid;place-items:center">${icon('close')}</button></div>`;
     slot.querySelector('.x').onclick = () => { localStorage.setItem('su_push_dismiss', '1'); slot.innerHTML = ''; };
     const b = slot.querySelector('.on-push');
     if (b) b.onclick = async () => {
@@ -60,17 +88,15 @@ export default async function feed(view) {
     };
   })();
 
-  const [posts, me] = await Promise.all([api('/feed'), api(`/users/${state.me.id}/following`)]);
-  people = me;
-  paintStories();
+  const [posts] = await Promise.all([api('/feed'), loadStories(), loadPeople()]);
   const list = view.querySelector('.posts');
   if (!posts.length) {
     list.innerHTML = `<div class="empty"><div class="big">${icon('camera')}</div><h2>Akışın boş</h2>Birkaç kişiyi takip et ya da ilk gönderini paylaş.<p><a class="btn primary" href="#/create">Gönderi paylaş</a></p></div>`;
   } else {
-    list.innerHTML = posts.map(postCard).join('');
+    list.innerHTML = `<div class="section-t"><span>Akış</span></div>${posts.map(postCard).join('')}`;
     posts.forEach((p) => wirePost(list.querySelector(`[data-post="${p.id}"]`), p));
     offs.push(autoplay(list));
-    list.insertAdjacentHTML('beforeend', `<div class="empty" style="padding:32px">${icon('check')}<div>Hepsini gördün</div><a class="link" href="#/swipe">Yeni insanlarla tanış</a></div>`);
+    list.insertAdjacentHTML('beforeend', `<div class="empty" style="padding:24px">Hepsini gördün. <a class="link" href="#/swipe">Yeni insanlarla tanış</a></div>`);
   }
   return () => offs.forEach((f) => f());
 }

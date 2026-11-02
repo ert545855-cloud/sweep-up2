@@ -1,83 +1,224 @@
 import { icon } from '../icons.js';
 import {
   state, api, esc, on, clock, dayLabel, lastSeen, avatar, toast, pickFile, compressImage, uploadFile, refreshBadges,
+  el, sheet, audioRecorder, fmtDur, reportUser,
 } from '../core.js';
+import { startCall } from '../calls.js';
+
+const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
+
+function waveBars(id, n = 28) {
+  let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return Array.from({ length: n }, (_, i) => { h = (h * 1103515245 + 12345) >>> 0; return 25 + (h % 75) * (0.6 + 0.4 * Math.sin(i / 3)); });
+}
 
 export default async function chat(view, chatId) {
   view.innerHTML = '<div class="chat"><div class="spinner" style="margin-top:40vh"></div></div>';
-  const data = await api(`/chats/${chatId}`);
+  let data;
+  try { data = await api(`/chats/${chatId}`); } catch (e) {
+    view.innerHTML = `<div class="empty"><div class="big">${icon('send')}</div><h2>Sohbet bulunamadı</h2>${esc(e.message)}<p><a class="btn primary" href="#/chats">Mesajlara dön</a></p></div>`;
+    return null;
+  }
+  const isGroup = !!data.isGroup;
   const other = data.other;
+  const members = new Map((data.members || []).map((m) => [m.id, m]));
   const msgs = data.messages;
   const s = state.socket;
+  let replyTo = null;
+  let blocked = !!data.blocked;
 
   view.innerHTML = `<div class="chat">
     <header class="topbar bordered">
       <a class="ib" href="#/chats" aria-label="Geri">${icon('back')}</a>
-      <a class="who" href="#/u/${esc(other.username)}">${avatar(other, 32, { ring: true })}
-        <div class="grow"><div class="n ellipsis">${esc(other.name)}</div><div class="s"></div></div></a>
-      ${other.live ? `<a class="ib" href="#/live/${esc(other.id)}" aria-label="Canlı yayını izle" style="color:var(--red)">${icon('live')}</a>` : ''}
+      <a class="who" href="#/chat/${esc(chatId)}/info">${avatar(other, 40, { ring: true, dot: !isGroup })}
+        <div class="grow"><div class="n ellipsis">${esc(other.name)}</div><div class="s ellipsis"></div></div></a>
+      ${isGroup ? '' : `<button class="ib vc" aria-label="Sesli ara">${icon('phone')}</button><button class="ib vv" aria-label="Görüntülü ara">${icon('video')}</button>`}
     </header>
     <div class="msgs" role="log" aria-live="polite"></div>
-    <form class="composer">
-      <div class="box">
-        <button type="button" class="cam" aria-label="Fotoğraf gönder">${icon('camera')}</button>
-        <textarea rows="1" placeholder="Mesaj..." aria-label="Mesaj yaz" maxlength="4000"></textarea>
-        <button type="button" class="icon-btn pic" aria-label="Galeriden seç">${icon('image')}</button>
-        <button class="send" hidden>Gönder</button>
-      </div>
-    </form></div>`;
+    <div class="composer"></div></div>`;
 
   const box = view.querySelector('.msgs');
   const st = view.querySelector('.s');
-  const ta = view.querySelector('textarea');
-  const sendBtn = view.querySelector('.send');
-  const picBtn = view.querySelector('.pic');
-  let otherTyping = false;
+  const comp = view.querySelector('.composer');
+  const typingNow = new Map();
+
+  view.querySelector('.vc')?.addEventListener('click', () => startCall(chatId, other, false));
+  view.querySelector('.vv')?.addEventListener('click', () => startCall(chatId, other, true));
 
   const paintStatus = () => {
-    st.textContent = otherTyping ? 'yazıyor...' : lastSeen(other);
-    st.classList.toggle('on', otherTyping || st.textContent === 'çevrimiçi');
+    const tp = [...typingNow.entries()];
+    if (tp.length) {
+      const [uid, kind] = tp[0];
+      const who = isGroup ? `${(members.get(uid)?.name || '').split(' ')[0]} ` : '';
+      st.textContent = `${who}${kind === 'audio' ? 'ses kaydediyor...' : 'yazıyor...'}`;
+      st.classList.add('on');
+      return;
+    }
+    if (isGroup) {
+      const on_ = [...members.values()].filter((m) => m.id !== state.me.id && state.presence.get(m.id)?.online).length;
+      st.textContent = `${members.size} üye${on_ ? ` · ${on_} çevrimiçi` : ''}`;
+      st.classList.remove('on');
+      return;
+    }
+    st.textContent = lastSeen(other);
+    st.classList.toggle('on', st.textContent === 'çevrimiçi');
   };
   paintStatus();
 
+  const othersOf = () => (isGroup ? [...members.keys()].filter((id) => id !== state.me.id) : [other.id]);
   const tick = (m) => {
-    if (m.from !== state.me.id) return '';
-    if (m.readBy.includes(other.id)) return `<span class="read">${icon('dcheck')}</span>`;
-    if (m.deliveredTo.includes(other.id)) return icon('dcheck');
+    if (m.from !== state.me.id || m.system || m.deleted) return '';
+    const os = othersOf();
+    if (os.length && os.every((id) => m.readBy.includes(id))) return `<span class="read">${icon('dcheck')}</span>`;
+    if (os.length && os.every((id) => m.deliveredTo.includes(id))) return icon('dcheck');
     return icon('check');
   };
-  const bubble = (m, prev) => {
-    const mine = m.from === state.me.id;
-    const day = !prev || new Date(prev.at).toDateString() !== new Date(m.at).toDateString();
-    const gap = prev && (prev.from !== m.from || m.at - prev.at > 300000);
+  const reactsHtml = (m) => {
+    const r = Object.values(m.reactions || {});
+    if (!r.length) return '';
+    const counts = r.reduce((a, e) => ((a[e] = (a[e] || 0) + 1), a), {});
+    return `<div class="reacts">${Object.keys(counts).join('')}${r.length > 1 ? `<small>${r.length}</small>` : ''}</div>`;
+  };
+  const audioHtml = (m) => `<div class="audio-b" data-src="${esc(m.media)}"><button class="pp" aria-label="Oynat">${icon('play')}</button>
+      <div class="wave">${waveBars(m.id).map((h) => `<i style="height:${h}%"></i>`).join('')}</div><span class="dur">${fmtDur(m.duration || 0)}</span></div>`;
+
+  const bubbleInner = (m) => {
     const meta = `<span class="meta">${clock(m.at)}<span class="tk">${tick(m)}</span></span>`;
-    const body = m.media
-      ? `<div class="msg media ${mine ? 'me' : 'them'} ${gap ? 'gap' : ''}" data-id="${esc(m.id)}">${m.mediaType === 'video'
+    if (m.deleted) return `<div class="msg deleted">${icon('block', '', 'style="width:14px;height:14px;vertical-align:-2px"')} Bu mesaj silindi${meta}</div>`;
+    const reply = m.reply ? `<span class="reply"><b>${esc(m.reply.from === state.me.id ? 'Sen' : (m.reply.fromName || ''))}</b>${esc(m.reply.text || { audio: '🎤 Sesli mesaj', video: '🎥 Video', image: '📷 Fotoğraf' }[m.reply.mediaType] || '')}</span>` : '';
+    const story = m.story ? `<span class="story-ref">${m.story.media ? `<img src="${esc(m.story.media)}" alt="">` : ''}<span>Hikayeye yanıt</span></span>` : '';
+    if (m.mediaType === 'audio') return `<div class="msg">${reply}${audioHtml(m)}${meta}</div>`;
+    if (m.media) {
+      return `<div class="msg media">${m.mediaType === 'video'
         ? `<video src="${esc(m.media)}" controls playsinline preload="metadata"></video>`
-        : `<a href="${esc(m.media)}" target="_blank" rel="noopener"><img src="${esc(m.media)}" alt="Fotoğraf"></a>`}${meta}</div>
-        ${m.text ? `<div class="msg ${mine ? 'me' : 'them'}" data-id="${esc(m.id)}-t">${esc(m.text)}</div>` : ''}`
-      : `<div class="msg ${mine ? 'me' : 'them'} ${gap ? 'gap' : ''}" data-id="${esc(m.id)}">${esc(m.text)}${meta}</div>`;
-    return `${day ? `<div class="day">${dayLabel(m.at)}</div>` : ''}${body}`;
+        : `<a href="${esc(m.media)}" target="_blank" rel="noopener"><img src="${esc(m.media)}" alt="Fotoğraf" loading="lazy"></a>`}${m.text ? '' : meta}</div>
+        ${m.text ? `<div class="msg">${reply}${esc(m.text)}${meta}</div>` : ''}`;
+    }
+    return `<div class="msg">${story}${reply}${esc(m.text)}${meta}</div>`;
+  };
+  const bubble = (m, prev) => {
+    const day = !prev || new Date(prev.at).toDateString() !== new Date(m.at).toDateString();
+    const dayHtml = day ? `<div class="day">${dayLabel(m.at)}</div>` : '';
+    if (m.system) return `${dayHtml}<div class="sys" data-id="${esc(m.id)}">${esc(m.text)}</div>`;
+    const mine = m.from === state.me.id;
+    const gap = prev && (prev.from !== m.from || prev.system || m.at - prev.at > 300000);
+    const sender = isGroup && !mine && gap !== false && (!prev || prev.from !== m.from) ? `<span class="sender">${esc(members.get(m.from)?.name || '')}</span>` : '';
+    return `${dayHtml}<div class="mwrap ${mine ? 'me' : 'them'} ${gap ? 'gap' : ''}" data-id="${esc(m.id)}">${sender}${bubbleInner(m)}${reactsHtml(m)}</div>`;
   };
   const paintAll = () => {
     box.innerHTML = msgs.length
       ? msgs.map((m, i) => bubble(m, msgs[i - 1])).join('')
-      : `<div class="empty">${avatar(other, 56, { dot: false })}<h2>${esc(other.name)}</h2>${esc(other.username)} · SwipeUp<p>Bir merhaba ile başla 👋</p></div>`;
+      : `<div class="empty">${avatar(other, 72, { dot: false })}<h2>${esc(other.name)}</h2>${isGroup ? `${members.size} üye` : `@${esc(other.username)}`}<p>Bir merhaba ile başla 👋</p></div>`;
     box.scrollTop = box.scrollHeight;
+  };
+  const repaintOne = (m) => {
+    const w = box.querySelector(`[data-id="${CSS.escape(m.id)}"]`);
+    if (!w) return;
+    const i = msgs.findIndex((x) => x.id === m.id);
+    const tmp = el(`<div>${bubble(m, msgs[i - 1])}</div>`);
+    w.replaceWith(tmp.querySelector(`[data-id="${CSS.escape(m.id)}"]`));
   };
   paintAll();
 
+  // ---- Sesli mesaj oynatma ----
+  let playing = null;
+  box.addEventListener('click', (e) => {
+    const pp = e.target.closest('.audio-b .pp'); if (!pp) return;
+    const wrap = pp.closest('.audio-b');
+    if (playing?.wrap === wrap) { playing.a.paused ? playing.a.play() : playing.a.pause(); return; }
+    if (playing) { playing.a.pause(); playing.stop(); }
+    const a = new Audio(wrap.dataset.src);
+    const bars = wrap.querySelectorAll('.wave i'); const dur = wrap.querySelector('.dur');
+    const stop = () => { pp.innerHTML = icon('play'); bars.forEach((b) => b.classList.remove('on')); };
+    a.onplay = () => { pp.innerHTML = icon('pause'); };
+    a.onpause = () => { pp.innerHTML = icon('play'); };
+    a.ontimeupdate = () => {
+      const d = a.duration && Number.isFinite(a.duration) ? a.duration : 0;
+      if (d) { const k = Math.floor((a.currentTime / d) * bars.length); bars.forEach((b, i) => b.classList.toggle('on', i <= k)); }
+      dur.textContent = fmtDur(a.currentTime);
+    };
+    a.onended = () => { stop(); playing = null; };
+    a.play().catch(() => toast('Ses oynatılamadı.'));
+    playing = { a, wrap, stop };
+  });
+
+  // ---- Mesaj menüsü: uzun bas / sağ tık / çift dokun / sağa kaydır ----
+  const findMsg = (node) => { const w = node.closest?.('.mwrap'); return w && msgs.find((m) => m.id === w.dataset.id); };
+  const react = (m, emoji) => s?.emit('message:react', { id: m.id, emoji });
+  function openMenu(m, wrap) {
+    if (m.deleted) return;
+    document.querySelector('.emoji-pop')?.remove();
+    const r = wrap.getBoundingClientRect();
+    const pop = el(`<div class="emoji-pop">${EMOJIS.map((e) => `<button class="${m.reactions?.[state.me.id] === e ? 'on' : ''}">${e}</button>`).join('')}</div>`);
+    document.body.append(pop);
+    const pw = pop.offsetWidth;
+    pop.style.top = `${Math.max(70, r.top - 56)}px`;
+    pop.style.left = `${Math.min(window.innerWidth - pw - 8, Math.max(8, wrap.classList.contains('me') ? r.right - pw : r.left))}px`;
+    pop.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; react(m, b.textContent); closeAll(); };
+    const mine = m.from === state.me.id;
+    const closeSheet = sheet(null, `<div class="menu">
+      <button data-a="reply">${icon('reply')}Yanıtla</button>
+      ${m.text ? `<button data-a="copy">${icon('copy')}Kopyala</button>` : ''}
+      ${mine ? `<button data-a="delall" class="danger">${icon('trash')}Herkesten sil</button>` : ''}
+      <button data-a="delme" class="danger">${icon('trash')}Benden sil</button>
+      ${!mine ? `<button data-a="report" class="danger">${icon('flag')}Şikayet et</button>` : ''}
+    </div>`, {
+      onMount(sh, close) {
+        sh.querySelector('.menu').onclick = async (e) => {
+          const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+          closeAll();
+          if (a === 'reply') setReply(m);
+          if (a === 'copy') { await navigator.clipboard?.writeText(m.text); toast('Kopyalandı.'); }
+          if (a === 'delall') s?.emit('message:delete', { id: m.id, forAll: true });
+          if (a === 'delme') s?.emit('message:delete', { id: m.id, forAll: false });
+          if (a === 'report') reportUser(members.get(m.from) || other, { ref: m.id });
+        };
+        close.__pop = pop;
+      },
+    });
+    function closeAll() { pop.remove(); closeSheet(); }
+    document.querySelector('.sheet-bg')?.addEventListener('click', () => pop.remove(), { once: true });
+  }
+  let lp = null; let sx = 0; let sy = 0; let swipeEl = null; let dx = 0;
+  box.addEventListener('pointerdown', (e) => {
+    const m = findMsg(e.target); if (!m || e.target.closest('a, video, .pp')) return;
+    sx = e.clientX; sy = e.clientY; dx = 0; swipeEl = e.target.closest('.mwrap');
+    lp = setTimeout(() => { lp = null; navigator.vibrate?.(15); openMenu(m, swipeEl); swipeEl = null; }, 450);
+  });
+  box.addEventListener('pointermove', (e) => {
+    if (!swipeEl) return;
+    const mx = e.clientX - sx; const my = e.clientY - sy;
+    if (Math.abs(my) > 12 || Math.abs(mx) > 10) { clearTimeout(lp); lp = null; }
+    if (Math.abs(my) > 24) { swipeEl.style.transform = ''; swipeEl = null; return; }
+    if (mx > 0) { dx = Math.min(80, mx); swipeEl.style.transform = `translateX(${dx}px)`; }
+  });
+  const endSwipe = () => {
+    clearTimeout(lp); lp = null;
+    if (swipeEl) {
+      const m = findMsg(swipeEl);
+      swipeEl.style.transition = 'transform .2s'; swipeEl.style.transform = '';
+      const w = swipeEl; setTimeout(() => { w.style.transition = ''; }, 220);
+      if (dx > 60 && m && !m.deleted) { navigator.vibrate?.(10); setReply(m); }
+      swipeEl = null;
+    }
+  };
+  box.addEventListener('pointerup', endSwipe);
+  box.addEventListener('pointercancel', endSwipe);
+  box.addEventListener('contextmenu', (e) => { const m = findMsg(e.target); if (m) { e.preventDefault(); openMenu(m, e.target.closest('.mwrap')); } });
+  box.addEventListener('dblclick', (e) => { const m = findMsg(e.target); if (m && !m.deleted) { react(m, '❤️'); window.getSelection()?.removeAllRanges(); } });
+
+  // ---- Okundu ----
   const markRead = () => { if (document.visibilityState === 'visible') s?.emit('read', { chatId }); };
   markRead();
   setTimeout(refreshBadges, 400);
 
-  const showTyping = (on_) => {
-    otherTyping = on_; paintStatus();
+  const showTyping = () => {
+    paintStatus();
     box.querySelector('.typing-b')?.remove();
-    if (on_) { box.insertAdjacentHTML('beforeend', '<div class="typing-b" aria-label="yazıyor"><i></i><i></i><i></i></div>'); box.scrollTop = box.scrollHeight; }
+    if (typingNow.size) { box.insertAdjacentHTML('beforeend', '<div class="typing-b" aria-label="yazıyor"><i></i><i></i><i></i></div>'); if (nearBottom()) box.scrollTop = box.scrollHeight; }
   };
+  const nearBottom = () => box.scrollHeight - box.scrollTop - box.clientHeight < 160;
 
-  const nearBottom = () => box.scrollHeight - box.scrollTop - box.clientHeight < 140;
   const offs = [
     on('message', (m) => {
       if (m.chatId !== chatId || msgs.some((x) => x.id === m.id)) return;
@@ -86,69 +227,167 @@ export default async function chat(view, chatId) {
       box.querySelector('.typing-b')?.remove();
       msgs.push(m);
       box.insertAdjacentHTML('beforeend', bubble(m, msgs[msgs.length - 2]));
-      if (m.from !== state.me.id) { otherTyping = false; paintStatus(); markRead(); }
+      if (m.from !== state.me.id) { typingNow.delete(m.from); paintStatus(); markRead(); }
+      if (typingNow.size) showTyping();
       if (stick) box.scrollTop = box.scrollHeight;
     }),
-    on('typing', ({ chatId: c, userId, typing }) => { if (c === chatId && userId === other.id) showTyping(typing); }),
+    on('message:update', (m) => {
+      if (m.chatId !== chatId) return;
+      const i = msgs.findIndex((x) => x.id === m.id); if (i < 0) return;
+      msgs[i] = m; repaintOne(m);
+    }),
+    on('message:hidden', ({ id, chatId: c }) => {
+      if (c !== chatId) return;
+      const i = msgs.findIndex((x) => x.id === id); if (i >= 0) msgs.splice(i, 1);
+      box.querySelector(`[data-id="${CSS.escape(id)}"]`)?.remove();
+    }),
+    on('typing', ({ chatId: c, userId, typing, kind }) => {
+      if (c !== chatId || userId === state.me.id) return;
+      typing ? typingNow.set(userId, kind || 'text') : typingNow.delete(userId);
+      showTyping();
+    }),
     on('read', ({ chatId: c, userId }) => {
-      if (c !== chatId || userId !== other.id) return;
-      msgs.forEach((m) => { if (m.from === state.me.id && !m.readBy.includes(other.id)) m.readBy.push(other.id); });
-      box.querySelectorAll('.msg.me .tk').forEach((t) => { t.innerHTML = `<span class="read">${icon('dcheck')}</span>`; });
+      if (c !== chatId || userId === state.me.id) return;
+      msgs.forEach((m) => { if (!m.readBy.includes(userId)) m.readBy.push(userId); });
+      box.querySelectorAll('.mwrap.me').forEach((w) => { const m = msgs.find((x) => x.id === w.dataset.id); const t = w.querySelector('.tk'); if (m && t) t.innerHTML = tick(m); });
     }),
     on('delivered', ({ id, userId }) => {
-      const m = msgs.find((x) => x.id === id); if (!m || userId !== other.id) return;
+      const m = msgs.find((x) => x.id === id); if (!m) return;
       if (!m.deliveredTo.includes(userId)) m.deliveredTo.push(userId);
       const t = box.querySelector(`[data-id="${CSS.escape(id)}"] .tk`); if (t) t.innerHTML = tick(m);
     }),
-    on('presence', ({ userId }) => {
-      if (userId !== other.id) return;
-      paintStatus();
-      // karşı taraf çevrimiçi olunca iletildi işaretleri sunucudan gelir
+    on('presence', paintStatus),
+    on('chat:removed', ({ chatId: c }) => { if (c === chatId) { toast('Bu sohbet artık yok.'); location.hash = '#/chats'; } }),
+    on('chat:update', async ({ chatId: c }) => {
+      if (c !== chatId) return;
+      const d = await api(`/chats/${chatId}`).catch(() => null); if (!d) return;
+      members.clear(); (d.members || []).forEach((m) => members.set(m.id, m));
+      view.querySelector('.who .n').textContent = d.other.name; paintStatus();
+    }),
+    on('blocked', ({ by }) => { if (!isGroup && by === other.id) { blocked = true; paintComposer(); } }),
+    on('user:blocked', (id) => { if (!isGroup && id === other.id) location.hash = '#/chats'; }),
+    on('reconnected', async () => {
+      const d = await api(`/chats/${chatId}`).catch(() => null);
+      if (d) { msgs.splice(0, msgs.length, ...d.messages); paintAll(); markRead(); }
     }),
   ];
   const vis = () => { if (document.visibilityState === 'visible') markRead(); };
   document.addEventListener('visibilitychange', vis);
 
-  // Yazma göstergesi
+  // ---- Yazma alanı ----
   let typingTimer = null; let typingSent = false;
   const stopTyping = () => { if (typingSent) { s?.emit('typing', { chatId, typing: false }); typingSent = false; } };
-  ta.addEventListener('input', () => {
-    ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px';
-    const has = !!ta.value.trim();
-    sendBtn.hidden = !has; picBtn.hidden = has;
-    if (has && !typingSent) { s?.emit('typing', { chatId, typing: true }); typingSent = true; }
-    clearTimeout(typingTimer); typingTimer = setTimeout(stopTyping, 2500);
-    if (!has) stopTyping();
-  });
-  ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); view.querySelector('form').requestSubmit(); }
-  });
-
   const send = (payload) => new Promise((resolve) => {
-    if (s?.connected) s.emit('message:send', { chatId, ...payload }, (r) => { if (r?.error) toast(r.error); resolve(); });
-    else api(`/chats/${chatId}/messages`, { body: payload }).then((m) => { if (!msgs.some((x) => x.id === m.id)) { msgs.push(m); paintAll(); } resolve(); }).catch((e) => { toast(e.message); resolve(); });
+    const body = { ...payload, replyTo: replyTo?.id };
+    setReply(null);
+    if (s?.connected) s.emit('message:send', { chatId, ...body }, (r) => { if (r?.error) toast(r.error); resolve(); });
+    else api(`/chats/${chatId}/messages`, { body }).then((m) => { if (!msgs.some((x) => x.id === m.id)) { msgs.push(m); paintAll(); } resolve(); }).catch((e) => { toast(e.message); resolve(); });
   });
 
-  view.querySelector('form').onsubmit = async (e) => {
-    e.preventDefault();
-    const text = ta.value.trim(); if (!text) return;
-    ta.value = ''; ta.style.height = 'auto'; sendBtn.hidden = true; picBtn.hidden = false;
-    stopTyping();
-    await send({ text });
-    ta.focus();
-  };
+  function setReply(m) {
+    replyTo = m;
+    const r = comp.querySelector('.replying');
+    if (!r) return;
+    if (!m) { r.hidden = true; return; }
+    r.hidden = false;
+    r.querySelector('.who-r').textContent = m.from === state.me.id ? 'Kendine yanıt' : `${(members.get(m.from)?.name || other.name).split(' ')[0]} kişisine yanıt`;
+    r.querySelector('.txt').textContent = m.text || { audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf';
+    comp.querySelector('textarea')?.focus();
+  }
 
-  const sendMedia = async (accept, capture) => {
-    const f = await pickFile(accept, capture); if (!f) return;
-    toast('Gönderiliyor...', { ms: 1500 });
-    try {
-      const file = f.type.startsWith('image/') ? await compressImage(f) : f;
-      const up = await uploadFile(file);
-      await send({ media: up.url, mediaType: up.type });
-    } catch (er) { toast(er.message); }
-  };
-  view.querySelector('.cam').onclick = () => sendMedia('image/*', 'environment');
-  picBtn.onclick = () => sendMedia('image/*,video/*');
+  function paintComposer() {
+    if (blocked) {
+      comp.innerHTML = `<div class="blocked-bar">Bu kişiyle artık mesajlaşamazsın.</div>`;
+      view.querySelector('.vc')?.remove(); view.querySelector('.vv')?.remove();
+      return;
+    }
+    comp.innerHTML = `<div class="replying" hidden><span class="bar"></span><div class="grow"><b class="who-r"></b><div class="txt ellipsis muted"></div></div><button type="button" class="x" aria-label="Yanıtı iptal et">${icon('close')}</button></div>
+      <form class="row1">
+        <div class="box">
+          <button type="button" class="icon-btn pic" aria-label="Fotoğraf veya video gönder">${icon('image')}</button>
+          <textarea rows="1" placeholder="Mesaj yaz..." aria-label="Mesaj yaz" maxlength="4000"></textarea>
+          <button type="button" class="icon-btn cam" aria-label="Fotoğraf çek">${icon('camera')}</button>
+        </div>
+        <button class="go" aria-label="Basılı tutarak sesli mesaj kaydet">${icon('mic')}</button>
+      </form>`;
+    const ta = comp.querySelector('textarea');
+    const go = comp.querySelector('.go');
+    const boxEl = comp.querySelector('.box');
+    comp.querySelector('.replying .x').onclick = () => setReply(null);
+    const hasText = () => !!ta.value.trim();
+    const paintGo = () => { go.innerHTML = icon(hasText() ? 'send' : 'mic'); go.setAttribute('aria-label', hasText() ? 'Gönder' : 'Basılı tutarak sesli mesaj kaydet'); };
+    ta.addEventListener('input', () => {
+      ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px';
+      paintGo();
+      if (hasText() && !typingSent) { s?.emit('typing', { chatId, typing: true }); typingSent = true; }
+      clearTimeout(typingTimer); typingTimer = setTimeout(stopTyping, 2500);
+      if (!hasText()) stopTyping();
+    });
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); comp.querySelector('form').requestSubmit(); }
+    });
+    comp.querySelector('form').onsubmit = async (e) => {
+      e.preventDefault();
+      const text = ta.value.trim(); if (!text) return;
+      ta.value = ''; ta.style.height = 'auto'; paintGo();
+      stopTyping();
+      await send({ text });
+      ta.focus();
+    };
+    const sendMedia = async (accept, capture) => {
+      const f = await pickFile(accept, capture); if (!f) return;
+      toast('Gönderiliyor...', { ms: 1500 });
+      try {
+        const file = f.type.startsWith('image/') ? await compressImage(f) : f;
+        const up = await uploadFile(file);
+        await send({ media: up.url, mediaType: up.type });
+      } catch (er) { toast(er.message); }
+    };
+    comp.querySelector('.pic').onclick = () => sendMedia('image/*,video/*');
+    comp.querySelector('.cam').onclick = () => sendMedia('image/*', 'environment');
 
-  return () => { stopTyping(); offs.forEach((f) => f()); document.removeEventListener('visibilitychange', vis); refreshBadges(); };
+    // Basılı tut → sesli mesaj
+    const rec = audioRecorder();
+    let recording = false; let held = false; let startX = 0; let cancelled = false; let tmr = null; let bar = null;
+    go.addEventListener('pointerdown', async (e) => {
+      if (hasText()) return;
+      e.preventDefault();
+      if (!rec.supported) { toast('Bu tarayıcı ses kaydını desteklemiyor.'); return; }
+      held = true; cancelled = false; startX = e.clientX;
+      go.setPointerCapture?.(e.pointerId);
+      try { await rec.start(); } catch { held = false; toast('Mikrofon izni gerekiyor.'); return; }
+      if (!held) { await rec.stop(true); toast('Kaydetmek için basılı tut.'); return; }
+      recording = true; go.classList.add('rec');
+      navigator.vibrate?.(20);
+      s?.emit('typing', { chatId, typing: true, kind: 'audio' });
+      boxEl.hidden = true;
+      bar = el(`<div class="rec-bar"><i class="dot"></i><span class="tm">0:00</span><span class="hint">‹ iptal için sola kaydır</span></div>`);
+      boxEl.after(bar);
+      tmr = setInterval(() => { bar.querySelector('.tm').textContent = fmtDur(rec.elapsed()); if (rec.elapsed() > 300) finish(); }, 250);
+    });
+    go.addEventListener('pointermove', (e) => {
+      if (!recording) return;
+      if (e.clientX - startX < -90) { cancelled = true; bar.querySelector('.hint').textContent = 'Bırakınca iptal olur'; bar.style.opacity = .6; }
+      else if (cancelled) { cancelled = false; bar.querySelector('.hint').textContent = '‹ iptal için sola kaydır'; bar.style.opacity = 1; }
+    });
+    async function finish() {
+      held = false;
+      if (!recording) return;
+      recording = false; clearInterval(tmr);
+      go.classList.remove('rec'); bar?.remove(); boxEl.hidden = false;
+      s?.emit('typing', { chatId, typing: false });
+      const out = await rec.stop(cancelled);
+      if (!out) { if (!cancelled) toast('Kayıt çok kısa. Basılı tutup konuş.'); return; }
+      try {
+        const up = await uploadFile(out.file);
+        await send({ media: up.url, mediaType: 'audio', duration: out.duration });
+      } catch (er) { toast(er.message); }
+    }
+    go.addEventListener('pointerup', finish);
+    go.addEventListener('pointercancel', () => { cancelled = true; finish(); });
+    go.addEventListener('click', (e) => { if (!hasText()) e.preventDefault(); });
+  }
+  paintComposer();
+
+  return () => { stopTyping(); offs.forEach((f) => f()); document.removeEventListener('visibilitychange', vis); document.querySelector('.emoji-pop')?.remove(); playing?.a.pause(); refreshBadges(); };
 }
