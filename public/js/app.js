@@ -3,6 +3,7 @@ import {
   state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin, notifHref,
 } from './core.js';
 import { initCalls } from './calls.js';
+import { checkVersion, recover, afterBoot } from './update.js';
 
 const routes = [
   [/^\/?$/, 'feed', { tab: 'home' }],
@@ -143,7 +144,9 @@ async function router() {
     cleanup = c || null;
   } catch (e) {
     console.error(e);
-    view.innerHTML = `<div class="empty"><div class="big">${icon('close')}</div><h2>Bu sayfa açılamadı</h2>${esc(e.message)}<p><a class="btn primary" href="#/">Ana sayfaya dön</a></p></div>`;
+    if (recover(e)) return;
+    view.innerHTML = `<div class="empty"><div class="big">${icon('close')}</div><h2>Bu sayfa açılamadı</h2>${esc(e.message)}<p style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn primary rl">Yenile</button><a class="btn" href="#/">Ana sayfaya dön</a></p></div>`;
+    view.querySelector('.rl').onclick = () => import('./update.js').then((u) => u.applyUpdate()).catch(() => location.reload());
   }
 }
 
@@ -171,7 +174,25 @@ function wireRealtime() {
   on('match', ({ user, chatId }) => showMatch(user, chatId));
   on('blocked', () => { refreshBadges(); });
   on('reconnected', refreshBadges);
+  on('app:version', ({ version }) => checkVersion(version));
+  on('announce:popup', showAnnouncement);
+  setTimeout(() => api('/announcement').then((a) => a && showAnnouncement(a)).catch(() => {}), 1200);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshBadges(); });
+}
+
+// Yönetimden gelen açılış duyurusu (her duyuru bir kez gösterilir)
+function showAnnouncement(a) {
+  let seen = [];
+  try { seen = JSON.parse(localStorage.getItem('su_ann_seen') || '[]'); } catch {}
+  if (!a?.id || seen.includes(a.id) || document.querySelector('.ann-modal')) return;
+  const m = el(`<div class="ann-modal" role="dialog" aria-label="Duyuru"><div class="inner">
+      <img src="/icons/mark.png" alt=""><h2>${esc(a.title || 'SwipeUp')}</h2><p>${esc(a.text)}</p>
+      <div class="acts">${a.url && a.url !== '/#/notifications' ? '<button class="btn primary go">Göz at</button><button class="btn ok-b">Kapat</button>' : '<button class="btn primary ok-b">Tamam</button>'}</div></div></div>`);
+  const close = () => { m.remove(); try { localStorage.setItem('su_ann_seen', JSON.stringify([...seen, a.id].slice(-30))); } catch {} };
+  m.querySelector('.ok-b').onclick = close;
+  m.querySelector('.go')?.addEventListener('click', () => { close(); location.hash = a.url.replace(/^\//, ''); });
+  m.onclick = (e) => { if (e.target === m) close(); };
+  document.body.append(m);
 }
 
 export function showMatch(user, chatId) {
@@ -216,6 +237,9 @@ async function boot() {
     } catch { state.token = null; }
   }
   if (!state.config) state.config = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
+  afterBoot(state.config?.version);
+  // Beklenmeyen modül hataları (eski sürüm kalıntısı) → güncelleme ekranı
+  window.addEventListener('unhandledrejection', (e) => { recover(e.reason); });
   window.addEventListener('hashchange', router);
   router();
 }

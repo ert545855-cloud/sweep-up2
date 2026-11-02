@@ -2,6 +2,7 @@ import { icon } from '../icons.js';
 import {
   state, api, esc, on, clock, dayLabel, avatar, toast, pickFile, compressImage, uploadFile, el, sheet, reportUser, reportMessage, nm, richText,
 } from '../core.js';
+import { restoreDraft } from '../update.js';
 
 const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
 export const GENEL_SEEN = 'su_genel_seen';
@@ -120,6 +121,7 @@ export default async function genel(view) {
   // ---- Yazma ----
   const comp = view.querySelector('.composer');
   const ta = comp.querySelector('textarea');
+  restoreDraft(ta);
   function setReply(m) {
     replyTo = m;
     const r = comp.querySelector('.replying');

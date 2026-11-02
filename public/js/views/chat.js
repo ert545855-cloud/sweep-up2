@@ -2,6 +2,7 @@ import { icon } from '../icons.js';
 import {
   state, api, esc, on, clock, dayLabel, lastSeen, avatar, toast, pickFile, compressImage, uploadFile, refreshBadges, el, sheet, audioRecorder, fmtDur, reportUser, reportMessage, nm,
 } from '../core.js';
+import { restoreDraft } from '../update.js';
 import { startCall } from '../calls.js';
 import { FAL_TYPES, zodiacOf } from '../fal-data.js';
 
@@ -352,6 +353,7 @@ export default async function chat(view, chatId) {
       </form>`;
     const ta = comp.querySelector('textarea');
     const go = comp.querySelector('.go');
+    restoreDraft(ta);
     const boxEl = comp.querySelector('.box');
     comp.querySelector('.replying .x').onclick = () => setReply(null);
     const hasText = () => !!ta.value.trim();

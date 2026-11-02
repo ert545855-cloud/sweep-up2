@@ -375,15 +375,52 @@ module.exports = function mountAdmin(app, ctx) {
 
   // ---------- Duyurular ----------
   app.get('/api/admin/announcements', adminAuth, (req, res) => res.json(store.all('adm_announcements').sort((a, b) => b.at - a.at)));
+  // Hedef kitleye göre kullanıcılar
+  const AUDIENCES = { all: 'Herkes', online: 'Şu an çevrimiçi olanlar', plus: 'SwipeUp+ üyeleri', free: 'Ücretsiz üyeler', verified: 'Mavi tikliler', new7: 'Son 7 günde katılanlar', inactive: '7 gündür girmeyenler', city: 'Şehre göre', user: 'Tek kullanıcı' };
+  function audienceOf(b) {
+    const t = now();
+    let list = store.filter('users', (u) => statusOf(u) === 'active');
+    const aud = AUDIENCES[b.audience] ? b.audience : 'all';
+    if (aud === 'online') list = list.filter((u) => isOnline(u.id));
+    if (aud === 'plus') list = list.filter((u) => (u.plusUntil || 0) > t);
+    if (aud === 'free') list = list.filter((u) => !((u.plusUntil || 0) > t));
+    if (aud === 'verified') list = list.filter((u) => u.verified);
+    if (aud === 'new7') list = list.filter((u) => u.createdAt >= t - 7 * DAY);
+    if (aud === 'inactive') list = list.filter((u) => !isOnline(u.id) && (u.lastSeen || 0) < t - 7 * DAY);
+    if (aud === 'city') { const c = String(b.city || '').toLocaleLowerCase('tr-TR').trim(); list = c ? list.filter((u) => (u.city || '').toLocaleLowerCase('tr-TR').includes(c)) : []; }
+    if (aud === 'user') { const un = String(b.username || '').replace(/^@/, '').toLowerCase().trim(); list = list.filter((u) => u.username === un); }
+    return { aud, list };
+  }
+  const LINKS = ['/#/', '/#/notifications', '/#/store', '/#/genel', '/#/fal', '/#/dalga', '/#/swipe', '/#/create', '/#/verify', '/#/live'];
+  app.post('/api/admin/announcements/preview', adminAuth, (req, res) => {
+    const { list } = audienceOf(req.body || {});
+    res.json({ count: list.length, sample: list.slice(0, 5).map((u) => u.username) });
+  });
   app.post('/api/admin/announcements', adminAuth, (req, res) => {
-    const text = String(req.body?.text || '').trim().slice(0, 300);
-    if (!text) return res.status(400).json({ error: 'Duyuru metni boş olamaz.' });
-    const users = store.filter('users', (u) => statusOf(u) === 'active');
-    users.forEach((u) => notify(u.id, { type: 'announce', text: `📣 ${text}`, title: 'SwipeUp', url: '/#/notifications', tag: 'announce' }));
-    const a = store.put('adm_announcements', { id: nanoid(10), text, by: req.admin.username, at: now(), reach: users.length });
-    audit(req.admin, 'duyuru gönderdi', null, text);
+    const b = req.body || {};
+    const text = String(b.text || '').trim().slice(0, 300);
+    const title = String(b.title || '').trim().slice(0, 60) || 'SwipeUp';
+    if (!text) return res.status(400).json({ error: 'Bildirim metni boş olamaz.' });
+    const url = LINKS.includes(b.url) ? b.url : '/#/notifications';
+    const popup = !!b.popup;
+    const { aud, list } = audienceOf(b);
+    if (!list.length) return res.status(400).json({ error: 'Bu hedef kitlede kimse yok.' });
+    if (list.length > 1 && limited('ann:' + req.admin.id, 10, DAY)) return res.status(429).json({ error: 'Bugün çok fazla toplu bildirim gönderildi.' });
+    const id = nanoid(10);
+    const pushCount = list.filter((u) => store.find('pushSubs', (x) => x.userId === u.id)).length;
+    list.forEach((u) => {
+      notify(u.id, { type: 'announce', text: `📣 ${text}`, title, url, tag: 'announce-' + id });
+      if (popup) emitTo(u.id, 'announce:popup', { id, title, text, url });
+    });
+    if (popup) store.put('settings', { id: 'popup', annId: id, title, text, url, at: now(), users: aud === 'all' ? null : list.map((u) => u.id), until: now() + 7 * DAY });
+    const a = store.put('adm_announcements', {
+      id, title, text, url, popup, audience: aud, audienceLabel: AUDIENCES[aud] + (aud === 'city' ? `: ${b.city}` : aud === 'user' ? `: @${b.username}` : ''),
+      by: req.admin.username, at: now(), reach: list.length, pushReach: pushCount, online: list.filter((u) => isOnline(u.id)).length,
+    });
+    audit(req.admin, 'bildirim gönderdi', aud === 'user' ? list[0].id : null, `${a.audienceLabel} · ${text}`);
     res.json(a);
   });
+  app.delete('/api/admin/announcements/popup', adminAuth, (req, res) => { store.del('settings', 'popup'); audit(req.admin, 'açılış duyurusunu kaldırdı'); res.json({ ok: true }); });
 
   // ---------- Notlar ----------
   app.get('/api/admin/notes', adminAuth, (req, res) => res.json(store.all('adm_notes').sort((a, b) => (b.pinned - a.pinned) || (b.at - a.at))));

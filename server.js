@@ -18,6 +18,19 @@ const eco = require('./server/economy')(store);
 const music = require('./server/music');
 
 const PORT = process.env.PORT || 3000;
+
+// Sürüm: public klasörünün içerik özeti. Dosyalar değişince (yeni yayın) değişir,
+// sunucu yeniden başlasa da aynı kalır. İstemci farkı görünce güncelleme ekranını açar.
+const fs = require('fs');
+const APP_VERSION = (() => {
+  const h = crypto.createHash('sha1');
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).forEach((e) => {
+    const f = path.join(d, e.name);
+    if (e.isDirectory()) walk(f); else { h.update(f.slice(__dirname.length)); h.update(fs.readFileSync(f)); }
+  });
+  try { walk(path.join(__dirname, 'public')); } catch {}
+  return h.digest('hex').slice(0, 12);
+})();
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: true }, maxHttpBufferSize: 1e6, pingInterval: 20000, pingTimeout: 25000 });
@@ -313,11 +326,18 @@ function iceServers(userId) {
   return ice;
 }
 
+// Açılışta gösterilen duyuru penceresi (yönetim panelinden)
+app.get('/api/announcement', auth, (req, res) => {
+  const p = store.get('settings', 'popup');
+  if (!p || p.until < now() || (p.users && !p.users.includes(req.user.id)) || p.at < (req.user.createdAt || 0) - 60000) return res.json(null);
+  res.json({ id: p.annId, title: p.title, text: p.text, url: p.url, at: p.at });
+});
+app.get('/api/version', (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ version: APP_VERSION }); });
 app.get('/api/config', (req, res) => {
   let uid = null;
   try { uid = jwt.verify((req.headers.authorization || '').slice(7), JWT_SECRET).id; } catch {}
   const { id, ...legal } = store.get('settings', 'legal') || {};
-  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal });
+  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION });
 });
 
 // ---------- Kimlik ----------
@@ -1295,6 +1315,7 @@ io.on('connection', (socket) => {
     emitTo(m.from, 'delivered', { id: m.id, chatId: m.chatId, userId: uid });
   });
 
+  socket.emit('app:version', { version: APP_VERSION });
   socket.emit('lives', [...lives.values()].map(liveOut));
   socket.emit('presence:all', [...online.keys()].filter((id) => isOnline(id) && !priv(store.get('users', id)).hideLastSeen));
   // Çalan bir arama varsa (uygulama bildirimden açıldıysa) tekrar göster
@@ -1554,7 +1575,7 @@ async function ensureFalci() {
   await ensureFalci();
   await adminApi.ensureAdmin?.();
   music.selfTest().catch(() => {});
-  server.listen(PORT, () => console.log(`SwipeUp http://localhost:${PORT}`));
+  server.listen(PORT, () => console.log(`SwipeUp http://localhost:${PORT} · sürüm ${APP_VERSION}`));
 
   // Render ücretsiz planda uykuya geçmemek için kendine ping at
   const selfUrl = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;

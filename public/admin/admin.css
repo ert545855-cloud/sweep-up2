@@ -181,3 +181,14 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .erow .field { flex: 1 1 80px; }
 .savebar { grid-column: 1 / -1; position: sticky; bottom: 12px; display: flex; justify-content: flex-end; }
 .savebar .btn { height: 44px; padding: 0 22px; box-shadow: 0 10px 30px -10px rgba(0,0,0,.35); }
+.upd { position: fixed; z-index: 100; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; border-radius: 14px; background: #15151a; color: #fff; box-shadow: 0 12px 30px -10px rgba(0,0,0,.4); font-weight: 650; }
+.ann .fl, label.fl { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.ann .fl .field { color: var(--text); }
+.ann textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
+.phone-pv { border-radius: 26px; padding: 18px 14px; background: linear-gradient(160deg, #2a0f3d, #0b0610); min-height: 280px; display: grid; gap: 14px; align-content: start; }
+.phone-pv .np { display: flex; gap: 10px; padding: 12px; border-radius: 16px; background: rgba(255,255,255,.92); color: #111; }
+.phone-pv .np img { width: 36px; height: 36px; border-radius: 9px; }
+.phone-pv .np .pv-m { font-size: 13px; color: #444; white-space: pre-wrap; word-break: break-word; }
+.phone-pv .pv-pop { justify-self: center; width: 80%; padding: 18px; border-radius: 20px; background: #fff; color: #111; display: grid; gap: 8px; justify-items: center; text-align: center; }
+.phone-pv .pv-pop img { width: 52px; height: 52px; border-radius: 14px; }
+.phone-pv .pv-pop .pv-m { font-size: 13.5px; color: #333; white-space: pre-wrap; word-break: break-word; }

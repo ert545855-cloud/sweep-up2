@@ -47,7 +47,7 @@ const SECTIONS = [
   ['ledger', 'Gelir ve gider', 'sliders'],
   ['fal', 'Fal', 'star', 'falPending'],
   ['content', 'İçerik', 'grid'],
-  ['announce', 'Duyurular', 'bell'],
+  ['announce', 'Bildirim gönder', 'bell'],
   ['notes', 'Notlar', 'edit'],
   ['audit', 'İşlem kaydı', 'eye'],
   ['settings', 'Ayarlar', 'settings'],
@@ -410,17 +410,59 @@ VIEWS.content = async (main) => {
 // ---- Duyurular ----
 VIEWS.announce = async (main) => {
   const list = await api('/announcements');
-  main.innerHTML = `${head('Duyurular', 'Tüm aktif kullanıcılara uygulama içi bildirim ve anlık bildirim gönderir.')}
-    <div class="panel" style="margin-bottom:14px"><form class="pb" style="display:grid;gap:10px"><textarea class="field" name="t" rows="3" maxlength="300" placeholder="Örn. Bu akşam 22:00'de kısa bir bakım çalışması yapılacak."></textarea>
-      <div class="row"><span class="muted grow cnt">0 / 300</span><button class="btn primary">${icon('bell')} Duyuruyu gönder</button></div></form></div>
-    <div class="panel">${list.length ? list.map((a) => `<div class="case"><div>${esc(a.text)}</div><div class="muted">${dt(a.at)} · ${esc(a.by)} · ${a.reach} kişiye</div></div>`).join('') : '<div class="empty">Henüz duyuru gönderilmedi.</div>'}</div>`;
+  const LINKS = [['/#/notifications', 'Bildirimler'], ['/#/', 'Ana sayfa'], ['/#/store', 'Mağaza (SwipeUp+ / jeton)'], ['/#/genel', 'Genel sohbet'], ['/#/fal', 'Fal'], ['/#/dalga', 'Dalga'], ['/#/swipe', 'Keşfet (kaydır)'], ['/#/create', 'Paylaşım oluştur'], ['/#/verify', 'Profil doğrulama'], ['/#/live', 'Canlı yayın aç']];
+  const AUD = [['all', 'Herkes'], ['online', 'Şu an çevrimiçi olanlar'], ['plus', 'SwipeUp+ üyeleri'], ['free', 'Ücretsiz üyeler'], ['verified', 'Mavi tikliler'], ['new7', 'Son 7 günde katılanlar'], ['inactive', '7 gündür girmeyenler'], ['city', 'Şehre göre…'], ['user', 'Tek kullanıcı…']];
+  main.innerHTML = `${head('Bildirim gönder', 'Seçtiğin kişilere uygulama içi bildirim ve telefonlarına anlık bildirim (push) gönderir. İstersen uygulama açılınca duyuru penceresi de çıkar.')}
+    <div class="grid g21">
+      <div class="panel"><div class="ph"><h3>Yeni bildirim</h3></div><form class="pb ann" style="display:grid;gap:12px">
+        <label class="fl">Başlık<input class="field" name="title" maxlength="60" placeholder="SwipeUp"></label>
+        <label class="fl">Mesaj<textarea class="field" name="t" rows="3" maxlength="300" placeholder="Örn. Bu hafta sonu SwipeUp+ %30 indirimde! 🎉"></textarea><span class="muted cnt" style="justify-self:end;font-size:12px">0 / 300</span></label>
+        <div class="row" style="flex-wrap:wrap;gap:10px">
+          <label class="fl" style="flex:1;min-width:200px">Kime<select class="field" name="aud">${AUD.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+          <label class="fl xcity" style="flex:1;min-width:160px" hidden>Şehir<input class="field" name="city" placeholder="Örn. İstanbul"></label>
+          <label class="fl xuser" style="flex:1;min-width:160px" hidden>Kullanıcı adı<input class="field" name="username" placeholder="@kullanici"></label>
+        </div>
+        <label class="fl">Dokununca açılacak yer<select class="field" name="url">${LINKS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+        <label class="row" style="gap:8px;cursor:pointer"><input type="checkbox" name="popup" style="width:18px;height:18px;accent-color:var(--brand)"><span><b>Açılış duyurusu</b> <span class="muted">— uygulamayı açan herkese pencere olarak da gösterilir (7 gün)</span></span></label>
+        <div class="row"><span class="muted grow reach">Alıcı sayısı hesaplanıyor…</span><button class="btn primary send">${icon('bell')} Gönder</button></div>
+      </form></div>
+      <div class="panel"><div class="ph"><h3>Önizleme</h3></div><div class="pb">
+        <div class="phone-pv"><div class="np"><img src="/icons/mark.png" alt=""><div class="grow"><div class="row"><b class="pv-t">SwipeUp</b><span class="muted" style="margin-left:auto;font-size:11px">şimdi</span></div><div class="pv-m muted">Mesajın burada görünecek.</div></div></div>
+        <div class="pv-pop" hidden><img src="/icons/mark.png" alt=""><b class="pv-t">SwipeUp</b><div class="pv-m"></div><span class="btn sm primary">Tamam</span></div></div>
+      </div></div>
+    </div>
+    <div class="panel" style="margin-top:14px"><div class="ph"><h3>Gönderilenler</h3><button class="btn sm rmpop">${icon('close')} Açılış duyurusunu kaldır</button></div><div class="tw">${list.length ? `<table class="tbl"><thead><tr><th>Bildirim</th><th>Kime</th><th class="num">Alıcı</th><th class="num">Push açık</th><th>Gönderen</th><th>Tarih</th></tr></thead><tbody>
+      ${list.map((a) => `<tr><td style="max-width:420px"><b>${esc(a.title || 'SwipeUp')}</b>${a.popup ? ' <span class="chip info">Açılış duyurusu</span>' : ''}<div class="muted">${esc(a.text)}</div></td><td>${esc(a.audienceLabel || 'Herkes')}</td><td class="num">${a.reach}</td><td class="num">${a.pushReach ?? '—'}</td><td>${esc(a.by)}</td><td>${dt(a.at)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Henüz bildirim gönderilmedi.</div>'}</div></div>`;
   const f = main.querySelector('form');
-  f.t.oninput = () => { main.querySelector('.cnt').textContent = `${f.t.value.length} / 300`; };
+  const body = () => ({ title: f.title.value, text: f.t.value, url: f.url.value, audience: f.aud.value, city: f.city.value, username: f.username.value, popup: f.popup.checked });
+  const pv = () => {
+    main.querySelectorAll('.pv-t').forEach((x) => { x.textContent = f.title.value || 'SwipeUp'; });
+    main.querySelectorAll('.pv-m').forEach((x) => { x.textContent = f.t.value ? `📣 ${f.t.value}` : 'Mesajın burada görünecek.'; });
+    main.querySelector('.pv-pop').hidden = !f.popup.checked;
+    main.querySelector('.cnt').textContent = `${f.t.value.length} / 300`;
+    main.querySelector('.xcity').hidden = f.aud.value !== 'city';
+    main.querySelector('.xuser').hidden = f.aud.value !== 'user';
+  };
+  let rt;
+  const reach = () => {
+    clearTimeout(rt);
+    rt = setTimeout(async () => {
+      try { const r = await api('/announcements/preview', { body: body() }); main.querySelector('.reach').textContent = r.count ? `${r.count} kişiye gidecek` : 'Bu seçimde kimse yok'; } catch {}
+    }, 250);
+  };
+  f.oninput = () => { pv(); reach(); };
+  f.onchange = () => { pv(); reach(); };
+  pv(); reach();
   f.onsubmit = async (e) => {
     e.preventDefault();
-    if (!f.t.value.trim()) return;
-    if (!confirm('Duyuru tüm kullanıcılara gönderilsin mi?')) return;
-    try { const a = await api('/announcements', { body: { text: f.t.value } }); toast(`${a.reach} kişiye gönderildi.`); VIEWS.announce(main); } catch (er) { toast(er.message); }
+    if (!f.t.value.trim()) return toast('Mesaj yaz.');
+    const label = f.aud.selectedOptions[0].textContent.replace('…', '');
+    if (!confirm(`Bildirim gönderilsin mi?\n\nKime: ${label}\n${main.querySelector('.reach').textContent}`)) return;
+    try { const a = await api('/announcements', { body: body() }); toast(`${a.reach} kişiye gönderildi${a.pushReach ? ` (${a.pushReach} telefona push)` : ''}.`); VIEWS.announce(main); } catch (er) { toast(er.message); }
+  };
+  main.querySelector('.rmpop').onclick = async () => {
+    if (!confirm('Aktif açılış duyurusu kaldırılsın mı?')) return;
+    try { await api('/announcements/popup', { method: 'DELETE' }); toast('Kaldırıldı.'); } catch (er) { toast(er.message); }
   };
 };
 
@@ -661,3 +703,21 @@ document.addEventListener('error', (e) => {
 window.addEventListener('hashchange', render);
 render();
 setInterval(() => { if (S.token && document.visibilityState === 'visible') refreshCounts(); }, 30000);
+
+// ---- Yeni sürüm: panel kendini yeniler (yazı yazılıyorsa düğmeyle) ----
+let panelVersion = null;
+async function checkPanelVersion() {
+  try {
+    const { version } = await (await fetch('/api/version', { cache: 'no-store' })).json();
+    if (!panelVersion) { panelVersion = version; return; }
+    if (version === panelVersion || document.querySelector('.upd')) return;
+    const typing = document.activeElement?.matches('input, textarea, select');
+    const b = el(`<div class="upd"><span>✨ Panelin yeni sürümü yayında</span><button class="btn sm primary">Yenile</button></div>`);
+    b.querySelector('button').onclick = () => location.reload();
+    document.body.append(b);
+    if (!typing) setTimeout(() => { if (!document.activeElement?.matches('input, textarea, select')) location.reload(); }, 3000);
+  } catch {}
+}
+checkPanelVersion();
+setInterval(() => { if (document.visibilityState === 'visible') checkPanelVersion(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkPanelVersion(); });
