@@ -131,6 +131,27 @@ class Store {
     return 'disk';
   }
 
+  // Medyayı kalıcı olarak sil; boşalan bayt sayısını döndürür
+  async deleteMedia(id) {
+    if (!/^[\w-]+$/.test(id)) return 0;
+    let freed = 0;
+    if (this.pg) {
+      const r = await this.pg.query('DELETE FROM media WHERE id=$1 RETURNING length(data) AS n', [id]);
+      freed = +(r.rows[0]?.n || 0);
+    }
+    if (this.redis) {
+      const n = await this.redis.strLen(`su:m:${id}`);
+      if (n) {
+        await this.redis.multi().del(`su:m:${id}`).del(`su:mt:${id}`).decrBy('su:mediabytes', n).exec();
+        this.mediaBytes = Math.max(0, this.mediaBytes - n);
+        freed += n;
+      }
+    }
+    const p = path.join(this.dir, 'media', id);
+    try { if (fs.existsSync(p)) { freed += fs.statSync(p).size; fs.unlinkSync(p); fs.rmSync(p + '.mime', { force: true }); } } catch {}
+    return freed;
+  }
+
   async loadMedia(id) {
     if (!/^[\w-]+$/.test(id)) return null;
     if (this.pg) {

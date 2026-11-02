@@ -301,7 +301,7 @@ app.use(express.json({ limit: '1mb' }));
 
 const adminApi = require('./server/admin')(app, {
   store, io, emitTo, notify, brief, isOnline, online, lives, removeChat, limited, ipOf,
-  secret: () => JWT_SECRET, endLive: (id) => endLive(id), eco, purgeUser: (id) => purgeUser(id),
+  secret: () => JWT_SECRET, endLive: (id) => endLive(id), eco, purgeUser: (id) => purgeUser(id), dropMediaCache: (id) => dropMediaCache(id),
 });
 app.get('/admin', (req, res, next) => (req.originalUrl.split('?')[0].endsWith('/') ? next() : res.redirect('/admin/')));
 
@@ -543,11 +543,13 @@ app.post('/api/upload', auth, upload.single('file'), wrap(async (req, res) => {
   if (!f || !/^(image|video|audio)\//.test(f.mimetype)) return res.status(400).json({ error: 'Sadece fotoğraf, video veya ses yüklenebilir.' });
   if (limited('up:' + req.user.id, 60, 3600000)) return res.status(429).json({ error: 'Çok fazla yükleme. Biraz sonra tekrar dene.' });
   const id = nanoid(16);
-  await store.saveMedia(id, f.mimetype.split(';')[0], f.buffer);
+  const where = await store.saveMedia(id, f.mimetype.split(';')[0], f.buffer);
+  store.put('media_meta', { id, userId: req.user.id, mime: f.mimetype.split(';')[0], size: f.buffer.length, where, at: now() });
   res.json({ url: `/media/${id}`, type: f.mimetype.split('/')[0] });
 }));
 
 const mediaCache = new Map(); let cacheBytes = 0;
+function dropMediaCache(id) { const m = mediaCache.get(id); if (m) { cacheBytes -= m.data.length; mediaCache.delete(id); } }
 const CACHE_MAX = 120 * 1024 * 1024;
 async function getMedia(id) {
   if (mediaCache.has(id)) { const m = mediaCache.get(id); mediaCache.delete(id); mediaCache.set(id, m); return m; }
@@ -664,6 +666,21 @@ app.delete('/api/posts/:id', auth, (req, res) => {
   if (!p || p.userId !== req.user.id) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
   store.del('posts', p.id);
   res.json({ ok: true });
+});
+
+// Çoklu gönderiden tek bir fotoğrafı kaldır (gönderi sahibi)
+app.delete('/api/posts/:id/items/:idx', auth, (req, res) => {
+  const p = store.get('posts', req.params.id);
+  if (!p || p.userId !== req.user.id) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
+  const items = p.items || [{ media: p.media, type: p.type === 'reel' ? 'video' : 'image', poster: p.poster }];
+  const i = parseInt(req.params.idx, 10);
+  if (!(i >= 0 && i < items.length)) return res.status(400).json({ error: 'Geçersiz fotoğraf.' });
+  if (items.length < 2) return res.status(400).json({ error: 'Tek fotoğraflı gönderiyi silmek için gönderiyi sil.' });
+  const [gone] = items.splice(i, 1);
+  store.update('posts', p.id, { items, media: items[0].media, poster: items[0].poster || null });
+  const mid = String(gone.media).split('/').pop();
+  store.deleteMedia(mid).then(() => { dropMediaCache(mid); store.del('media_meta', mid); }).catch(() => {});
+  res.json(postOut(store.get('posts', p.id), req.user.id));
 });
 
 app.post('/api/posts/:id/like', auth, (req, res) => {

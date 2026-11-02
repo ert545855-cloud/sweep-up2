@@ -47,6 +47,7 @@ const SECTIONS = [
   ['ledger', 'Gelir ve gider', 'sliders'],
   ['fal', 'Fal', 'star', 'falPending'],
   ['content', 'İçerik', 'grid'],
+  ['media', 'Medya', 'image'],
   ['announce', 'Bildirim gönder', 'bell'],
   ['notes', 'Notlar', 'edit'],
   ['audit', 'İşlem kaydı', 'eye'],
@@ -404,6 +405,68 @@ VIEWS.content = async (main) => {
     if (!confirm('Bu içerik kaldırılsın mı?')) return;
     try { await api(`/content/${b.closest('[data-id]').dataset.id}`, { method: 'DELETE' }); toast('Kaldırıldı.'); load(); } catch (er) { toast(er.message); }
   };
+  await load();
+};
+
+
+// ---- Medya: atılan görsel, video ve sesler ----
+VIEWS.media = async (main) => {
+  let kind = 'all'; let q = '';
+  const sel = new Map();
+  const TABS = [['all', 'Tümü'], ['post', 'Gönderi'], ['reel', 'Dalga'], ['story', 'Hikaye'], ['chat', 'Özel mesaj'], ['genel', 'Genel sohbet'], ['profile', 'Profil'], ['music', 'Müzik'], ['orphan', 'Sahipsiz']];
+  main.innerHTML = `${head('Medya', 'Uygulamaya yüklenen tüm görseller, videolar ve sesler. Seçip kaldırdığında içerik uygulamadan da çıkar ve dosya silinir.')}
+    <div class="stats sm mstat"></div>
+    <div class="row" style="flex-wrap:wrap;margin-bottom:10px"><div class="tabs" style="margin:0;flex-wrap:wrap">${TABS.map(([k, l], i) => `<button data-k="${k}" class="${i ? '' : 'on'}">${l}<span class="tc" data-c="${k}"></span></button>`).join('')}</div>
+      <input class="field q" placeholder="Kullanıcı adına göre" style="max-width:220px;margin-left:auto"></div>
+    <div class="mbar" hidden><b class="nsel">0 seçili</b><input class="field rs" placeholder="Gerekçe (kullanıcıya gider, isteğe bağlı)" style="flex:1;min-width:200px"><label class="row" style="gap:6px"><input type="checkbox" class="nt" checked> Kullanıcıya bildir</label>
+      <button class="btn sm clr">Seçimi temizle</button><button class="btn sm solid-danger del">${icon('trash')} Seçilenleri kaldır</button></div>
+    <div class="lst"><div class="spin"></div></div>`;
+  const lst = main.querySelector('.lst');
+  const bar = main.querySelector('.mbar');
+  const paintBar = () => { bar.hidden = !sel.size; main.querySelector('.nsel').textContent = `${sel.size} seçili`; };
+  const kb = (n) => (n == null ? '' : n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+  const thumb = (m) => {
+    const t = m.mime || '';
+    if (t.startsWith('audio') || m.kind === 'music') return `<div class="mt-audio">${icon('music')}<audio src="${esc(m.url)}" controls preload="none"></audio></div>`;
+    if (t.startsWith('video') || m.kind === 'reel' || (m.kind === 'story' && !t.startsWith('image'))) return `<video src="${esc(m.url)}#t=0.5" muted preload="metadata" playsinline></video><span class="vtag">${icon('play')}</span>`;
+    return `<img src="${esc(m.url)}" alt="" loading="lazy">`;
+  };
+  let items = [];
+  const load = async () => {
+    const r = await api(`/media?kind=${kind}&q=${encodeURIComponent(q)}`);
+    items = r.items;
+    main.querySelector('.mstat').innerHTML = `<div class="stat"><b>${r.total}</b><span>Bu listede medya</span></div><div class="stat"><b>${r.storeMB} MB</b><span>${r.kind === 'redis' ? 'Key Value (kalıcı)' : r.kind === 'postgres' ? 'PostgreSQL' : 'Sunucu diski'} kullanımı</span></div><div class="stat"><b>${r.trackedMB} MB</b><span>Kayıtlı yüklemeler</span></div>`;
+    main.querySelectorAll('.tc').forEach((c) => { const n = c.dataset.c === 'all' ? '' : r.counts[c.dataset.c]; c.textContent = n ? ` ${n}` : ''; });
+    lst.innerHTML = items.length ? `<div class="mgrid">${items.map((m, i) => `<div class="mitem ${sel.has(m.url + m.refId) ? 'on' : ''}" data-i="${i}">
+      <div class="mthumb">${thumb(m)}<label class="mcheck"><input type="checkbox" ${sel.has(m.url + m.refId) ? 'checked' : ''}></label><a class="mopen" href="${esc(m.url)}" target="_blank" rel="noopener" title="Aç">${icon('eye')}</a></div>
+      <div class="mb"><div class="row" style="gap:6px"><span class="chip ${m.kind === 'orphan' ? 'warn' : ''}">${esc(m.label)}</span><span class="muted" style="margin-left:auto;font-size:11.5px">${kb(m.size)}</span></div>
+        ${m.user ? `<div class="ell"><b>@${esc(m.user.username)}</b></div>` : '<div class="muted">—</div>'}
+        <div class="muted" style="font-size:11.5px">${dt(m.at)}</div>
+        <button class="btn sm danger rm1">${icon('trash')} Kaldır</button></div></div>`).join('')}</div>
+      ${items.length >= 240 ? '<div class="muted" style="padding:10px">İlk 240 gösteriliyor; filtre ya da kullanıcı adıyla daralt.</div>' : ''}` : '<div class="panel"><div class="empty">Bu listede medya yok.</div></div>';
+    paintBar();
+  };
+  const remove = async (list) => {
+    if (!list.length) return;
+    if (!confirm(`${list.length} medya kaldırılsın mı? Bu işlem geri alınamaz.`)) return;
+    try {
+      const r = await api('/media/delete', { body: { items: list.map((m) => ({ url: m.url, kind: m.kind, refId: m.refId })), reason: main.querySelector('.rs').value, notify: main.querySelector('.nt').checked } });
+      toast(`${r.removed} medya kaldırıldı${r.freedMB ? ` · ${r.freedMB} MB boşaldı` : ''}${r.notified ? ` · ${r.notified} kişiye bildirildi` : ''}.`);
+      list.forEach((m) => sel.delete(m.url + m.refId));
+      load();
+    } catch (er) { toast(er.message); }
+  };
+  main.querySelector('.tabs').onclick = (e) => { const b = e.target.closest('[data-k]'); if (!b) return; kind = b.dataset.k; main.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b)); load(); };
+  let t; main.querySelector('.q').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { q = e.target.value; load(); }, 300); };
+  lst.addEventListener('change', (e) => {
+    const box = e.target.closest('.mcheck input'); if (!box) return;
+    const card = box.closest('[data-i]'); const m = items[+card.dataset.i];
+    if (box.checked) sel.set(m.url + m.refId, m); else sel.delete(m.url + m.refId);
+    card.classList.toggle('on', box.checked); paintBar();
+  });
+  lst.addEventListener('click', (e) => { const b = e.target.closest('.rm1'); if (!b) return; remove([items[+b.closest('[data-i]').dataset.i]]); });
+  main.querySelector('.del').onclick = () => remove([...sel.values()]);
+  main.querySelector('.clr').onclick = () => { sel.clear(); load(); };
   await load();
 };
 

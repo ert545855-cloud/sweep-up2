@@ -192,3 +192,21 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .phone-pv .pv-pop { justify-self: center; width: 80%; padding: 18px; border-radius: 20px; background: #fff; color: #111; display: grid; gap: 8px; justify-items: center; text-align: center; }
 .phone-pv .pv-pop img { width: 52px; height: 52px; border-radius: 14px; }
 .phone-pv .pv-pop .pv-m { font-size: 13.5px; color: #333; white-space: pre-wrap; word-break: break-word; }
+.mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.mitem { border-radius: 14px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; display: grid; }
+.mitem.on { outline: 2px solid var(--bad); outline-offset: -1px; }
+.mthumb { position: relative; aspect-ratio: 1; background: var(--soft); display: grid; place-items: center; overflow: hidden; }
+.mthumb img, .mthumb video { width: 100%; height: 100%; object-fit: cover; }
+.mthumb .vtag { position: absolute; left: 8px; bottom: 8px; width: 26px; height: 26px; border-radius: 8px; background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center; }
+.mthumb .vtag svg { width: 14px; height: 14px; }
+.mt-audio { display: grid; gap: 8px; justify-items: center; padding: 10px; width: 100%; color: var(--muted); }
+.mt-audio svg { width: 34px; height: 34px; }
+.mt-audio audio { width: 100%; height: 32px; }
+.mcheck { position: absolute; top: 8px; left: 8px; width: 28px; height: 28px; border-radius: 8px; background: rgba(255,255,255,.9); display: grid; place-items: center; cursor: pointer; }
+.mcheck input { width: 17px; height: 17px; accent-color: var(--bad); }
+.mopen { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 8px; background: rgba(0,0,0,.5); color: #fff; display: grid; place-items: center; }
+.mopen svg { width: 15px; height: 15px; }
+.mitem .mb { padding: 10px; display: grid; gap: 4px; font-size: 13px; }
+.mitem .rm1 { margin-top: 4px; }
+.mbar { position: sticky; top: 8px; z-index: 5; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 12px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 30px -14px rgba(0,0,0,.25); }
+.tabs .tc { color: var(--muted); font-weight: 600; font-size: 12px; }

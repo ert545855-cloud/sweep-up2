@@ -123,6 +123,7 @@ export function wirePost(root, p, onRemove) {
       <button data-a="share">${icon('share')}Paylaş</button>
       <button data-a="link">${icon('link')}Bağlantıyı kopyala</button>
       <button data-a="profile">${icon('person')}Profile git</button>
+      ${mine && (p.items || []).length > 1 ? `<button data-a="rmitem" class="danger">${icon('image')}Bu fotoğrafı kaldır</button>` : ''}
       ${mine ? `<button data-a="del" class="danger">${icon('trash')}Sil</button>` : `<button data-a="report" class="danger">${icon('flag')}Şikayet et</button>`}
     </div>`, {
       onMount(sh, close) {
@@ -133,6 +134,17 @@ export function wirePost(root, p, onRemove) {
           if (a === 'link') { await navigator.clipboard?.writeText(`${location.origin}/#/p/${p.id}`); toast('Bağlantı kopyalandı.'); }
           if (a === 'profile') location.hash = `#/u/${p.user.username}`;
           if (a === 'report') reportUser(p.user, { ref: p.id });
+          if (a === 'rmitem') {
+            const tr = mediaBox.querySelector('.car-track');
+            const idx = tr ? Math.round(tr.scrollLeft / tr.clientWidth) : 0;
+            if (!confirm(`${idx + 1}. fotoğraf gönderiden kaldırılsın mı?`)) return;
+            try {
+              const np = await api(`/posts/${p.id}/items/${idx}`, { method: 'DELETE' });
+              p.items = np.items; p.media = np.media;
+              mediaBox.innerHTML = mediaHtml(p); wireCarousel(mediaBox); fitMedia(mediaBox);
+              toast('Fotoğraf kaldırıldı.');
+            } catch (er) { toast(er.message); }
+          }
           if (a === 'del') {
             if (!confirm('Bu gönderi silinsin mi?')) return;
             try { await api(`/posts/${p.id}`, { method: 'DELETE' }); root.remove(); onRemove?.(); toast('Gönderi silindi.'); } catch (er) { toast(er.message); }

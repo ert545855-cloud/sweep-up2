@@ -654,5 +654,121 @@ module.exports = function mountAdmin(app, ctx) {
     res.json({ ok: true });
   });
 
+
+  // ================= Medya (görseller, videolar, sesler) =================
+  const mid = (u) => (typeof u === 'string' && /^\/media\/[\w-]+$/.test(u) ? u.slice(7) : null);
+  // Uygulamadaki tüm medya kullanımlarını topla
+  function mediaRefs() {
+    const refs = [];
+    const add = (url, kind, refId, userId, at, extra = {}) => { const id = mid(url); if (id) refs.push({ id, url, kind, refId, userId, at, ...extra }); };
+    store.all('posts').forEach((p) => {
+      const items = p.items || [{ media: p.media, poster: p.poster }];
+      items.forEach((it, i) => { add(it.media, p.type === 'reel' ? 'reel' : 'post', p.id, p.userId, p.createdAt, { idx: i, caption: p.caption }); if (it.poster) add(it.poster, 'poster', p.id, p.userId, p.createdAt, { idx: i }); });
+      if (p.edit?.audio) add(p.edit.audio, 'music', p.id, p.userId, p.createdAt);
+    });
+    store.all('stories').forEach((x) => { add(x.media, 'story', x.id, x.userId, x.at); (x.stickers || []).forEach((st) => st.type === 'music' && add(st.src, 'music', x.id, x.userId, x.at, { story: true })); });
+    store.all('messages').forEach((m) => {
+      if (!m.deleted) add(m.media, 'dm', m.id, m.from, m.at, { mediaType: m.mediaType });
+      (m.fal?.images || []).forEach((u) => add(u, 'fal', m.id, m.from, m.at));
+    });
+    store.all('pub_msgs').forEach((m) => { if (!m.deleted) add(m.media, 'genel', m.id, m.userId, m.at); });
+    store.all('users').forEach((u) => { add(u.avatar, 'avatar', u.id, u.id, u.createdAt); (u.photos || []).forEach((ph) => add(ph, 'photo', u.id, u.id, u.createdAt)); });
+    store.all('verifications').forEach((v) => add(v.selfie, 'selfie', v.id, v.userId, v.at));
+    return refs;
+  }
+  const KIND_LABEL = { post: 'Gönderi', reel: 'Dalga', poster: 'Dalga kapağı', story: 'Hikaye', dm: 'Özel mesaj', genel: 'Genel sohbet', fal: 'Fal fotoğrafı', avatar: 'Profil fotoğrafı', photo: 'Profil fotoğrafı', selfie: 'Doğrulama selfiesi', music: 'Müzik', orphan: 'Sahipsiz' };
+
+  app.get('/api/admin/media', adminAuth, (req, res) => {
+    const kind = String(req.query.kind || 'all');
+    const refs = mediaRefs();
+    const used = new Set(refs.map((r) => r.id));
+    const orphans = store.filter('media_meta', (m) => !used.has(m.id)).map((m) => ({ id: m.id, url: `/media/${m.id}`, kind: 'orphan', refId: null, userId: m.userId, at: m.at }));
+    let list = [...refs.filter((r) => r.kind !== 'poster'), ...orphans];
+    const groups = { post: ['post'], reel: ['reel'], story: ['story'], chat: ['dm', 'fal'], genel: ['genel'], profile: ['avatar', 'photo', 'selfie'], music: ['music'], orphan: ['orphan'] };
+    const counts = Object.fromEntries(Object.entries(groups).map(([k, ks]) => [k, list.filter((r) => ks.includes(r.kind)).length]));
+    if (kind !== 'all' && groups[kind]) list = list.filter((r) => groups[kind].includes(r.kind));
+    const q = String(req.query.q || '').toLowerCase().trim();
+    if (q) list = list.filter((r) => store.get('users', r.userId)?.username.includes(q));
+    list.sort((a, b) => (b.at || 0) - (a.at || 0));
+    const total = list.length;
+    const metaBytes = store.all('media_meta').reduce((a, m) => a + (m.size || 0), 0);
+    res.json({
+      total, counts, storeMB: +((store.mediaBytes || 0) / 1048576).toFixed(1), trackedMB: +(metaBytes / 1048576).toFixed(1), kind: store.kind,
+      items: list.slice(0, 240).map((r) => {
+        const m = store.get('media_meta', r.id);
+        return { ...r, label: KIND_LABEL[r.kind], mime: m?.mime || r.mediaType || null, size: m?.size || null, where: m?.where || null, user: brief(store.get('users', r.userId)) };
+      }),
+    });
+  });
+
+  // Seçilen medyaları kaldır: içeriği uygulamadan çıkar, dosyayı sil
+  app.post('/api/admin/media/delete', adminAuth, async (req, res) => {
+    const items = (Array.isArray(req.body?.items) ? req.body.items : []).slice(0, 200);
+    const reason = String(req.body?.reason || '').slice(0, 200);
+    const tell = !!req.body?.notify;
+    if (!items.length) return res.status(400).json({ error: 'Kaldırılacak medya seç.' });
+    const notified = new Set(); const fileIds = new Set(); let removed = 0;
+    for (const it of items) {
+      const id = mid(it.url); if (!id) continue;
+      fileIds.add(id);
+      let owner = null;
+      if (it.kind === 'post' || it.kind === 'reel') {
+        const p = store.get('posts', it.refId);
+        if (p) {
+          owner = p.userId;
+          const list = (p.items || [{ media: p.media, poster: p.poster }]).filter((x) => x.media !== it.url);
+          if (!list.length || p.type === 'reel') { (p.items || []).forEach((x) => { const pid = mid(x.poster); if (pid) fileIds.add(pid); }); store.del('posts', p.id); }
+          else store.update('posts', p.id, { items: list, media: list[0].media, poster: list[0].poster || null });
+        }
+      } else if (it.kind === 'story') {
+        const x = store.get('stories', it.refId);
+        if (x) { owner = x.userId; store.del('stories', x.id); io.emit('stories:update', {}); }
+      } else if (it.kind === 'dm' || it.kind === 'fal') {
+        const m = store.get('messages', it.refId);
+        if (m) {
+          owner = m.from;
+          if (it.kind === 'fal' && m.fal) m.fal.images = (m.fal.images || []).filter((u) => u !== it.url);
+          else Object.assign(m, { deleted: true, text: '', media: null, reactions: {} });
+          store.update('messages', m.id, {});
+          store.get('chats', m.chatId)?.members.forEach((x) => emitTo(x, 'message:update', m));
+        }
+      } else if (it.kind === 'genel') {
+        const m = store.get('pub_msgs', it.refId);
+        if (m) { owner = m.userId; Object.assign(m, { deleted: true, text: '', media: null, reactions: {} }); store.update('pub_msgs', m.id, {}); io.to('genel').emit('genel:update', { ...m, user: brief(store.get('users', m.userId)) }); }
+      } else if (it.kind === 'avatar' || it.kind === 'photo') {
+        const u = store.get('users', it.refId);
+        if (u) {
+          owner = u.id;
+          const patch = { photos: (u.photos || []).filter((x) => x !== it.url) };
+          if (u.avatar === it.url) patch.avatar = `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(u.username)}&backgroundColor=ffe3dc`;
+          store.update('users', u.id, patch);
+        }
+      } else if (it.kind === 'selfie') {
+        const v = store.get('verifications', it.refId); if (v) store.update('verifications', v.id, { selfie: null });
+      } else if (it.kind === 'music') {
+        const p = store.get('posts', it.refId);
+        if (p?.edit) { owner = p.userId; store.update('posts', p.id, { edit: { ...p.edit, audio: null, muteOriginal: false } }); }
+        const x = store.get('stories', it.refId);
+        if (x) { owner = x.userId; store.update('stories', x.id, { stickers: (x.stickers || []).filter((st) => st.src !== it.url) }); }
+      }
+      removed++;
+      if (tell && owner && !notified.has(owner) && !['selfie', 'orphan'].includes(it.kind)) {
+        notified.add(owner);
+        notify(owner, { type: 'warning', title: 'SwipeUp', url: '/#/notifications', text: `⚠️ Paylaştığın bir içerik topluluk kurallarına aykırı olduğu için kaldırıldı.${reason ? ' ' + reason : ''}` });
+      }
+    }
+    // Başka yerde kullanılmayan dosyaları sil
+    const still = new Set(mediaRefs().map((r) => r.id));
+    let freed = 0;
+    for (const id of fileIds) {
+      if (still.has(id)) continue;
+      freed += await store.deleteMedia(id).catch(() => 0);
+      ctx.dropMediaCache?.(id);
+      store.del('media_meta', id);
+    }
+    audit(req.admin, `medya kaldırdı (${removed})`, null, reason);
+    res.json({ ok: true, removed, freedMB: +(freed / 1048576).toFixed(2), notified: notified.size });
+  });
+
   return { statusOf, ensureAdmin: ctx.ensureAdmin };
 };
