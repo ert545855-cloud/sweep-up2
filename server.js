@@ -876,6 +876,56 @@ app.post('/api/users/:id/report', auth, (req, res) => {
   console.log(`[report] ${req.user.username} -> ${t.username}: ${req.body?.reason}`);
   res.json({ ok: true });
 });
+// Tek bir mesajı / yorumu bildir (içeriğin o anki kopyası saklanır)
+app.post('/api/report/message', auth, (req, res) => {
+  const { kind, id, postId } = req.body || {};
+  const me = req.user.id;
+  let target = null; let snap = null;
+  if (kind === 'dm') {
+    const m = store.get('messages', id);
+    const c = m && store.get('chats', m.chatId);
+    if (!m || !c || !c.members.includes(me)) return res.status(404).json({ error: 'Mesaj bulunamadı.' });
+    target = m.from;
+    snap = { text: m.text || '', media: m.media || null, mediaType: m.mediaType || null, location: m.location || null, at: m.at, chat: c.isGroup ? c.name : null };
+  } else if (kind === 'genel') {
+    const m = store.get('pub_msgs', id);
+    if (!m) return res.status(404).json({ error: 'Mesaj bulunamadı.' });
+    target = m.userId;
+    snap = { text: m.text || '', media: m.media || null, mediaType: m.mediaType || null, at: m.at, chat: 'Genel sohbet' };
+  } else if (kind === 'comment') {
+    const p = store.get('posts', postId);
+    const c = p && p.comments.find((x) => x.id === id);
+    if (!c) return res.status(404).json({ error: 'Yorum bulunamadı.' });
+    target = c.userId;
+    snap = { text: c.text, at: c.at, postId: p.id };
+  } else return res.status(400).json({ error: 'Geçersiz istek.' });
+  if (target === me) return res.status(400).json({ error: 'Kendi mesajını bildiremezsin.' });
+  if (limited('rep:' + me, 20, DAY)) return res.status(429).json({ error: 'Bugün çok fazla bildirim gönderdin.' });
+  if (store.find('reports', (r) => r.from === me && r.ref === id && r.status === 'open')) return res.status(409).json({ error: 'Bu mesajı zaten bildirdin.' });
+  store.put('reports', {
+    id: nanoid(12), from: me, to: target, reason: String(req.body?.reason || 'diger').slice(0, 40),
+    details: String(req.body?.details || '').slice(0, 1000), ref: id, refKind: kind, postId: kind === 'comment' ? postId : null,
+    snapshot: snap, at: now(), status: 'open',
+  });
+  if (req.body?.block && target) {
+    store.put('blocks', { id: `${me}_${target}`, from: me, to: target, at: now() });
+    store.del('follows', `${me}_${target}`); store.del('follows', `${target}_${me}`);
+    unmatch(me, target);
+    emitTo(target, 'blocked', { by: me });
+  }
+  res.json({ ok: true });
+});
+
+// Yorumu sil (yorum sahibi ya da gönderi sahibi)
+app.delete('/api/posts/:id/comments/:cid', auth, (req, res) => {
+  const p = store.get('posts', req.params.id);
+  const c = p && p.comments.find((x) => x.id === req.params.cid);
+  if (!c || (c.userId !== req.user.id && p.userId !== req.user.id)) return res.status(404).json({ error: 'Yorum bulunamadı.' });
+  p.comments = p.comments.filter((x) => x.id !== c.id);
+  store.update('posts', p.id, {});
+  res.json({ ok: true });
+});
+
 app.post('/api/users/:id/unmatch', auth, (req, res) => {
   unmatch(req.user.id, req.params.id);
   res.json({ ok: true });

@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, clock, dayLabel, avatar, toast, pickFile, compressImage, uploadFile, el, sheet, reportUser, nm, richText,
+  state, api, esc, on, clock, dayLabel, avatar, toast, pickFile, compressImage, uploadFile, el, sheet, reportUser, reportMessage, nm, richText,
 } from '../core.js';
 
 const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
@@ -67,10 +67,17 @@ export default async function genel(view) {
     msgs = [...r.items, ...msgs]; more = r.more; paint(true);
   });
 
+
+  try {
+    if (!localStorage.getItem('su_hint_msgmenu')) {
+      localStorage.setItem('su_hint_msgmenu', '1');
+      setTimeout(() => toast('İpucu: Bir mesaja basılı tutarak yanıtlayabilir, tepki verebilir ya da mesajı bildirebilirsin.', { ms: 6000 }), 900);
+    }
+  } catch {}
   // ---- Menü ----
   const find = (node) => { const w = node.closest?.('.gm'); return w && msgs.find((m) => m.id === w.dataset.id); };
   function openMenu(m, wrap) {
-    if (m.deleted) return;
+    if (m.deleted || document.querySelector('#sheet-root .sheet')) return; // uzun basma + contextmenu aynı anda gelmesin
     document.querySelector('.emoji-pop')?.remove();
     const r = wrap.querySelector('.msg').getBoundingClientRect();
     const pop = el(`<div class="emoji-pop">${EMOJIS.map((x) => `<button class="${m.reactions?.[state.me.id] === x ? 'on' : ''}">${x}</button>`).join('')}</div>`);
@@ -83,7 +90,7 @@ export default async function genel(view) {
       <button data-a="reply">${icon('reply')}Yanıtla</button>
       ${m.text ? `<button data-a="copy">${icon('copy')}Kopyala</button>` : ''}
       ${mine ? '' : `<button data-a="profile">${icon('person')}Profiline git</button><button data-a="dm">${icon('send')}Özelden yaz</button>`}
-      ${mine ? `<button data-a="del" class="danger">${icon('trash')}Sil</button>` : `<button data-a="report" class="danger">${icon('flag')}Şikayet et</button>`}</div>`, {
+      ${mine ? `<button data-a="del" class="danger">${icon('trash')}Sil</button>` : `<button data-a="report" class="danger">${icon('flag')}Mesajı bildir</button>`}</div>`, {
       onMount(sh) {
         sh.querySelector('.menu').onclick = async (e) => {
           const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
@@ -93,7 +100,7 @@ export default async function genel(view) {
           if (a === 'del') s?.emit('genel:delete', { id: m.id });
           if (a === 'profile') location.hash = `#/u/${m.user.username}`;
           if (a === 'dm') import('../core.js').then((c) => c.openChatWith(m.userId)).catch((er) => toast(er.message));
-          if (a === 'report') reportUser(m.user, { ref: m.id });
+          if (a === 'report') reportMessage({ kind: 'genel', id: m.id, user: m.user, text: m.text, media: m.media });
         };
       },
     });

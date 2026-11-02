@@ -1047,3 +1047,7 @@ input.sw:checked::after { transform: translateX(18px); }
 .reel .snd-line img { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; flex: none; }
 a.snd-line { color: #fff; }
 .picker .stk.mu { max-width: 94%; padding-right: 10px; }
+.rq-quote { margin: 0 16px 10px; padding: 10px 12px; border-left: 3px solid var(--hot); border-radius: 10px; background: var(--surface); display: grid; gap: 2px; font-size: 14px; max-height: 120px; overflow: hidden; }
+.comment { position: relative; }
+.comment .cmore { margin-left: auto; width: 30px; height: 30px; display: grid; place-items: center; color: var(--muted); flex: none; align-self: flex-start; }
+.comment .cmore svg { width: 18px; height: 18px; }

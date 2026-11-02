@@ -36,8 +36,13 @@ module.exports = function mountAdmin(app, ctx) {
   const kickSockets = (userId, payload) => {
     online.get(userId)?.forEach((s) => { s.emit('account:banned', payload); s.disconnect(true); });
   };
-  const contentOf = (ref) => {
+  const contentOf = (ref, r) => {
     if (!ref) return null;
+    if (r?.refKind === 'comment') {
+      const p = store.get('posts', r.postId);
+      const c = p?.comments.find((x) => x.id === ref);
+      return c ? { kind: 'comment', id: c.id, postId: p.id, text: c.text } : { kind: 'gone', id: ref, text: r.snapshot?.text };
+    }
     const p = store.get('posts', ref);
     if (p) return { kind: 'post', id: p.id, type: p.type, media: p.media, poster: p.poster, caption: p.caption };
     const m = store.get('messages', ref);
@@ -46,11 +51,15 @@ module.exports = function mountAdmin(app, ctx) {
     if (s) return { kind: 'story', id: s.id, media: s.media, mediaType: s.mediaType };
     const g = store.get('pub_msgs', ref);
     if (g) return { kind: 'genel', id: g.id, text: g.deleted ? '(silindi)' : g.text, media: g.deleted ? null : g.media, mediaType: g.mediaType };
-    return { kind: 'gone', id: ref };
+    return { kind: 'gone', id: ref, text: r?.snapshot?.text };
   };
-  const deleteContent = (ref) => {
-    const c = contentOf(ref);
+  const deleteContent = (ref, r) => {
+    const c = contentOf(ref, r);
     if (!c) return null;
+    if (c.kind === 'comment') {
+      const p = store.get('posts', c.postId);
+      store.update('posts', p.id, { comments: p.comments.filter((x) => x.id !== ref) });
+    }
     if (c.kind === 'post') store.del('posts', ref);
     if (c.kind === 'story') { store.del('stories', ref); io.emit('stories:update', {}); }
     if (c.kind === 'genel') {
@@ -243,7 +252,7 @@ module.exports = function mountAdmin(app, ctx) {
     const list = store.filter('reports', (r) => st === 'all' || r.status === st).sort((a, b) => b.at - a.at).slice(0, 300);
     res.json(list.map((r) => ({
       ...r, fromUser: brief(store.get('users', r.from)), toUser: store.get('users', r.to) ? userRow(store.get('users', r.to)) : null,
-      content: contentOf(r.ref), sameTarget: store.filter('reports', (x) => x.to === r.to).length,
+      content: contentOf(r.ref, r), snapshot: r.snapshot || null, refKind: r.refKind || null, sameTarget: store.filter('reports', (x) => x.to === r.to).length,
     })));
   });
   app.post('/api/admin/reports/:id', adminAuth, (req, res) => {
@@ -253,7 +262,7 @@ module.exports = function mountAdmin(app, ctx) {
     const note = String(req.body?.note || '').slice(0, 500);
     const target = store.get('users', r.to);
     let did = 'yoksaydı';
-    if (action === 'delete' && r.ref) { deleteContent(r.ref); did = 'içeriği sildi'; }
+    if (action === 'delete' && r.ref) { deleteContent(r.ref, r); did = 'içeriği sildi'; }
     if (action === 'warn' && target) {
       notify(target.id, { type: 'warning', text: `⚠️ Hakkında gelen bir şikayet incelendi. ${note || 'Lütfen topluluk kurallarına uy.'}`, title: 'SwipeUp', url: '/#/notifications' });
       did = 'uyardı';

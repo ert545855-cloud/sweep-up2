@@ -32,7 +32,7 @@ const STATUS = { active: ['ok', 'Aktif'], suspended: ['warn', 'Askıda'], banned
 const statusChip = (s) => `<span class="chip ${STATUS[s]?.[0] || ''}">${STATUS[s]?.[1] || s}</span>`;
 const vt = (u) => (u?.verified ? `<span class="vt" title="Doğrulanmış">${icon('verified')}</span>` : '') + (u?.plus ? '<span class="chip gold">+</span>' : '');
 const userCell = (u) => (u ? `<div class="row"><img class="av" src="${esc(u.avatar)}" alt="" loading="lazy"><div class="grow"><div class="ell"><b>${esc(u.name)}</b>${vt(u)}${u.role === 'falci' ? ' <span class="chip info">Falcı</span>' : ''}</div><div class="muted ell">@${esc(u.username)}</div></div></div>` : '<span class="muted">Silinmiş hesap</span>');
-const REASON = { spam: 'Spam / sahte hesap', taciz: 'Taciz veya zorbalık', uygunsuz: 'Uygunsuz içerik', dolandirici: 'Dolandırıcılık', yas: '18 yaş altı olabilir', diger: 'Diğer' };
+const REASON = { tehdit: 'Tehdit / şiddet', nefret: 'Nefret söylemi', spam: 'Spam / sahte hesap', taciz: 'Taciz veya zorbalık', uygunsuz: 'Uygunsuz içerik', dolandirici: 'Dolandırıcılık', yas: '18 yaş altı olabilir', diger: 'Diğer' };
 const FAL = { kahve: '☕️ Kahve falı', tarot: '🔮 Tarot', burc: '✨ Burç', uyum: '💞 Aşk uyumu' };
 
 const SECTIONS = [
@@ -233,8 +233,10 @@ VIEWS.reports = async (main) => {
       <div class="who">${userCell(r.fromUser)}<span class="arrow">→</span>${userCell(r.toUser)}${r.toUser ? statusChip(r.toUser.status) : ''}</div>
       <div class="row" style="flex-wrap:wrap"><span class="chip warn">${esc(REASON[r.reason] || r.reason)}</span><span class="muted">${dt(r.at)}</span>${r.sameTarget > 1 ? `<span class="chip bad">Bu kişi hakkında ${r.sameTarget} şikayet</span>` : ''}${r.status !== 'open' ? `<span class="chip">${esc(r.resolution || r.status)} · ${esc(r.resolvedBy || '')}</span>` : ''}</div>
       ${r.details ? `<div class="det">${esc(r.details)}</div>` : ''}
-      ${r.content ? `<div><div class="muted" style="font-size:12px;margin-bottom:4px">Şikayet edilen içerik (${{ post: 'gönderi', message: 'mesaj', story: 'hikaye', gone: 'silinmiş' }[r.content.kind]})</div>
-        ${r.content.text || r.content.caption ? `<div class="det">${esc(r.content.text || r.content.caption)}</div>` : ''}<div class="media">${media(r.content)}</div></div>` : ''}
+      ${r.content ? `<div><div class="muted" style="font-size:12px;margin-bottom:4px">Bildirilen içerik (${{ post: 'gönderi', message: 'özel mesaj', genel: 'genel sohbet mesajı', comment: 'yorum', story: 'hikaye', gone: 'silinmiş' }[r.content.kind] || r.content.kind}${r.snapshot?.chat ? ` · ${esc(r.snapshot.chat)}` : ''})</div>
+        ${r.content.text || r.content.caption ? `<div class="det">${esc(r.content.text || r.content.caption)}</div>` : ''}
+        ${r.snapshot && r.snapshot.text && r.snapshot.text !== r.content.text ? `<div class="muted" style="font-size:12px;margin:6px 0 4px">Bildirildiği andaki hali (${dt(r.snapshot.at)})</div><div class="det">${esc(r.snapshot.text)}</div>` : ''}
+        <div class="media">${media(r.content)}</div></div>` : ''}
       ${r.status === 'open' ? `<div class="acts"><input class="field nt" placeholder="Not / uyarı metni (isteğe bağlı)">
         <button class="btn sm" data-a="dismiss">Yoksay</button><button class="btn sm" data-a="warn">${icon('flag')} Uyar</button>
         ${r.content && r.content.kind !== 'gone' ? `<button class="btn sm danger" data-a="delete">${icon('trash')} İçeriği sil</button>` : ''}

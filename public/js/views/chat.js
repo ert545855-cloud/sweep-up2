@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, clock, dayLabel, lastSeen, avatar, toast, pickFile, compressImage, uploadFile, refreshBadges, el, sheet, audioRecorder, fmtDur, reportUser, nm,
+  state, api, esc, on, clock, dayLabel, lastSeen, avatar, toast, pickFile, compressImage, uploadFile, refreshBadges, el, sheet, audioRecorder, fmtDur, reportUser, reportMessage, nm,
 } from '../core.js';
 import { startCall } from '../calls.js';
 import { FAL_TYPES, zodiacOf } from '../fal-data.js';
@@ -174,11 +174,18 @@ export default async function chat(view, chatId) {
     playing = { a, wrap, stop };
   });
 
+
+  try {
+    if (!localStorage.getItem('su_hint_msgmenu')) {
+      localStorage.setItem('su_hint_msgmenu', '1');
+      setTimeout(() => toast('İpucu: Bir mesaja basılı tutarak yanıtlayabilir, tepki verebilir ya da mesajı bildirebilirsin.', { ms: 6000 }), 900);
+    }
+  } catch {}
   // ---- Mesaj menüsü: uzun bas / sağ tık / çift dokun / sağa kaydır ----
   const findMsg = (node) => { const w = node.closest?.('.mwrap'); return w && msgs.find((m) => m.id === w.dataset.id); };
   const react = (m, emoji) => s?.emit('message:react', { id: m.id, emoji });
   function openMenu(m, wrap) {
-    if (m.deleted) return;
+    if (m.deleted || document.querySelector('#sheet-root .sheet')) return; // uzun basma + contextmenu aynı anda gelmesin
     document.querySelector('.emoji-pop')?.remove();
     const r = wrap.getBoundingClientRect();
     const pop = el(`<div class="emoji-pop">${EMOJIS.map((e) => `<button class="${m.reactions?.[state.me.id] === e ? 'on' : ''}">${e}</button>`).join('')}</div>`);
@@ -193,7 +200,7 @@ export default async function chat(view, chatId) {
       ${m.text ? `<button data-a="copy">${icon('copy')}Kopyala</button>` : ''}
       ${mine ? `<button data-a="delall" class="danger">${icon('trash')}Herkesten sil</button>` : ''}
       <button data-a="delme" class="danger">${icon('trash')}Benden sil</button>
-      ${!mine ? `<button data-a="report" class="danger">${icon('flag')}Şikayet et</button>` : ''}
+      ${!mine ? `<button data-a="report" class="danger">${icon('flag')}Mesajı bildir</button>` : ''}
     </div>`, {
       onMount(sh, close) {
         sh.querySelector('.menu').onclick = async (e) => {
@@ -203,7 +210,7 @@ export default async function chat(view, chatId) {
           if (a === 'copy') { await navigator.clipboard?.writeText(m.text); toast('Kopyalandı.'); }
           if (a === 'delall') s?.emit('message:delete', { id: m.id, forAll: true });
           if (a === 'delme') s?.emit('message:delete', { id: m.id, forAll: false });
-          if (a === 'report') reportUser(members.get(m.from) || other, { ref: m.id });
+          if (a === 'report') reportMessage({ kind: 'dm', id: m.id, user: members.get(m.from) || other, text: m.text || (m.location ? '📍 Konum' : ''), media: m.media });
         };
         close.__pop = pop;
       },

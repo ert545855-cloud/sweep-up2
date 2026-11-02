@@ -341,6 +341,33 @@ export function reportUser(u, { ref } = {}) {
     },
   });
 }
+// Tek bir mesajı / yorumu bildir
+const MSG_REASONS = [['taciz', 'Hakaret, taciz veya zorbalık'], ['tehdit', 'Tehdit ya da şiddet'], ['uygunsuz', 'Müstehcen / uygunsuz içerik'], ['spam', 'Spam ya da reklam'], ['dolandirici', 'Dolandırıcılık, para isteme'], ['nefret', 'Nefret söylemi'], ['diger', 'Diğer']];
+export function reportMessage({ kind, id, postId, user, text, media }) {
+  const who = user?.name || user?.username || 'Bu kişi';
+  sheet('Mesajı bildir', `<form class="rf">
+    <div class="rq-quote">${user ? `<b>${esc(who)}</b>` : ''}${media ? `<span class="muted">📷 Medya</span>` : ''}${text ? `<span>${esc(String(text).slice(0, 300))}</span>` : ''}</div>
+    <p class="muted" style="margin:0 16px 10px;font-size:13.5px">Bildirimin gizli tutulur; ${esc(who)} kimin bildirdiğini görmez. Ekibimiz mesajı inceler.</p>
+    <div class="radio-list">${MSG_REASONS.map(([k, l], i) => `<label><input type="radio" name="r" value="${k}" ${i ? '' : 'checked'}>${l}</label>`).join('')}</div>
+    <div style="padding:0 16px 8px"><textarea class="field" name="d" placeholder="Eklemek istediğin bir şey var mı? (isteğe bağlı)" maxlength="1000"></textarea></div>
+    ${user && user.id !== state.me?.id ? `<label class="list-item" style="gap:10px"><input type="checkbox" name="b" style="accent-color:var(--uv);width:18px;height:18px">${esc(who)} kişisini engelle</label>` : ''}
+    <div style="padding:8px 16px 16px"><button class="btn hot block">Bildir</button></div></form>`, {
+    onMount(sh, close) {
+      const f = sh.querySelector('form');
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        const block = !!f.b?.checked;
+        try {
+          await api('/report/message', { body: { kind, id, postId, reason: f.r.value, details: f.d.value, block } });
+          close();
+          toast(block ? 'Mesaj bildirildi ve kişi engellendi.' : 'Mesaj bildirildi, teşekkürler.');
+          if (block && user) emit('user:blocked', user.id);
+        } catch (er) { toast(er.message); }
+      };
+    },
+  });
+}
+
 export async function blockUser(u) {
   if (!confirm(`${u.name || u.username} engellensin mi? Seni göremez, sana mesaj atamaz; eşleşmeniz ve sohbetiniz silinir.`)) return false;
   try { await api(`/users/${u.id}/block`, { body: {} }); toast('Engellendi.'); emit('user:blocked', u.id); return true; } catch (e) { toast(e.message); return false; }
@@ -422,9 +449,31 @@ export function openComments(post) {
     footer: `<form class="comment-input">${avatar(state.me, 32, { dot: false })}<input name="t" placeholder="${esc(post.user.username)} için yorum ekle..." autocomplete="off" maxlength="500"><button class="link">Paylaş</button></form>`,
     async onMount(sh) {
       const list = sh.querySelector('.cl');
-      const row = (c) => `<div class="comment">${avatar(c.user, 32, { dot: false })}<div class="t"><span class="b">${nm(c.user, 'username')}</span><span class="muted">${ago(c.at)}</span><div>${richText(c.text)}</div></div></div>`;
+      const row = (c) => `<div class="comment" data-cid="${esc(c.id)}">${avatar(c.user, 32, { dot: false })}<div class="t"><span class="b">${nm(c.user, 'username')}</span><span class="muted">${ago(c.at)}</span><div>${richText(c.text)}</div></div><button class="cmore" aria-label="Yorum seçenekleri">${icon('more')}</button></div>`;
+      let cs = [];
+      list.addEventListener('click', (e) => {
+        const b = e.target.closest('.cmore'); if (!b) return;
+        const el_ = b.closest('[data-cid]'); const c = cs.find((x) => x.id === el_.dataset.cid); if (!c) return;
+        const mine = c.user?.id === state.me.id; const owner = post.user?.id === state.me.id;
+        sheet(null, `<div class="menu">
+          ${mine || owner ? `<button data-a="del" class="danger">${icon('trash')}Yorumu sil</button>` : ''}
+          ${mine ? '' : `<button data-a="rep" class="danger">${icon('flag')}Yorumu bildir</button>`}
+          <button data-a="copy">${icon('copy')}Kopyala</button></div>`, {
+          onMount(s2, close2) {
+            s2.querySelector('.menu').onclick = async (ev) => {
+              const a = ev.target.closest('[data-a]')?.dataset.a; if (!a) return;
+              close2();
+              if (a === 'copy') { await navigator.clipboard?.writeText(c.text); toast('Kopyalandı.'); }
+              if (a === 'rep') reportMessage({ kind: 'comment', id: c.id, postId: post.id, user: c.user, text: c.text });
+              if (a === 'del') {
+                try { await api(`/posts/${post.id}/comments/${c.id}`, { method: 'DELETE' }); el_.remove(); post.commentCount = Math.max(0, post.commentCount - 1); toast('Yorum silindi.'); } catch (er) { toast(er.message); }
+              }
+            };
+          },
+        });
+      });
       try {
-        const cs = await api(`/posts/${post.id}/comments`);
+        cs = await api(`/posts/${post.id}/comments`);
         list.innerHTML = cs.length ? cs.map(row).join('') : '<div class="empty"><h2>Henüz yorum yok</h2>Sohbeti başlat.</div>';
       } catch (e) { list.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
       const f = sh.querySelector('form');
@@ -434,6 +483,7 @@ export function openComments(post) {
         f.t.value = '';
         try {
           const c = await api(`/posts/${post.id}/comments`, { body: { text } });
+          cs.push(c);
           if (list.querySelector('.empty')) list.innerHTML = '';
           list.insertAdjacentHTML('beforeend', row(c));
           post.commentCount++;
