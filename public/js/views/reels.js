@@ -5,7 +5,7 @@ import {
 
 export default async function reels(view, focusId) {
   view.innerHTML = `<div class="reels-top">
-      <a href="#/create/reel" aria-label="Reels oluştur">${icon('plus')}</a>
+      <a href="#/create/reel" aria-label="Dalga oluştur">${icon('plus')}</a>
       <div class="tabsw"><span class="on" data-t="all">Senin için</span><span data-t="fol">Takip ettiklerin</span></div>
       <button class="snd" aria-label="Sesi aç/kapat">${icon(state.muted ? 'mute' : 'volume')}</button>
     </div>
@@ -32,7 +32,7 @@ export default async function reels(view, focusId) {
   const paint = (items) => {
     io?.disconnect();
     if (!items.length) {
-      box.innerHTML = `<div class="empty" style="color:#aaa;padding-top:40vh">Henüz reels yok. <a class="link" href="#/create/reel">İlk reels videosunu paylaş</a></div>`;
+      box.innerHTML = `<div class="empty" style="color:#aaa;padding-top:40vh">Henüz dalga yok. <a class="link" href="#/create/reel">İlk dalgayı sen paylaş</a></div>`;
       return;
     }
     box.innerHTML = items.map((r) => `<section class="reel" data-id="${esc(r.id)}" data-post>

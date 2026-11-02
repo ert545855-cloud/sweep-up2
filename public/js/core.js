@@ -386,7 +386,7 @@ export function openComments(post) {
 }
 
 export async function sharePost(post) {
-  const url = `${location.origin}/#/${post.type === 'reel' ? 'reels' : 'p'}/${post.id}`;
+  const url = `${location.origin}/#/${post.type === 'reel' ? 'dalga' : 'p'}/${post.id}`;
   if (navigator.share) {
     try { await navigator.share({ title: 'SwipeUp', text: post.caption || '', url }); return; } catch { return; }
   }

@@ -5,7 +5,7 @@ Kaydırarak tanış, reels izle, hikaye paylaş, canlı yayın aç, mesajlaş ve
 - **Keşfet (kaydır):** Kartı sağa kaydır beğen, sola geç, yukarı süper beğeni. Karşılıklı beğenide eşleşme ekranı açılır ve sohbet başlar.
 - **Seni beğenenler ve filtreler:** Kimlerin sağa kaydırdığını gör; yaş aralığı, uzaklık ve cinsiyete göre filtrele.
 - **Hikayeler:** 24 saatte kaybolan fotoğraf/video, görüntüleyenler listesi, hikayeye mesajla yanıt.
-- **Reels:** Tam ekran dikey video akışı, çift dokunarak beğen, yorum, paylaş, kaydet, takip et.
+- **Dalga:** Tam ekran dikey video akışı (SwipeUp’a özgü kısa videolar), çift dokunarak beğen, yorum, paylaş, kaydet, takip et.
 - **Canlı yayın:** Kameradan WebRTC ile yayın; izleyici sayısı, canlı yorumlar ve kalpler. Takipçilere ve eşleşmelere bildirim gider.
 - **Mesajlar:** Gerçek zamanlı sohbet; yazıyor göstergesi, çevrimiçi / son görülme, tek-çift-mavi tik, fotoğraf, video ve sesli mesaj. Mesajı sağa kaydırıp yanıtla, uzun basıp emoji tepkisi ver ya da herkesten sil.
 - **Sesli ve görüntülü arama:** Birebir WebRTC araması, gelen arama ekranı ve push bildirimi, cevapsız arama kaydı.

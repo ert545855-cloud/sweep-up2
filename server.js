@@ -535,8 +535,8 @@ app.post('/api/posts', auth, (req, res) => {
   });
   store.filter('follows', (f) => f.to === req.user.id).forEach((f) => notify(f.from, {
     type: 'post', fromId: req.user.id, ref: p.id,
-    text: `${req.user.username} yeni bir ${type === 'reel' ? 'reels' : 'gönderi'} paylaştı.`,
-    url: type === 'reel' ? `/#/reels/${p.id}` : `/#/p/${p.id}`,
+    text: `${req.user.username} yeni bir ${type === 'reel' ? 'dalga' : 'gönderi'} paylaştı.`,
+    url: type === 'reel' ? `/#/dalga/${p.id}` : `/#/p/${p.id}`,
   }));
   res.json(postOut(p, req.user.id));
 });
@@ -561,7 +561,7 @@ app.post('/api/posts/:id/like', auth, (req, res) => {
   const want = req.body?.like ?? !p.likes.includes(me);
   if (want && !p.likes.includes(me)) {
     p.likes.push(me);
-    notify(p.userId, { type: 'like', fromId: me, ref: p.id, text: `${req.user.username} ${p.type === 'reel' ? 'reels videonu' : 'gönderini'} beğendi.`, url: `/#/p/${p.id}` });
+    notify(p.userId, { type: 'like', fromId: me, ref: p.id, text: `${req.user.username} ${p.type === 'reel' ? 'dalganı' : 'gönderini'} beğendi.`, url: `/#/p/${p.id}` });
   }
   if (!want) p.likes = p.likes.filter((x) => x !== me);
   store.update('posts', p.id, {});
@@ -905,7 +905,7 @@ const isMedia = (u) => typeof u === 'string' && /^\/media\/[\w-]+$/.test(u);
 
 app.get('/api/fal/falci', auth, (req, res) => {
   const f = falci();
-  res.json(f ? { ...brief(f), bio: f.bio } : null);
+  res.json(f ? { ...brief(f), bio: f.bio, isFollowing: !!store.get('follows', `${req.user.id}_${f.id}`), followers: store.filter('follows', (x) => x.to === f.id).length } : null);
 });
 
 app.post('/api/fal', auth, (req, res) => {

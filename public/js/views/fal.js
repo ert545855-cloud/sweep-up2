@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, toast, avatar, pickFile, compressImage, uploadFile, ago, on,
+  state, api, esc, toast, avatar, pickFile, compressImage, uploadFile, ago, on, el,
 } from '../core.js';
 import {
   FAL_TYPES, TAROT, TAROT_POS, ZODIAC, zodiacOf, seeded,
@@ -37,8 +37,21 @@ async function hub(view) {
     <div class="mine"></div>${note}`;
   const [f, mine] = await Promise.all([api('/fal/falci').catch(() => null), api('/fal/mine').catch(() => [])]);
   const hero = view.querySelector('.fal-hero');
-  if (f) hero.querySelector('.fz').outerHTML = `<img class="av av-56" src="${esc(f.avatar)}" alt="">`;
-  else hero.querySelector('.fz').outerHTML = '<span class="zs">🔮</span>';
+  if (f) {
+    hero.querySelector('.fz').outerHTML = `<a href="#/u/${esc(f.username)}"><img class="av av-56" src="${esc(f.avatar)}" alt="Falcı Teyze profili"></a>`;
+    hero.querySelector('b').outerHTML = `<a href="#/u/${esc(f.username)}"><b>Falcı Teyze</b></a> <span class="fcnt" style="opacity:.85;font-size:13px">· ${f.followers} takipçi</span>`;
+    const fb = el(`<button class="btn sm" style="background:rgba(255,255,255,.22);color:inherit">${f.isFollowing ? 'Takiptesin' : 'Takip et'}</button>`);
+    fb.onclick = async () => {
+      try {
+        const r = await api(`/users/${f.id}/follow`, { body: {} });
+        if (r.following !== f.isFollowing) f.followers += r.following ? 1 : -1;
+        f.isFollowing = r.following; fb.textContent = r.following ? 'Takiptesin' : 'Takip et';
+        hero.querySelector('.fcnt').textContent = `· ${f.followers} takipçi`;
+        toast(r.following ? 'Falcı Teyze’yi takip ediyorsun. Paylaşımları akışına düşecek.' : 'Takibi bıraktın.');
+      } catch (er) { toast(er.message); }
+    };
+    hero.append(fb);
+  } else hero.querySelector('.fz').outerHTML = '<span class="zs">🔮</span>';
   if (f && mine.length) {
     hero.insertAdjacentHTML('beforeend', `<a class="btn sm" href="#/chat/${esc(mine[0].chatId)}" style="background:rgba(255,255,255,.22);color:inherit">Mesajlar</a>`);
   }

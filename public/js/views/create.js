@@ -25,7 +25,7 @@ function posterFrom(file) {
 
 export default function create(view, kind) {
   let mode = ['reel', 'story'].includes(kind) ? kind : 'image';
-  const TITLES = { image: 'Yeni gönderi', reel: 'Yeni reels', story: 'Yeni hikaye' };
+  const TITLES = { image: 'Yeni gönderi', reel: 'Yeni dalga', story: 'Yeni hikaye' };
   let file = null;
 
   view.innerHTML = `<header class="topbar bordered">
@@ -37,7 +37,7 @@ export default function create(view, kind) {
       <div class="seg" role="tablist">
         <button data-m="image" class="${mode === 'image' ? 'on' : ''}">Gönderi</button>
         <button data-m="story" class="${mode === 'story' ? 'on' : ''}">Hikaye</button>
-        <button data-m="reel" class="${mode === 'reel' ? 'on' : ''}">Reels</button>
+        <button data-m="reel" class="${mode === 'reel' ? 'on' : ''}">Dalga</button>
         <button data-m="live">Canlı</button>
       </div>
       <button class="picker"></button>
@@ -100,8 +100,8 @@ export default function create(view, kind) {
         return;
       }
       const p = await api('/posts', { body: { type: mode, media: up.url, poster, caption: view.querySelector('.cap').value } });
-      toast(mode === 'reel' ? 'Reels paylaşıldı.' : 'Gönderi paylaşıldı.');
-      location.hash = mode === 'reel' ? `#/reels/${p.id}` : '#/me';
+      toast(mode === 'reel' ? 'Dalga paylaşıldı.' : 'Gönderi paylaşıldı.');
+      location.hash = mode === 'reel' ? `#/dalga/${p.id}` : '#/me';
     } catch (e) {
       toast(e.message); bar.hidden = true; goBtns.forEach((b) => { b.disabled = false; });
     }

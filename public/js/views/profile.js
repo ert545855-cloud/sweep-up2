@@ -102,11 +102,11 @@ export default async function profile(view, username) {
     : u.blockedByMe
       ? '<button class="btn primary unb">Engeli kaldır</button>'
       : u.role === 'falci'
-        ? `<a class="btn primary" href="#/fal">🔮 Fal baktır</a><button class="btn msg">${icon('send')} Mesaj</button>`
+        ? `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : 'Takip et'}</button><a class="btn" href="#/fal">🔮 Fal baktır</a><button class="btn sq msg" aria-label="Mesaj gönder">${icon('send', '', 'style="width:18px;height:18px"')}</button>`
         : `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button><button class="btn msg">${icon('send')} Mesaj</button>`}
     </div>
     <div class="tabs">
-      ${tabs.map((t, i) => `<button data-t="${t}" class="${i ? '' : 'on'}" aria-label="${{ grid: 'Gönderiler', reels: 'Reels', saved: 'Kaydedilenler' }[t]}">${icon({ grid: 'grid', reels: 'reels', saved: 'bookmark' }[t])}</button>`).join('')}
+      ${tabs.map((t, i) => `<button data-t="${t}" class="${i ? '' : 'on'}" aria-label="${{ grid: 'Gönderiler', reels: 'Dalgalar', saved: 'Kaydedilenler' }[t]}">${icon({ grid: 'grid', reels: 'reels', saved: 'bookmark' }[t])}</button>`).join('')}
     </div>
     <div class="tab-body"></div>`;
 
@@ -121,7 +121,7 @@ export default async function profile(view, username) {
     if (!items.length) {
       const msg = {
         grid: self ? ['Fotoğraf paylaş', 'Paylaştığın fotoğraflar profilinde görünür.', '#/create', 'İlk fotoğrafını paylaş'] : ['Henüz gönderi yok', '', '', ''],
-        reels: self ? ['Reels paylaş', 'Kısa videoların burada görünür.', '#/create/reel', 'Reels oluştur'] : ['Henüz reels yok', '', '', ''],
+        reels: self ? ['Dalga paylaş', 'Kısa dikey videoların burada görünür.', '#/create/reel', 'Dalga oluştur'] : ['Henüz dalga yok', '', '', ''],
         saved: ['Kaydedilenler', 'Kaydettiğin gönderiler sadece sana görünür.', '', ''],
       }[t];
       body.innerHTML = `<div class="empty" style="padding-top:28px"><div class="big">${icon(t === 'grid' ? 'camera' : t === 'reels' ? 'reels' : 'bookmark')}</div><h2>${msg[0]}</h2>${msg[1]}${msg[2] ? `<p><a class="btn primary" href="${msg[2]}">${msg[3]}</a></p>` : ''}</div>`;

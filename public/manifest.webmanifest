@@ -1,7 +1,7 @@
 {
   "name": "SwipeUp",
   "short_name": "SwipeUp",
-  "description": "Kaydır, eşleş, reels izle, canlı yayın aç ve sohbet et.",
+  "description": "Kaydır, eşleş, dalgaları izle, canlı yayın aç ve sohbet et.",
   "start_url": "/#/",
   "scope": "/",
   "display": "standalone",

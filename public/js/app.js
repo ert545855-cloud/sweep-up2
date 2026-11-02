@@ -7,7 +7,7 @@ import { initCalls } from './calls.js';
 const routes = [
   [/^\/?$/, 'feed', { tab: 'home' }],
   [/^\/search$/, 'search', { tab: 'home' }],
-  [/^\/reels(?:\/([\w-]+))?$/, 'reels', { tab: 'reels', dark: true }],
+  [/^\/(?:dalga|reels)(?:\/([\w-]+))?$/, 'reels', { tab: 'reels', dark: true }],
   [/^\/swipe$/, 'swipe', { tab: 'swipe' }],
   [/^\/likes$/, 'likes', { tab: 'swipe' }],
   [/^\/chats$/, 'chats', { tab: 'chats' }],
@@ -38,7 +38,7 @@ function renderTabbar(active) {
   const b = state.badges;
   const tabs = [
     ['home', '#/', icon(active === 'home' ? 'homeFill' : 'home'), 'Ana sayfa', ''],
-    ['reels', '#/reels', icon('reels'), 'Reels', ''],
+    ['reels', '#/dalga', icon('reels'), 'Dalga', ''],
     ['swipe', '#/swipe', `<span class="center">${icon('flame')}${b.likes ? `<span class="num-badge">${b.likes > 99 ? '99+' : b.likes}</span>` : ''}</span>`, 'Kaydır ve eşleş', 'mid'],
     ['chats', '#/chats', `<span style="position:relative;display:grid">${icon('send')}${b.messages ? `<span class="num-badge">${b.messages}</span>` : ''}</span>`, 'Mesajlar', ''],
     ['me', '#/me', `<img class="me-av" src="${esc(state.me?.avatar)}" alt="">${b.notifications ? '<i class="dot-badge"></i>' : ''}`, 'Profil', ''],

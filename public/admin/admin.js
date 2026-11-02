@@ -112,7 +112,7 @@ VIEWS.overview = async (main) => {
   main.innerHTML = `${head('Genel bakış', `Veri deposu: ${o.store === 'redis' ? 'Render Key Value' : o.store === 'postgres' ? 'PostgreSQL' : 'Sunucu diski'} · medya ${o.mediaMB} MB`)}
     <div class="stats">
       ${st(o.users, 'Toplam üye')}${st(o.newToday, 'Bugün katılan')}${st(o.new7, 'Son 7 gün katılan')}${st(o.online, 'Şu an çevrimiçi')}${st(o.active24, 'Son 24 saatte aktif')}
-      ${st(o.messagesToday, 'Bugün gönderilen mesaj')}${st(o.matches, 'Toplam eşleşme')}${st(o.posts, 'Gönderi ve reels')}${st(o.stories, 'Yayında hikaye')}${st(o.banned, 'Askıda / yasaklı', true, '#/users')}
+      ${st(o.messagesToday, 'Bugün gönderilen mesaj')}${st(o.matches, 'Toplam eşleşme')}${st(o.posts, 'Gönderi ve dalga')}${st(o.stories, 'Yayında hikaye')}${st(o.banned, 'Askıda / yasaklı', true, '#/users')}
       ${st(o.reportsOpen, 'Açık şikayet', true, '#/reports')}${st(o.appealsOpen, 'Bekleyen itiraz', true, '#/appeals')}${st(o.falPending, 'Bekleyen fal', true, '#/fal')}
       <div class="stat"><b class="money in">${tl(o.income)}</b><span>Bu ay gelir</span></div>
       <div class="stat"><b class="money out">${tl(o.expense)}</b><span>Bu ay gider</span></div>
@@ -358,8 +358,8 @@ VIEWS.fal = async (main) => {
 // ---- İçerik ----
 VIEWS.content = async (main) => {
   let kind = 'posts';
-  main.innerHTML = `${head('İçerik', 'Son paylaşılan gönderiler, reels ve hikayeler.')}
-    <div class="tabs"><button data-k="posts" class="on">Gönderiler ve reels</button><button data-k="stories">Hikayeler (24 saat)</button></div><div class="lst"><div class="spin"></div></div>`;
+  main.innerHTML = `${head('İçerik', 'Son paylaşılan gönderiler, dalgalar ve hikayeler.')}
+    <div class="tabs"><button data-k="posts" class="on">Gönderiler ve dalgalar</button><button data-k="stories">Hikayeler (24 saat)</button></div><div class="lst"><div class="spin"></div></div>`;
   const lst = main.querySelector('.lst');
   const load = async () => {
     const list = await api(`/content?kind=${kind}`);
