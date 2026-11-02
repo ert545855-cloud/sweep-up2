@@ -72,18 +72,33 @@ function postOut(p, viewerId) {
 
 function sign(u) { return jwt.sign({ id: u.id }, JWT_SECRET, { expiresIn: '90d' }); }
 
+// Yasak / askı durumu (yönetim panelinden verilir)
+function banInfo(u) {
+  if (!u) return null;
+  if (u.status === 'banned') return { banned: true, kind: 'banned', reason: u.banReason || '', until: null };
+  if (u.status === 'suspended' && u.bannedUntil > Date.now()) return { banned: true, kind: 'suspended', reason: u.banReason || '', until: u.bannedUntil };
+  return null;
+}
+const isActive = (u) => !banInfo(u);
+const BAN_OK = new Set(['/api/me', '/api/appeals', '/api/appeals/mine']);
+
 function auth(req, res, next) {
   const h = req.headers.authorization || '';
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
+  let u;
   try {
     const { id } = jwt.verify(token, JWT_SECRET);
-    const u = store.get('users', id);
+    u = store.get('users', id);
     if (!u) throw new Error('no user');
-    req.user = u;
-    next();
   } catch {
-    res.status(401).json({ error: 'Oturum süresi doldu, tekrar giriş yap.' });
+    return res.status(401).json({ error: 'Oturum süresi doldu, tekrar giriş yap.' });
   }
+  req.user = u;
+  const ban = banInfo(u);
+  if (ban && !BAN_OK.has(req.originalUrl.split('?')[0])) {
+    return res.status(423).json({ error: ban.kind === 'banned' ? 'Hesabın kalıcı olarak kapatıldı.' : 'Hesabın geçici olarak askıya alındı.', ...ban });
+  }
+  next();
 }
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -224,6 +239,12 @@ app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false,
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
 
+const adminApi = require('./server/admin')(app, {
+  store, io, emitTo, notify, brief, isOnline, online, lives, removeChat, limited, ipOf,
+  secret: () => JWT_SECRET, endLive: (id) => endLive(id),
+});
+app.get('/admin', (req, res, next) => (req.originalUrl.split('?')[0].endsWith('/') ? next() : res.redirect('/admin/')));
+
 app.get('/healthz', (req, res) => res.json({ ok: true, store: store.kind, users: store.all('users').length, online: online.size, mediaMB: +((store.mediaBytes || 0) / 1048576).toFixed(1) }));
 
 // TURN: metered.ca Open Relay (statik kimlik, ücretsiz) — env ile değiştirilebilir
@@ -343,7 +364,23 @@ app.post('/api/me/password', auth, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-app.get('/api/me', auth, (req, res) => res.json(pub(req.user, req.user.id)));
+app.get('/api/me', auth, (req, res) => res.json({ ...pub(req.user, req.user.id), ban: banInfo(req.user) }));
+
+// İtiraz (yasaklı ya da askıdaki kullanıcı)
+app.post('/api/appeals', auth, (req, res) => {
+  const ban = banInfo(req.user);
+  if (!ban) return res.status(400).json({ error: 'Hesabın zaten aktif.' });
+  const text = String(req.body?.text || '').trim().slice(0, 1500);
+  if (text.length < 10) return res.status(400).json({ error: 'İtirazını biraz daha ayrıntılı yaz (en az 10 karakter).' });
+  if (store.find('appeals', (a) => a.userId === req.user.id && a.status === 'open')) return res.status(409).json({ error: 'Zaten incelenmeyi bekleyen bir itirazın var.' });
+  if (limited('appeal:' + req.user.id, 3, DAY)) return res.status(429).json({ error: 'Bugün çok fazla itiraz gönderdin.' });
+  const a = store.put('appeals', { id: nanoid(10), userId: req.user.id, text, ban, status: 'open', at: now() });
+  res.json(a);
+});
+app.get('/api/appeals/mine', auth, (req, res) => {
+  const since = banInfo(req.user) ? (req.user.bannedAt || 0) : 0;
+  res.json(store.filter('appeals', (a) => a.userId === req.user.id && a.at >= since).sort((a, b) => b.at - a.at).slice(0, 10));
+});
 
 app.patch('/api/me', auth, (req, res) => {
   const b = req.body || {};
@@ -462,7 +499,7 @@ function rankPeople(list) {
 }
 app.get('/api/people', auth, (req, res) => {
   const me = req.user.id;
-  const list = rankPeople(store.filter('users', (u) => u.id !== me && u.role !== 'falci' && !isBlocked(me, u.id)));
+  const list = rankPeople(store.filter('users', (u) => u.id !== me && u.role !== 'falci' && isActive(u) && !isBlocked(me, u.id)));
   res.json(list.slice(0, 60).map(brief));
 });
 
@@ -607,7 +644,7 @@ setInterval(() => store.filter('stories', (s) => now() - s.at > DAY * 2).forEach
 app.get('/api/users/search', auth, (req, res) => {
   const q = String(req.query.q || '').toLowerCase().trim();
   if (!q) return res.json([]);
-  const list = rankPeople(store.filter('users', (u) => !isBlocked(req.user.id, u.id) && (u.username.includes(q) || u.name.toLowerCase().includes(q))));
+  const list = rankPeople(store.filter('users', (u) => isActive(u) && !isBlocked(req.user.id, u.id) && (u.username.includes(q) || u.name.toLowerCase().includes(q))));
   res.json(list.slice(0, 30).map(brief));
 });
 
@@ -698,7 +735,7 @@ app.get('/api/swipe/deck', auth, (req, res) => {
   const me = req.user;
   const prefs = me.prefs || { ageMin: 18, ageMax: 99, maxKm: null };
   const swiped = new Set(store.filter('swipes', (s) => s.from === me.id).map((s) => s.to));
-  let deck = store.filter('users', (u) => u.id !== me.id && u.role !== 'falci' && !swiped.has(u.id) && !isBlocked(me.id, u.id));
+  let deck = store.filter('users', (u) => u.id !== me.id && u.role !== 'falci' && isActive(u) && !swiped.has(u.id) && !isBlocked(me.id, u.id));
   if (me.lookingFor && me.lookingFor !== 'all') deck = deck.filter((u) => u.gender === me.lookingFor || !u.gender);
   deck = deck.filter((u) => !u.age || (u.age >= prefs.ageMin && u.age <= prefs.ageMax));
   if (prefs.maxKm && me.lat != null) deck = deck.filter((u) => { const d = distance(me, u); return d == null || d <= prefs.maxKm; });
@@ -948,7 +985,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
     if (p.endsWith('sw.js') || p.endsWith('.html') || p.endsWith('.js') || p.endsWith('.css')) res.setHeader('Cache-Control', 'no-cache');
   },
 }));
-app.get(/^\/(?!api|media|socket\.io).*/, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get(/^\/(?!api|media|admin|socket\.io).*/, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -962,6 +999,7 @@ io.use((socket, next) => {
     const { id } = jwt.verify(socket.handshake.auth?.token, JWT_SECRET);
     const u = store.get('users', id);
     if (!u) return next(new Error('unauthorized'));
+    if (banInfo(u)) return next(new Error('banned'));
     socket.data.userId = u.id;
     socket.data.visible = true;
     next();
@@ -1222,6 +1260,7 @@ async function ensureFalci() {
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@swipeup.app', VAPID.publicKey, VAPID.privateKey);
   purgeDemo();
   await ensureFalci();
+  await adminApi.ensureAdmin?.();
   server.listen(PORT, () => console.log(`SwipeUp http://localhost:${PORT}`));
 
   // Render ücretsiz planda uykuya geçmemek için kendine ping at

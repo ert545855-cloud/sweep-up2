@@ -29,6 +29,7 @@ export async function api(path, opts = {}) {
   });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && state.token) { logout(); throw new Error(data.error); }
+  if (res.status === 423) { emit('banned', data); throw new Error(data.error); }
   if (!res.ok) throw new Error(data.error || 'Bir şeyler ters gitti.');
   return data;
 }
@@ -91,7 +92,11 @@ export function connectSocket() {
   if (state.socket) return state.socket;
   const s = io({ auth: { token: state.token }, transports: ['websocket', 'polling'] });
   state.socket = s;
-  s.on('connect_error', (e) => { if (e.message === 'unauthorized') logout(); });
+  s.on('connect_error', (e) => {
+    if (e.message === 'unauthorized') logout();
+    if (e.message === 'banned') { s.disconnect(); api('/me').then((m) => m.ban && emit('banned', m.ban)).catch(() => {}); }
+  });
+  s.on('account:banned', () => { api('/me').then((m) => m.ban && emit('banned', m.ban)).catch(() => {}); });
   s.on('connect', () => s.emit('visibility', document.visibilityState === 'visible'));
   document.addEventListener('visibilitychange', () => s.emit('visibility', document.visibilityState === 'visible'));
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',

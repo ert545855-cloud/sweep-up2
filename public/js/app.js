@@ -47,7 +47,40 @@ function renderTabbar(active) {
 }
 on('badges', () => renderTabbar(tabbar.dataset.active));
 
+function showBan(ban) {
+  state.ban = ban;
+  document.body.classList.add('no-tabs');
+  document.body.classList.remove('dark-ui');
+  if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
+  const until = ban.until ? new Date(ban.until).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : null;
+  view.innerHTML = `<section class="auth ban">
+    <div class="empty" style="padding:0"><div class="big">${icon('block')}</div></div>
+    <h2 style="text-align:center;margin:16px 0 6px;font-size:24px">${ban.kind === 'banned' ? 'Hesabın kapatıldı' : 'Hesabın askıya alındı'}</h2>
+    <p class="tagline" style="margin-bottom:12px">${until ? `${esc(until)} tarihine kadar uygulamayı kullanamazsın.` : 'Topluluk kurallarını ihlal ettiği için bu hesap kapatıldı.'}</p>
+    ${ban.reason ? `<div class="fal-card" style="margin-bottom:14px"><h3>Gerekçe</h3><p>${esc(ban.reason)}</p></div>` : ''}
+    <form class="ap" style="display:grid;gap:10px"><b>Bir hata olduğunu düşünüyorsan itiraz et</b>
+      <textarea class="field" name="t" rows="4" maxlength="1500" placeholder="Ne olduğunu ve neden tekrar açılması gerektiğini anlat"></textarea>
+      <button class="btn primary block">İtirazı gönder</button></form>
+    <div class="apl" style="margin-top:14px"></div>
+    <button class="btn outline block lo" style="margin-top:10px">Çıkış yap</button></section>`;
+  const paintAppeals = async () => {
+    const list = await api('/appeals/mine').catch(() => []);
+    const lbl = { open: 'İnceleniyor', accepted: 'Kabul edildi', rejected: 'Reddedildi' };
+    view.querySelector('.apl').innerHTML = list.map((a) => `<div class="fal-card" style="margin-bottom:8px"><h3>İtirazın <span class="chip ${a.status === 'accepted' ? 'fal-ok' : 'fal-wait-chip'}">${lbl[a.status]}</span></h3><p>${esc(a.text)}</p>${a.note ? `<p class="muted" style="margin-top:6px">Yanıt: ${esc(a.note)}</p>` : ''}</div>`).join('');
+    if (list.some((a) => a.status === 'open')) view.querySelector('.ap').hidden = true;
+    if (list.some((a) => a.status === 'accepted')) { const m = await api('/me').catch(() => null); if (m && !m.ban) location.reload(); }
+  };
+  paintAppeals();
+  view.querySelector('.ap').onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api('/appeals', { body: { text: e.target.t.value } }); toast('İtirazın alındı. İncelenince burada göreceksin.'); paintAppeals(); } catch (er) { toast(er.message); }
+  };
+  view.querySelector('.lo').onclick = () => import('./core.js').then((c) => c.logout());
+}
+on('banned', (b) => { if (!state.ban) showBan(b); });
+
 async function router() {
+  if (state.ban) return showBan(state.ban);
   const path = location.hash.replace(/^#/, '') || '/';
   let match = null;
   for (const [re, name, opts] of routes) {
@@ -87,8 +120,8 @@ function wireRealtime() {
     if (location.hash === '#/notifications') return;
     const href = {
       match: '#/chats', live: `#/live/${n.fromId}`, follow: `#/u/${n.from?.username}`, super: '#/likes', liked: '#/likes', group: '#/chats', missed: '#/chats',
-    }[n.type] || `#/p/${n.ref}`;
-    toast(n.text, { title: n.type === 'liked' ? 'Yeni beğeni' : n.from?.name, img: n.type === 'liked' ? null : n.from?.avatar, href });
+    }[n.type] || (n.ref ? `#/p/${n.ref}` : '#/notifications');
+    toast(n.text, { ms: ['announce', 'warning'].includes(n.type) ? 8000 : 3500, title: n.type === 'liked' ? 'Yeni beğeni' : n.from?.name || 'SwipeUp', img: n.type === 'liked' ? null : n.from?.avatar, href });
   });
   on('likes:new', () => refreshBadges());
   on('message', (m) => {
@@ -142,9 +175,9 @@ async function boot() {
     try {
       const [cfg, me] = await Promise.all([api('/config'), api('/me')]);
       state.config = cfg; state.me = me;
+      if (me.ban) state.ban = me.ban;
       if (me.skin && me.skin !== currentSkin()) applySkin(me.skin);
-      wireRealtime();
-      refreshBadges();
+      if (!state.ban) { wireRealtime(); refreshBadges(); }
     } catch { state.token = null; }
   }
   if (!state.config) state.config = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));

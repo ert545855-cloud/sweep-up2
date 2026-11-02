@@ -13,6 +13,7 @@ Kaydırarak tanış, reels izle, hikaye paylaş, canlı yayın aç, mesajlaş ve
 - **Güvenlik:** Engelle, şikayet et, eşleşmeyi kaldır; giriş denemesi sınırı; e-posta kodu ya da kurtarma koduyla şifre sıfırlama.
 - **Temalar:** Gün batımı (açık/koyu), Pembe rüya, Gece moru ve Altın. Seçilen tema hesapta saklanır, her cihazda aynı görünür.
 - **Fal:** Kahve falı (fincan fotoğrafları), tarot, burç yorumu ve aşk uyumu istekleri **Falcı Teyze** hesabının mesaj kutusuna düşer; cevabı o hesaptan bir kişi yazar (yazı ya da sesli mesaj). Falcı Teyze'nin "Fal kuyruğu" ekranında bekleyen ve cevaplanan istekler listelenir.
+- **Yönetim paneli (`/admin`):** Ayrı giriş ve ayrı yönetici verisiyle (gelir-gider, notlar, duyurular, işlem kaydı) çalışır, uygulama verisini okur ve uygulamaya etki eder: kullanıcıları uyarma, askıya alma, yasaklama, şikayetleri sonuçlandırma, itirazları kabul/ret, içerik kaldırma, herkese duyuru, fal istatistikleri, gelir-gider takibi ve CSV dışa aktarma.
 - **Bildirimler:** Uygulama açıkken üstte banner, kapalıyken Web Push (Android / masaüstü; iPhone'da ana ekrana eklenmiş uygulama).
 
 ## Teknoloji
@@ -42,6 +43,7 @@ npm start          # http://localhost:3000
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | Gmail yerine başka bir e-posta sağlayıcısı. |
 | `CANONICAL_URL` | Bu sunucuya gelen istekleri verilen adrese yönlendirir (eski adresler için). |
 | `FALCI_PASSWORD` | Falcı Teyze hesabının (`falciteyze`) şifresi. Hesap ilk açılışta oluşturulur; şifre uygulamadan değiştirilirse bu değer artık uygulanmaz. |
+| `ADMIN_PASSWORD` | Yönetim panelindeki `admin` hesabının ilk şifresi. Panelden değiştirilirse bu değer artık uygulanmaz. |
 | `KEEP_ALIVE` | `0` verilirse sunucu kendini uyanık tutmaz. |
 
 ## Render'da yayınlama
