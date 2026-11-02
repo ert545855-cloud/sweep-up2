@@ -97,7 +97,7 @@ function wireRealtime() {
     if (!inChat) {
       refreshBadges();
       if (location.hash === '#/chats') return;
-      api(`/users/${m.from}`).then((u) => toast(m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf'), { title: u.name, img: u.avatar, href: `#/chat/${m.chatId}` })).catch(() => {});
+      api(`/users/${m.from}`).then((u) => toast(m.fal ? '🔮 Yeni fal isteği' : m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf'), { title: u.name, img: u.avatar, href: `#/chat/${m.chatId}` })).catch(() => {});
     }
   });
   on('match', ({ user, chatId }) => showMatch(user, chatId));

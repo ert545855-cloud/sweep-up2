@@ -47,7 +47,7 @@ function pub(u, viewerId) {
 }
 const brief = (u) => u && ({
   id: u.id, username: u.username, name: u.name, avatar: u.avatar,
-  online: isOnline(u.id), live: lives.has(u.id), lastSeen: u.lastSeen, createdAt: u.createdAt,
+  online: isOnline(u.id), live: lives.has(u.id), lastSeen: u.lastSeen, createdAt: u.createdAt, role: u.role || null,
 });
 
 function distance(a, b) {
@@ -157,9 +157,9 @@ function msgOut(m) {
   return m;
 }
 
-function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story }) {
+function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal }) {
   text = String(text || '').slice(0, 4000).trim();
-  if (!text && !media) return null;
+  if (!text && !media && !fal) return null;
   if (!chat.isGroup) {
     const other = chat.members.find((m) => m !== fromId);
     if (isBlocked(fromId, other)) return null;
@@ -175,7 +175,7 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
     id: nanoid(14), chatId: chat.id, from: fromId, text,
     media: media || null, mediaType: ['image', 'video', 'audio'].includes(mediaType) ? mediaType : (media ? 'image' : null),
     duration: duration ? Math.min(600, Math.round(duration)) : null,
-    reply, story: story || null, system: !!system, reactions: {},
+    reply, story: story || null, fal: fal || null, system: !!system, reactions: {},
     at: now(), readBy: [fromId], deliveredTo: [fromId],
   });
   store.update('chats', chat.id, { lastAt: msg.at });
@@ -184,7 +184,13 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
   chat.members.forEach((m) => emitTo(m, 'message', msg));
   if (system) return msg;
   const sender = store.get('users', fromId);
-  const preview = text || { video: '🎥 Video', audio: '🎤 Sesli mesaj' }[msg.mediaType] || '📷 Fotoğraf';
+  if (sender?.role === 'falci' && !fal) {
+    store.filter('messages', (m) => m.chatId === chat.id && m.fal && m.fal.status === 'pending').forEach((m) => {
+      m.fal.status = 'answered'; m.fal.answeredAt = now(); store.update('messages', m.id, {});
+      chat.members.forEach((x) => emitTo(x, 'message:update', msgOut(m)));
+    });
+  }
+  const preview = fal ? `🔮 Yeni ${FAL_TYPES[fal.type]} isteği` : text || { video: '🎥 Video', audio: '🎤 Sesli mesaj' }[msg.mediaType] || '📷 Fotoğraf';
   chat.members.filter((m) => m !== fromId).forEach((m) => {
     notify(m, {
       type: 'message', fromId, tag: 'chat-' + chat.id,
@@ -333,7 +339,7 @@ app.post('/api/me/password', auth, wrap(async (req, res) => {
   const { current, password } = req.body || {};
   if (!(await bcrypt.compare(String(current || ''), req.user.passHash))) return res.status(400).json({ error: 'Mevcut şifre hatalı.' });
   if (String(password || '').length < 6) return res.status(400).json({ error: 'Yeni şifre en az 6 karakter olmalı.' });
-  store.update('users', req.user.id, { passHash: await bcrypt.hash(password, 10) });
+  store.update('users', req.user.id, { passHash: await bcrypt.hash(password, 10), ...(req.user.role === 'falci' ? { passChangedByUser: true } : {}) });
   res.json({ ok: true });
 }));
 
@@ -456,7 +462,7 @@ function rankPeople(list) {
 }
 app.get('/api/people', auth, (req, res) => {
   const me = req.user.id;
-  const list = rankPeople(store.filter('users', (u) => u.id !== me && !isBlocked(me, u.id)));
+  const list = rankPeople(store.filter('users', (u) => u.id !== me && u.role !== 'falci' && !isBlocked(me, u.id)));
   res.json(list.slice(0, 60).map(brief));
 });
 
@@ -692,7 +698,7 @@ app.get('/api/swipe/deck', auth, (req, res) => {
   const me = req.user;
   const prefs = me.prefs || { ageMin: 18, ageMax: 99, maxKm: null };
   const swiped = new Set(store.filter('swipes', (s) => s.from === me.id).map((s) => s.to));
-  let deck = store.filter('users', (u) => u.id !== me.id && !swiped.has(u.id) && !isBlocked(me.id, u.id));
+  let deck = store.filter('users', (u) => u.id !== me.id && u.role !== 'falci' && !swiped.has(u.id) && !isBlocked(me.id, u.id));
   if (me.lookingFor && me.lookingFor !== 'all') deck = deck.filter((u) => u.gender === me.lookingFor || !u.gender);
   deck = deck.filter((u) => !u.age || (u.age >= prefs.ageMin && u.age <= prefs.ageMax));
   if (prefs.maxKm && me.lat != null) deck = deck.filter((u) => { const d = distance(me, u); return d == null || d <= prefs.maxKm; });
@@ -787,7 +793,7 @@ app.get('/api/chats/:id', auth, (req, res) => {
 app.post('/api/chats/:id/messages', auth, (req, res) => {
   const c = store.get('chats', req.params.id);
   if (!c || !c.members.includes(req.user.id)) return res.status(404).json({ error: 'Sohbet bulunamadı.' });
-  const msg = sendMessage(c, req.user.id, req.body || {});
+  const msg = sendMessage(c, req.user.id, { ...(req.body || {}), system: false, fal: null, story: null });
   if (!msg) return res.status(400).json({ error: 'Mesaj gönderilemedi.' });
   res.json(msg);
 });
@@ -855,6 +861,63 @@ app.delete('/api/groups/:id/members/:uid', auth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Fal (Falcı Teyze'ye istek) ----------
+const FAL_TYPES = { kahve: 'kahve falı', tarot: 'tarot falı', burc: 'burç yorumu', uyum: 'aşk uyumu' };
+const falci = () => store.find('users', (u) => u.role === 'falci');
+const isMedia = (u) => typeof u === 'string' && /^\/media\/[\w-]+$/.test(u);
+
+app.get('/api/fal/falci', auth, (req, res) => {
+  const f = falci();
+  res.json(f ? { ...brief(f), bio: f.bio } : null);
+});
+
+app.post('/api/fal', auth, (req, res) => {
+  const f = falci();
+  if (!f) return res.status(503).json({ error: 'Falcı Teyze şu an hizmet vermiyor.' });
+  if (req.user.id === f.id) return res.status(400).json({ error: 'Kendine fal isteği gönderemezsin.' });
+  if (isBlocked(req.user.id, f.id)) return res.status(403).json({ error: 'Fal isteği gönderilemedi.' });
+  const b = req.body || {};
+  if (!FAL_TYPES[b.type]) return res.status(400).json({ error: 'Fal türünü seç.' });
+  if (limited('fal:' + req.user.id, 5, DAY)) return res.status(429).json({ error: 'Bugün en fazla 5 fal isteği gönderebilirsin. Yarın tekrar dene.' });
+  const images = (Array.isArray(b.images) ? b.images : []).filter(isMedia).slice(0, 3);
+  if (b.type === 'kahve' && !images.length) return res.status(400).json({ error: 'Kahve falı için en az bir fincan fotoğrafı ekle.' });
+  const zodiacs = ['koc', 'boga', 'ikizler', 'yengec', 'aslan', 'basak', 'terazi', 'akrep', 'yay', 'oglak', 'kova', 'balik'];
+  const cards = (Array.isArray(b.cards) ? b.cards : []).slice(0, 3).map((c) => ({ name: String(c.name || '').slice(0, 30), em: String(c.em || '').slice(0, 4), rev: !!c.rev, pos: String(c.pos || '').slice(0, 12) }));
+  if (b.type === 'tarot' && cards.length !== 3) return res.status(400).json({ error: 'Üç kart seç.' });
+  let partner = null;
+  if (b.type === 'uyum') {
+    const p = store.get('users', b.partnerId);
+    if (!p) return res.status(400).json({ error: 'Uyumuna bakılacak kişiyi seç.' });
+    partner = { id: p.id, name: p.name, username: p.username, avatar: p.avatar, zodiac: p.zodiac || null };
+  }
+  const zodiac = zodiacs.includes(b.zodiac) ? b.zodiac : (req.user.zodiac || null);
+  const payload = {
+    id: nanoid(8), type: b.type, note: String(b.note || '').trim().slice(0, 1000), images, cards, partner, zodiac,
+    name: req.user.name, status: 'pending', at: now(),
+  };
+  const chat = chatBetween(req.user.id, f.id);
+  const msg = sendMessage(chat, req.user.id, { text: payload.note, fal: payload });
+  if (!msg) return res.status(400).json({ error: 'Fal isteği gönderilemedi.' });
+  res.json({ ok: true, chatId: chat.id, messageId: msg.id });
+});
+
+app.get('/api/fal/mine', auth, (req, res) => {
+  const f = falci();
+  if (!f) return res.json([]);
+  const chatId = [req.user.id, f.id].sort().join('_');
+  res.json(store.filter('messages', (m) => m.chatId === chatId && m.fal && m.from === req.user.id)
+    .sort((a, b) => b.at - a.at).slice(0, 30).map((m) => ({ ...m.fal, chatId, messageId: m.id })));
+});
+
+app.get('/api/fal/queue', auth, (req, res) => {
+  if (req.user.role !== 'falci') return res.status(403).json({ error: 'Bu sayfa sadece Falcı Teyze içindir.' });
+  const list = store.filter('messages', (m) => m.fal && store.get('chats', m.chatId)?.members.includes(req.user.id))
+    .sort((a, b) => (a.fal.status === 'pending') === (b.fal.status === 'pending') ? b.at - a.at : (a.fal.status === 'pending' ? -1 : 1))
+    .slice(0, 200)
+    .map((m) => ({ ...m.fal, chatId: m.chatId, messageId: m.id, user: brief(store.get('users', m.from)) }));
+  res.json(list);
+});
+
 // ---------- Bildirim listesi ----------
 app.get('/api/notifications', auth, (req, res) => {
   const list = store.filter('notifications', (n) => n.userId === req.user.id && !isBlocked(req.user.id, n.fromId)).sort((a, b) => b.at - a.at).slice(0, 100);
@@ -871,7 +934,8 @@ app.get('/api/badges', auth, (req, res) => {
   const msgs = store.filter('messages', (m) => chats.has(m.chatId) && m.from !== me && !m.system && !m.readBy.includes(me) && !(m.hiddenFor || []).includes(me));
   const mySwipes = new Set(store.filter('swipes', (s) => s.from === me).map((s) => s.to));
   const likes = store.filter('swipes', (s) => s.to === me && s.dir !== 'left' && !mySwipes.has(s.from)).length;
-  res.json({ notifications: notifs, messages: new Set(msgs.map((m) => m.chatId)).size, likes });
+  const fal = req.user.role === 'falci' ? store.filter('messages', (m) => m.fal?.status === 'pending' && chats.has(m.chatId)).length : 0;
+  res.json({ notifications: notifs, messages: new Set(msgs.map((m) => m.chatId)).size, likes, fal });
 });
 
 // ---------- Canlı ----------
@@ -963,7 +1027,7 @@ io.on('connection', (socket) => {
     const c = store.get('chats', data?.chatId);
     if (!c || !c.members.includes(uid)) return ack?.({ error: 'Sohbet bulunamadı.' });
     if (limited('msg:' + uid, 60, 60000)) return ack?.({ error: 'Çok hızlı mesaj gönderiyorsun.' });
-    const msg = sendMessage(c, uid, { ...data, system: false });
+    const msg = sendMessage(c, uid, { ...data, system: false, fal: null, story: null });
     ack?.(msg ? { ok: true, msg } : { error: 'Mesaj gönderilemedi.' });
   });
 
@@ -1122,6 +1186,27 @@ function purgeDemo() {
   console.log(`[purge] ${bots.size} örnek hesap silindi`);
 }
 
+// Falcı Teyze hesabı: fal istekleri bu hesaba düşer, cevaplar bu hesaptan verilir
+async function ensureFalci() {
+  let f = falci();
+  const pass = process.env.FALCI_PASSWORD;
+  if (!f) {
+    if (store.find('users', (u) => u.username === 'falciteyze')) return;
+    const initial = pass || crypto.randomBytes(9).toString('base64url');
+    f = store.put('users', {
+      id: nanoid(10), username: 'falciteyze', name: 'Falcı Teyze', email: null, role: 'falci',
+      bio: 'Kahve falı, tarot, burç ve aşk uyumu ☕️🔮 Fal isteğini Fal sayfasından gönder, cevabım mesaj kutuna gelsin.',
+      age: null, gender: null, lookingFor: 'all', city: '', interests: ['Kahve falı', 'Tarot', 'Burçlar'],
+      prefs: { ageMin: 18, ageMax: 99, maxKm: null },
+      avatar: 'https://api.dicebear.com/9.x/notionists/svg?seed=Falci%20Teyze&backgroundColor=f0c25a',
+      photos: [], passHash: await bcrypt.hash(initial, 10), isBot: false, createdAt: now(), lastSeen: now(),
+    });
+    console.log(`[falci] Falcı Teyze hesabı oluşturuldu (kullanıcı adı: falciteyze)${pass ? '' : `, geçici şifre: ${initial}`}`);
+  } else if (pass && !(await bcrypt.compare(pass, f.passHash)) && !f.passChangedByUser) {
+    store.update('users', f.id, { passHash: await bcrypt.hash(pass, 10) });
+  }
+}
+
 // ================= Başlat =================
 (async () => {
   await store.init();
@@ -1136,6 +1221,7 @@ function purgeDemo() {
     : meta.vapid;
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@swipeup.app', VAPID.publicKey, VAPID.privateKey);
   purgeDemo();
+  await ensureFalci();
   server.listen(PORT, () => console.log(`SwipeUp http://localhost:${PORT}`));
 
   // Render ücretsiz planda uykuya geçmemek için kendine ping at

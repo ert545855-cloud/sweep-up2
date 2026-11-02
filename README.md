@@ -12,7 +12,7 @@ Kaydırarak tanış, reels izle, hikaye paylaş, canlı yayın aç, mesajlaş ve
 - **Grup sohbetleri:** Grup kur, kişi ekle/çıkar, adını değiştir, ayrıl.
 - **Güvenlik:** Engelle, şikayet et, eşleşmeyi kaldır; giriş denemesi sınırı; e-posta kodu ya da kurtarma koduyla şifre sıfırlama.
 - **Temalar:** Gün batımı (açık/koyu), Pembe rüya, Gece moru ve Altın. Seçilen tema hesapta saklanır, her cihazda aynı görünür.
-- **Fal:** Kahve falı (fincan fotoğrafıyla, istersen arkadaşına baktır), tarot, günlük/yarınki burç yorumu ve aşk uyumu. Sonuçlar sohbete gönderilebilir. Eğlence amaçlıdır.
+- **Fal:** Kahve falı (fincan fotoğrafları), tarot, burç yorumu ve aşk uyumu istekleri **Falcı Teyze** hesabının mesaj kutusuna düşer; cevabı o hesaptan bir kişi yazar (yazı ya da sesli mesaj). Falcı Teyze'nin "Fal kuyruğu" ekranında bekleyen ve cevaplanan istekler listelenir.
 - **Bildirimler:** Uygulama açıkken üstte banner, kapalıyken Web Push (Android / masaüstü; iPhone'da ana ekrana eklenmiş uygulama).
 
 ## Teknoloji
@@ -41,6 +41,7 @@ npm start          # http://localhost:3000
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Şifre sıfırlama kodlarını Gmail ile göndermek için. Yoksa kurtarma kodu kullanılır. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | Gmail yerine başka bir e-posta sağlayıcısı. |
 | `CANONICAL_URL` | Bu sunucuya gelen istekleri verilen adrese yönlendirir (eski adresler için). |
+| `FALCI_PASSWORD` | Falcı Teyze hesabının (`falciteyze`) şifresi. Hesap ilk açılışta oluşturulur; şifre uygulamadan değiştirilirse bu değer artık uygulanmaz. |
 | `KEEP_ALIVE` | `0` verilirse sunucu kendini uyanık tutmaz. |
 
 ## Render'da yayınlama

@@ -667,6 +667,25 @@ input[type=range] { width: 100%; accent-color: var(--uv); }
 .bars i b { display: block; height: 100%; background: var(--grad); border-radius: 5px; }
 .bars em { font-style: normal; color: var(--muted); text-align: right; }
 
+/* Fal isteği kartları */
+.fal-ok { background: color-mix(in srgb, var(--mint) 18%, transparent); color: var(--mint); height: 24px; font-size: 12px; }
+.fal-wait-chip { background: color-mix(in srgb, var(--sun) 20%, transparent); color: #b87700; height: 24px; font-size: 12px; }
+:root[data-skin="gece"] .fal-wait-chip, :root[data-skin="altin"] .fal-wait-chip { color: var(--sun); }
+.fal-hero.teyze .grow + .btn { flex: none; }
+.fal-q { display: grid; gap: 10px; margin: 0 14px 10px; padding: 12px; border-radius: var(--r-md); background: var(--surface); }
+.fal-q .sub { font-size: 13px; }
+.fq-imgs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.fq-imgs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; }
+.fq-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.fq-cards small { color: var(--muted); font-weight: 600; }
+.fq-note { margin: 0; white-space: pre-wrap; }
+.fq-line { font-weight: 600; font-size: 14px; }
+.msg.fal-msg { display: grid; gap: 8px; min-width: 240px; background: var(--surface) !important; color: var(--text) !important; border: 1.5px solid var(--uv); }
+.msg.fal-msg .fm-h { display: flex; align-items: center; gap: 8px; }
+.msg.fal-msg .fm-h b { flex: 1; font-family: var(--display); }
+.msg.fal-msg .fm-h > span:first-child { font-size: 22px; }
+.msg.fal-msg .meta { color: var(--muted); }
+
 /* ----- Toast ----- */
 #toasts { position: fixed; top: calc(8px + var(--safe-t)); left: 50%; transform: translateX(-50%); width: calc(100% - 16px); max-width: 500px; z-index: 100; display: grid; gap: 8px; pointer-events: none; }
 .toast { pointer-events: auto; background: color-mix(in srgb, var(--bg) 90%, transparent); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border: 1px solid var(--line); border-radius: 18px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; box-shadow: var(--shadow); animation: drop .3s cubic-bezier(.2,.9,.3,1.2); color: var(--text); }

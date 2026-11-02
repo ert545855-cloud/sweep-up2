@@ -4,6 +4,7 @@ import {
   el, sheet, audioRecorder, fmtDur, reportUser,
 } from '../core.js';
 import { startCall } from '../calls.js';
+import { FAL_TYPES, zodiacOf } from '../fal-data.js';
 
 const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
 
@@ -87,6 +88,16 @@ export default async function chat(view, chatId) {
     if (m.deleted) return `<div class="msg deleted">${icon('block', '', 'style="width:14px;height:14px;vertical-align:-2px"')} Bu mesaj silindi${meta}</div>`;
     const reply = m.reply ? `<span class="reply"><b>${esc(m.reply.from === state.me.id ? 'Sen' : (m.reply.fromName || ''))}</b>${esc(m.reply.text || { audio: '🎤 Sesli mesaj', video: '🎥 Video', image: '📷 Fotoğraf' }[m.reply.mediaType] || '')}</span>` : '';
     const story = m.story ? `<span class="story-ref">${m.story.media ? `<img src="${esc(m.story.media)}" alt="">` : ''}<span>Hikayeye yanıt</span></span>` : '';
+    if (m.fal) {
+      const f = m.fal; const t = FAL_TYPES[f.type] || { em: '🔮', name: 'Fal' };
+      const z = zodiacOf(f.zodiac);
+      return `<div class="msg fal-msg"><div class="fm-h"><span>${t.em}</span><b>${t.name} isteği</b>${f.status === 'answered' ? '<span class="chip fal-ok">Cevaplandı</span>' : '<span class="chip fal-wait-chip">Bekliyor</span>'}</div>
+        ${f.images?.length ? `<div class="fq-imgs">${f.images.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Fincan fotoğrafı" loading="lazy"></a>`).join('')}</div>` : ''}
+        ${f.cards?.length ? `<div class="fq-cards">${f.cards.map((c) => `<span class="chip"><small>${esc(c.pos)}</small> ${c.em} ${esc(c.name)}${c.rev ? ' (ters)' : ''}</span>`).join('')}</div>` : ''}
+        ${z ? `<div class="fq-line">${z[2]} ${z[1]}${f.partner ? '' : ''}</div>` : ''}
+        ${f.partner ? `<div class="fq-line">💞 ${esc(f.name)} & ${esc(f.partner.name)}${zodiacOf(f.partner.zodiac) ? ` (${zodiacOf(f.partner.zodiac)[2]} ${zodiacOf(f.partner.zodiac)[1]})` : ''}</div>` : ''}
+        ${f.note ? `<p class="fq-note">${esc(f.note)}</p>` : ''}${meta}</div>`;
+    }
     if (m.mediaType === 'audio') return `<div class="msg">${reply}${audioHtml(m)}${meta}</div>`;
     if (m.media) {
       return `<div class="msg media">${m.mediaType === 'video'

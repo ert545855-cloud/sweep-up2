@@ -39,6 +39,7 @@ export default async function chats(view) {
     if (!c.last) return 'Eşleştiniz! İlk mesajı sen gönder 👋';
     if (c.last.system) return esc(c.last.text);
     if (c.last.deleted) return '<i>Bu mesaj silindi</i>';
+    if (c.last.fal) return `${c.last.from === state.me.id ? 'Sen: ' : ''}🔮 Fal isteği · ${c.last.fal.status === 'answered' ? 'cevaplandı' : 'bekliyor'}`;
     const mine = c.last.from === state.me.id;
     const who = mine ? 'Sen: ' : c.isGroup ? `${esc(c.last.fromName || '')}: ` : '';
     return `${who}${esc(preview(c.last))}`;

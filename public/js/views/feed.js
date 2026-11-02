@@ -14,7 +14,7 @@ export default async function feed(view) {
       <a class="ib" href="#/notifications" aria-label="Bildirimler">${icon('bell')}<i class="dot-badge nb" style="top:8px;right:8px;${state.badges.notifications ? '' : 'display:none'}"></i></a>
     </header>
     <div class="stories" aria-label="Hikayeler ve canlı yayınlar"></div>
-    <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>Fal baktır</b><p>Kahve falı, tarot, günlük burç ve aşk uyumu.</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
+    <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
     <div class="push-slot"></div>
     <div class="people"></div>
     <div class="posts"><div class="spinner"></div></div>`;

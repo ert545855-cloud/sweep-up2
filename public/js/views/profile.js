@@ -82,6 +82,7 @@ export default async function profile(view, username) {
         ${u.live ? '<span class="live-tag">CANLI</span>' : self && !u.hasStory ? `<span class="plus">${icon('plus')}</span>` : (!self && isOn(u) ? '<i class="online"></i>' : '')}
       </${avHref ? 'a' : 'div'}>
       <h2>${esc(u.name)}</h2>
+      ${u.role === 'falci' ? '<span class="chip uv" style="margin-top:8px">🔮 Falcı</span>' : ''}
       <div class="handle">@${esc(u.username)}${!self ? ` · ${esc(lastSeen(u))}` : ''}</div>
       ${u.bio ? `<p class="bio">${esc(u.bio)}</p>` : (self ? '<a class="link" href="#/edit" style="margin-top:6px">Biyografi ekle</a>' : '')}
       ${meta.length || u.interests?.length || (!self && (u.followsYou || u.matched)) ? `<div class="chips">
@@ -100,7 +101,9 @@ export default async function profile(view, username) {
     ? `<a class="btn" href="#/edit">Profili düzenle</a><button class="btn share">Paylaş</button>`
     : u.blockedByMe
       ? '<button class="btn primary unb">Engeli kaldır</button>'
-      : `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button><button class="btn msg">${icon('send')} Mesaj</button>`}
+      : u.role === 'falci'
+        ? `<a class="btn primary" href="#/fal">🔮 Fal baktır</a><button class="btn msg">${icon('send')} Mesaj</button>`
+        : `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button><button class="btn msg">${icon('send')} Mesaj</button>`}
     </div>
     <div class="tabs">
       ${tabs.map((t, i) => `<button data-t="${t}" class="${i ? '' : 'on'}" aria-label="${{ grid: 'Gönderiler', reels: 'Reels', saved: 'Kaydedilenler' }[t]}">${icon({ grid: 'grid', reels: 'reels', saved: 'bookmark' }[t])}</button>`).join('')}
