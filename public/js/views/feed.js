@@ -8,11 +8,13 @@ export default async function feed(view) {
   view.innerHTML = `
     <header class="topbar">
       <div class="wordmark">${logo()}</div>
+      <a class="ib" href="#/fal" aria-label="Fal" style="font-size:22px">🔮</a>
       <a class="ib" href="#/search" aria-label="Ara">${icon('search')}</a>
       <a class="ib" href="#/create" aria-label="Oluştur">${icon('plusSq')}</a>
       <a class="ib" href="#/notifications" aria-label="Bildirimler">${icon('bell')}<i class="dot-badge nb" style="top:8px;right:8px;${state.badges.notifications ? '' : 'display:none'}"></i></a>
     </header>
     <div class="stories" aria-label="Hikayeler ve canlı yayınlar"></div>
+    <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>Fal baktır</b><p>Kahve falı, tarot, günlük burç ve aşk uyumu.</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
     <div class="push-slot"></div>
     <div class="people"></div>
     <div class="posts"><div class="spinner"></div></div>`;

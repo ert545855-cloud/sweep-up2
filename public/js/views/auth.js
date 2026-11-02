@@ -22,10 +22,10 @@ function forgot(view) {
     <h2 style="text-align:center;margin:16px 0 6px;font-size:24px">Şifreni sıfırla</h2>
     <p class="tagline">${emailOn ? 'Kullanıcı adını ya da e-postanı yaz. Hesabına bağlı e-postaya 6 haneli bir kod göndereceğiz. Kurtarma kodunu da kullanabilirsin.' : 'Kayıt olurken aldığın 12 karakterlik kurtarma kodunu gir.'}</p>
     <form novalidate>
-      <input class="field" name="login" placeholder="Kullanıcı adı veya e-posta" autocapitalize="none" spellcheck="false" required>
+      <label class="ic-field">${icon('person')}<input class="field" name="login" placeholder="Kullanıcı adı veya e-posta" autocapitalize="none" spellcheck="false" required></label>
       ${emailOn ? '<button type="button" class="btn outline block send">E-postama kod gönder</button>' : ''}
-      <input class="field" name="code" placeholder="${emailOn ? 'E-postadaki kod ya da kurtarma kodu' : 'Kurtarma kodu (ör. ABCD-EFGH-JKLM)'}" autocapitalize="characters" autocomplete="one-time-code">
-      <input class="field" name="password" type="password" placeholder="Yeni şifre" autocomplete="new-password">
+      <label class="ic-field">${icon('key')}<input class="field" name="code" placeholder="${emailOn ? 'E-postadaki kod ya da kurtarma kodu' : 'Kurtarma kodu (ör. ABCD-EFGH-JKLM)'}" autocapitalize="characters" autocomplete="one-time-code"></label>
+      <label class="ic-field">${icon('lock')}<input class="field" name="password" type="password" placeholder="Yeni şifre" autocomplete="new-password"></label>
       <button class="btn primary block">Şifreyi değiştir</button>
       <div class="err" role="alert"></div>
     </form>
@@ -54,10 +54,10 @@ export default function auth(view, mode) {
     <div class="wordmark">${logo()}</div>
     <p class="tagline">${reg ? 'Kaydır, eşleş, reels izle, canlı yayında buluş.' : 'Kaydırmaya kaldığın yerden devam et.'}</p>
     <form novalidate>
-      ${reg ? '<input class="field" name="name" placeholder="Adın" autocomplete="name" maxlength="40">' : ''}
-      <input class="field" name="username" placeholder="${reg ? 'Kullanıcı adı' : 'Kullanıcı adı veya e-posta'}" autocomplete="username" autocapitalize="none" spellcheck="false" required>
-      ${reg ? '<input class="field" name="email" type="email" placeholder="E-posta (şifre sıfırlama için, isteğe bağlı)" autocomplete="email">' : ''}
-      <input class="field" name="password" type="password" placeholder="Şifre" autocomplete="${reg ? 'new-password' : 'current-password'}" required>
+      ${reg ? `<label class="ic-field">${icon('person')}<input class="field" name="name" placeholder="Adın" autocomplete="name" maxlength="40"></label>` : ''}
+      <label class="ic-field">${icon('person')}<input class="field" name="username" placeholder="${reg ? 'Kullanıcı adı' : 'Kullanıcı adı veya e-posta'}" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+      ${reg ? `<label class="ic-field">${icon('mail')}<input class="field" name="email" type="email" placeholder="E-posta (şifre sıfırlama için, isteğe bağlı)" autocomplete="email"></label>` : ''}
+      <label class="ic-field">${icon('lock')}<input class="field" name="password" type="password" placeholder="Şifre" autocomplete="${reg ? 'new-password' : 'current-password'}" required></label>
       <button class="btn primary block" style="margin-top:6px">${reg ? 'Hesap oluştur' : 'Giriş yap'}</button>
       <div class="err" role="alert"></div>
     </form>

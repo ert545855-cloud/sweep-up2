@@ -11,6 +11,8 @@ Kaydırarak tanış, reels izle, hikaye paylaş, canlı yayın aç, mesajlaş ve
 - **Sesli ve görüntülü arama:** Birebir WebRTC araması, gelen arama ekranı ve push bildirimi, cevapsız arama kaydı.
 - **Grup sohbetleri:** Grup kur, kişi ekle/çıkar, adını değiştir, ayrıl.
 - **Güvenlik:** Engelle, şikayet et, eşleşmeyi kaldır; giriş denemesi sınırı; e-posta kodu ya da kurtarma koduyla şifre sıfırlama.
+- **Temalar:** Gün batımı (açık/koyu), Pembe rüya, Gece moru ve Altın. Seçilen tema hesapta saklanır, her cihazda aynı görünür.
+- **Fal:** Kahve falı (fincan fotoğrafıyla, istersen arkadaşına baktır), tarot, günlük/yarınki burç yorumu ve aşk uyumu. Sonuçlar sohbete gönderilebilir. Eğlence amaçlıdır.
 - **Bildirimler:** Uygulama açıkken üstte banner, kapalıyken Web Push (Android / masaüstü; iPhone'da ana ekrana eklenmiş uygulama).
 
 ## Teknoloji

@@ -1,6 +1,6 @@
 import { icon } from './icons.js';
 import {
-  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el,
+  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin,
 } from './core.js';
 import { initCalls } from './calls.js';
 
@@ -22,6 +22,8 @@ const routes = [
   [/^\/u\/([\w.]+)$/, 'profile', { tab: 'me' }],
   [/^\/edit$/, 'edit', { tabs: false }],
   [/^\/settings$/, 'settings', { tabs: false }],
+  [/^\/fal(?:\/(\w+))?$/, 'fal', { tab: 'home' }],
+  [/^\/fal(?:\/(\w+))?$/, 'fal', { tab: 'home' }],
   [/^\/create(?:\/(\w+))?$/, 'create', { tabs: false }],
   [/^\/p\/([\w-]+)$/, 'post', { tab: 'home' }],
   [/^\/(login|register|forgot)$/, 'auth', { tabs: false, public: true }],
@@ -131,6 +133,7 @@ document.addEventListener('error', (e) => {
 
 async function boot() {
   try { const t = localStorage.getItem('su_theme'); if (t && t !== 'system') document.documentElement.dataset.theme = t; } catch {}
+  try { applySkin(localStorage.getItem('su_skin') || 'gunbatimi', { save: false }); } catch {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   navigator.serviceWorker?.addEventListener('message', (e) => {
     if (e.data?.type === 'navigate' && e.data.url) location.href = e.data.url;
@@ -139,6 +142,7 @@ async function boot() {
     try {
       const [cfg, me] = await Promise.all([api('/config'), api('/me')]);
       state.config = cfg; state.me = me;
+      if (me.skin && me.skin !== currentSkin()) applySkin(me.skin);
       wireRealtime();
       refreshBadges();
     } catch { state.token = null; }

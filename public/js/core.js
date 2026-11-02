@@ -231,6 +231,25 @@ export async function refreshBadges() {
   try { state.badges = await api('/badges'); emit('badges', state.badges); } catch {}
 }
 
+// ---- Temalar ----
+export const SKINS = [
+  { id: 'gunbatimi', name: 'Gün batımı', note: 'Sade, açık ya da koyu', pv: 'linear-gradient(170deg,#fff,#f5f5f7)', a: 'linear-gradient(120deg,#ff8a3d,#ff3d6e)', meta: ['#ffffff', '#0b0b0e'] },
+  { id: 'pembe', name: 'Pembe rüya', note: 'Pastel, buzlu cam', pv: 'linear-gradient(170deg,#ffe3f1,#efe6ff)', a: 'linear-gradient(120deg,#ff8a5c,#ff3d8b,#a24bff)', meta: ['#ffeef7'] },
+  { id: 'gece', name: 'Gece moru', note: 'Koyu, neon parıltı', pv: 'radial-gradient(80% 60% at 0 0,#3b1d73,#0d0a1a)', a: 'linear-gradient(120deg,#7c3aed,#ec4899)', meta: ['#0d0a1a'] },
+  { id: 'altin', name: 'Altın', note: 'Siyah ve altın', pv: 'radial-gradient(80% 60% at 100% 0,#3b2c10,#0b0906)', a: 'linear-gradient(120deg,#ffe7a3,#f0c25a,#c58b22)', meta: ['#0b0906'] },
+];
+export function applySkin(id, { save = true } = {}) {
+  const sk = SKINS.find((x) => x.id === id) || SKINS[0];
+  const root = document.documentElement;
+  if (sk.id === 'gunbatimi') delete root.dataset.skin; else root.dataset.skin = sk.id;
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m, i) => {
+    m.setAttribute('content', sk.id === 'gunbatimi' ? sk.meta[i] || sk.meta[0] : sk.meta[0]);
+  });
+  if (save) { try { localStorage.setItem('su_skin', sk.id); } catch {} }
+  return sk.id;
+}
+export const currentSkin = () => document.documentElement.dataset.skin || 'gunbatimi';
+
 // ---- Logo ----
 export const logo = () => `<span class="mark">${icon('arrowUp')}</span>swipeup`;
 

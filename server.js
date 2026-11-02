@@ -351,6 +351,8 @@ app.patch('/api/me', auth, (req, res) => {
   if (b.lookingFor !== undefined) patch.lookingFor = ['k', 'e', 'all'].includes(b.lookingFor) ? b.lookingFor : 'all';
   if (Array.isArray(b.interests)) patch.interests = b.interests.map((s) => String(s).slice(0, 24)).slice(0, 8);
   if (Array.isArray(b.photos)) patch.photos = b.photos.map(String).slice(0, 6);
+  if (b.skin !== undefined) patch.skin = ['gunbatimi', 'pembe', 'gece', 'altin'].includes(b.skin) ? b.skin : 'gunbatimi';
+  if (b.zodiac !== undefined) patch.zodiac = ['koc', 'boga', 'ikizler', 'yengec', 'aslan', 'basak', 'terazi', 'akrep', 'yay', 'oglak', 'kova', 'balik'].includes(b.zodiac) ? b.zodiac : null;
   if (b.prefs) {
     const ageMin = Math.max(18, Math.min(99, parseInt(b.prefs.ageMin, 10) || 18));
     const ageMax = Math.max(ageMin, Math.min(99, parseInt(b.prefs.ageMax, 10) || 99));

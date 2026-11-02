@@ -1,15 +1,27 @@
 import { icon } from '../icons.js';
 import {
   state, api, esc, num, avatar, sheet, toast, openChatWith, saved, enablePush, disablePush, pushEnabled, pushHint,
-  blockUser, reportUser, unmatchUser, lastSeen, isOn,
+  blockUser, reportUser, unmatchUser, lastSeen, isOn, SKINS, applySkin, currentSkin,
 } from '../core.js';
 import { gridTile } from '../components.js';
 
 export function themeMenu() {
-  const cur = localStorage.getItem('su_theme') || 'system';
-  sheet('Görünüm', `<div class="menu">${[['system', 'Sistem ayarı', 'settings'], ['light', 'Açık', 'sun'], ['dark', 'Koyu', 'eye']].map(([k, l, ic]) => `<button data-t="${k}">${icon(ic)}<span class="grow">${l}</span>${cur === k ? icon('check') : ''}</button>`).join('')}</div>`, {
+  const mode = localStorage.getItem('su_theme') || 'system';
+  const cur = currentSkin();
+  sheet('Tema', `<div class="skin-grid">${SKINS.map((k) => `<button class="skin-opt ${cur === k.id ? 'on' : ''}" data-s="${k.id}">
+      <span class="pv" style="background:${k.pv}"><i style="background:${k.a}"></i><i style="background:${k.a}"></i></span>
+      <b>${esc(k.name)}</b><span>${esc(k.note)}</span></button>`).join('')}</div>
+    <div class="mode" ${cur === 'gunbatimi' ? '' : 'hidden'}><div class="group-t" style="padding-left:16px">Gün batımı modu</div>
+    <div class="menu">${[['system', 'Sistem ayarı', 'settings'], ['light', 'Açık', 'sun'], ['dark', 'Koyu', 'eye']].map(([k, l, ic]) => `<button data-t="${k}">${icon(ic)}<span class="grow">${l}</span>${mode === k ? icon('check') : ''}</button>`).join('')}</div></div>`, {
     onMount(sh, close) {
-      sh.querySelector('.menu').onclick = (e) => {
+      sh.querySelector('.skin-grid').onclick = (e) => {
+        const b = e.target.closest('[data-s]'); if (!b) return;
+        const id = applySkin(b.dataset.s);
+        sh.querySelectorAll('.skin-opt').forEach((x) => x.classList.toggle('on', x === b));
+        sh.querySelector('.mode').hidden = id !== 'gunbatimi';
+        api('/me', { method: 'PATCH', body: { skin: id } }).then((u) => { state.me.skin = u.skin; }).catch(() => {});
+      };
+      sh.querySelector('.mode .menu').onclick = (e) => {
         const t = e.target.closest('[data-t]')?.dataset.t; if (!t) return;
         try { localStorage.setItem('su_theme', t); } catch {}
         if (t === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;

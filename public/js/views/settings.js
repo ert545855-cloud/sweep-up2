@@ -10,6 +10,7 @@ export default function settings(view) {
   view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button><div class="center">Ayarlar</div><span class="ib"></span></header>
     <div class="group-t">Profil</div>
     <div class="group">
+      <a class="it" href="#/fal">${icon('star')}<span class="grow">Fal<div class="sub">Kahve falı, tarot, günlük burç, aşk uyumu</div></span></a>
       <a class="it" href="#/edit">${icon('edit')}<span class="grow">Profili düzenle<div class="sub">Fotoğraflar, biyografi, ilgi alanları</div></span></a>
       <button class="it pref">${icon('sliders')}<span class="grow">Kaydırma tercihleri<div class="sub">Yaş aralığı, uzaklık, kimleri görmek istediğin</div></span></button>
     </div>
@@ -22,7 +23,7 @@ export default function settings(view) {
     <div class="group-t">Uygulama</div>
     <div class="group">
       <button class="it nt">${icon('bell')}<span class="grow">Bildirimler</span></button>
-      <button class="it th">${icon('sun')}<span class="grow">Görünüm</span></button>
+      <button class="it th">${icon('sun')}<span class="grow">Tema<div class="sub">Gün batımı, Pembe rüya, Gece moru, Altın</div></span></button>
       <button class="it bl">${icon('block')}<span class="grow">Engellenenler</span></button>
     </div>
     <div class="group"><button class="it danger lo">${icon('logout')}Çıkış yap</button></div>
