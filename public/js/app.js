@@ -1,6 +1,6 @@
 import { icon } from './icons.js';
 import {
-  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin,
+  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin, notifHref,
 } from './core.js';
 import { initCalls } from './calls.js';
 
@@ -23,10 +23,15 @@ const routes = [
   [/^\/edit$/, 'edit', { tabs: false }],
   [/^\/settings$/, 'settings', { tabs: false }],
   [/^\/fal(?:\/(\w+))?$/, 'fal', { tab: 'home' }],
-  [/^\/fal(?:\/(\w+))?$/, 'fal', { tab: 'home' }],
   [/^\/create(?:\/(\w+))?$/, 'create', { tabs: false }],
   [/^\/p\/([\w-]+)$/, 'post', { tab: 'home' }],
   [/^\/(login|register|forgot)$/, 'auth', { tabs: false, public: true }],
+  [/^\/legal\/(\w+)$/, 'legal', { tabs: false, any: true }],
+  [/^\/store$/, 'store', { tabs: false }],
+  [/^\/wallet$/, 'wallet', { tabs: false }],
+  [/^\/verify$/, 'verify', { tabs: false }],
+  [/^\/requests$/, 'requests', { tabs: false }],
+  [/^\/tag\/([^/]+)$/, 'tag', { tab: 'home' }],
 ];
 
 const view = document.getElementById('view');
@@ -79,6 +84,35 @@ function showBan(ban) {
 }
 on('banned', (b) => { if (!state.ban) showBan(b); });
 
+// Doğum tarihi olmayan eski hesaplar: 18 yaş onayı
+function showBirthGate() {
+  document.body.classList.add('no-tabs');
+  if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
+  const max = new Date(); max.setFullYear(max.getFullYear() - 18);
+  view.innerHTML = `<section class="auth">
+    <div class="empty" style="padding:0"><div class="big">${icon('shield')}</div></div>
+    <h2 style="text-align:center;margin:16px 0 6px;font-size:24px">Doğum tarihin</h2>
+    <p class="tagline" style="margin-bottom:16px">SwipeUp 18 yaş ve üzeri içindir. Devam etmek için doğum tarihini gir. Profilinde sadece yaşın görünür.</p>
+    <form style="display:grid;gap:12px"><input class="field" type="date" name="d" required min="1920-01-01" max="${max.toISOString().slice(0, 10)}">
+      <label class="consent"><input type="checkbox" name="a"><span><a class="link" href="#/legal/kosullar">Kullanım Koşulları</a>’nı ve <a class="link" href="#/legal/gizlilik">Gizlilik Politikası</a>’nı kabul ediyorum.</span></label>
+      <button class="btn primary block">Devam et</button><div class="err" role="alert"></div></form></section>`;
+  const f = view.querySelector('form');
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const err = f.querySelector('.err'); err.textContent = '';
+    if (!f.d.value) { err.textContent = 'Doğum tarihini gir.'; return; }
+    if (!f.a.checked) { err.textContent = 'Devam etmek için koşulları kabul etmelisin.'; return; }
+    try {
+      Object.assign(state.me, await api('/me', { method: 'PATCH', body: { birthdate: f.d.value } }));
+      router();
+    } catch (er) {
+      const m = await api('/me').catch(() => null);
+      if (m?.ban) { state.ban = m.ban; return showBan(m.ban); }
+      err.textContent = er.message;
+    }
+  };
+}
+
 async function router() {
   if (state.ban) return showBan(state.ban);
   const path = location.hash.replace(/^#/, '') || '/';
@@ -88,7 +122,8 @@ async function router() {
     if (m) { match = { name, opts, params: m.slice(1) }; break; }
   }
   if (!match) { location.hash = '#/'; return; }
-  if (!state.token && !match.opts.public) { location.hash = '#/login'; return; }
+  if (!state.token && !match.opts.public && !match.opts.any) { location.hash = '#/login'; return; }
+  if (state.me?.needsBirthdate && state.me.role !== 'falci' && !match.opts.any) return showBirthGate();
   if (state.token && match.opts.public) { location.hash = '#/'; return; }
 
   const my = ++navToken;
@@ -118,10 +153,9 @@ function wireRealtime() {
   on('notification', (n) => {
     state.badges.notifications++; emit('badges', state.badges);
     if (location.hash === '#/notifications') return;
-    const href = {
-      match: '#/chats', live: `#/live/${n.fromId}`, follow: `#/u/${n.from?.username}`, super: '#/likes', liked: '#/likes', group: '#/chats', missed: '#/chats',
-    }[n.type] || (n.ref ? `#/p/${n.ref}` : '#/notifications');
-    toast(n.text, { ms: ['announce', 'warning'].includes(n.type) ? 8000 : 3500, title: n.type === 'liked' ? 'Yeni beğeni' : n.from?.name || 'SwipeUp', img: n.type === 'liked' ? null : n.from?.avatar, href });
+    const href = notifHref(n);
+    if (n.type === 'order' || n.type === 'verify') api('/me').then((m) => Object.assign(state.me, m)).catch(() => {});
+    toast(n.text, { ms: ['announce', 'warning', 'order', 'verify'].includes(n.type) ? 8000 : 3500, title: n.type === 'liked' ? 'Yeni beğeni' : n.from?.name || 'SwipeUp', img: n.type === 'liked' ? null : n.from?.avatar, href });
   });
   on('likes:new', () => refreshBadges());
   on('message', (m) => {
@@ -130,7 +164,7 @@ function wireRealtime() {
     if (!inChat) {
       refreshBadges();
       if (location.hash === '#/chats') return;
-      api(`/users/${m.from}`).then((u) => toast(m.fal ? '🔮 Yeni fal isteği' : m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf'), { title: u.name, img: u.avatar, href: `#/chat/${m.chatId}` })).catch(() => {});
+      api(`/users/${m.from}`).then((u) => toast(m.fal ? '🔮 Yeni fal isteği' : m.location ? '📍 Konum' : m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf'), { title: u.name, img: u.avatar, href: `#/chat/${m.chatId}` })).catch(() => {});
     }
   });
   on('match', ({ user, chatId }) => showMatch(user, chatId));

@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, avatar, toast, blockUser, unmatchUser, reportUser, lastSeen, sheet,
+  state, api, esc, avatar, toast, blockUser, unmatchUser, reportUser, lastSeen, sheet, nm,
 } from '../core.js';
 import { startCall } from '../calls.js';
 import { pickPeople } from './groupnew.js';
@@ -11,7 +11,7 @@ export default async function chatinfo(view, chatId) {
   if (!d.isGroup) {
     const u = await api(`/users/${d.other.id}`);
     view.innerHTML = `<header class="topbar"><a class="ib" href="${back}" aria-label="Geri">${icon('back')}</a><div class="center">Kişi bilgisi</div><span class="ib"></span></header>
-      <section class="profile-hero"><div class="av-wrap"><img class="av" src="${esc(u.avatar)}" alt=""></div><h2>${esc(u.name)}</h2><div class="handle">@${esc(u.username)} · ${esc(lastSeen(u))}</div>${u.bio ? `<p class="bio">${esc(u.bio)}</p>` : ''}</section>
+      <section class="profile-hero"><div class="av-wrap"><img class="av" src="${esc(u.avatar)}" alt=""></div><h2>${nm(u)}</h2><div class="handle">@${esc(u.username)} · ${esc(lastSeen(u))}</div>${u.bio ? `<p class="bio">${esc(u.bio)}</p>` : ''}</section>
       <div class="profile-btns" style="margin-top:14px"><button class="btn vc">${icon('phone')} Sesli</button><button class="btn vv">${icon('video')} Görüntülü</button><a class="btn" href="#/u/${esc(u.username)}">${icon('person')} Profil</a></div>
       <div class="group">
         <button class="it clr">${icon('trash')}<span class="grow">Sohbeti temizle<div class="sub">Mesajlar sadece senden silinir</div></span></button>

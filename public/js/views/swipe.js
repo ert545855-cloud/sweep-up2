@@ -1,10 +1,11 @@
 import { icon } from '../icons.js';
-import { api, esc, toast, isOn, state, sheet, on } from '../core.js';
+import { api, esc, toast, isOn, state, sheet, on, tick, plusSheet, needCoins } from '../core.js';
 import { showMatch } from '../app.js';
 
 export default async function swipe(view) {
   view.innerHTML = `<header class="topbar">
       <h1><span>Keşfet</span></h1>
+      <button class="ib soft bst" aria-label="Boost">${icon('bolt')}</button>
       <a class="ib soft lk" href="#/likes" aria-label="Seni beğenenler">${icon('heart')}<span class="num-badge lkn" ${state.badges.likes ? '' : 'hidden'}>${state.badges.likes}</span></a>
       <button class="ib soft flt" aria-label="Filtreler">${icon('sliders')}</button>
     </header>
@@ -27,10 +28,10 @@ export default async function swipe(view) {
       ${u.photos.map((p, i) => `<img class="ph" src="${esc(p)}" alt="" style="${i ? 'display:none' : ''}" ${i ? 'loading="lazy"' : ''} draggable="false">`).join('')}
       ${u.photos.length > 1 ? `<div class="segs">${u.photos.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
       <div class="grad"></div>
-      <div class="tagrow">${u.likedYou ? '<span class="liked-you">Seni beğendi</span>' : ''}${isOn(u) ? '<span>Çevrimiçi</span>' : ''}</div>
+      <div class="tagrow">${u.boosted ? `<span class="boosted">${icon('bolt')}Öne çıkan</span>` : ''}${u.likedYou ? '<span class="liked-you">Seni beğendi</span>' : ''}${isOn(u) ? '<span>Çevrimiçi</span>' : ''}</div>
       <div class="stamp like">BEĞEN</div><div class="stamp nope">GEÇ</div><div class="stamp super">SÜPER</div>
       <div class="info">
-        <h2>${esc(u.name.split(' ')[0])} ${u.age ? `<small>${u.age}</small>` : ''}</h2>
+        <h2>${esc(u.name.split(' ')[0])} ${u.age ? `<small>${u.age}</small>` : ''}${tick(u)}</h2>
         <div class="where">${u.city || u.distanceKm ? `${icon('pin', '', 'style="width:16px;height:16px"')}${[u.city, u.distanceKm ? `${u.distanceKm} km uzakta` : ''].filter(Boolean).map(esc).join(' · ')}` : ''}</div>
         ${u.bio ? `<p>${esc(u.bio)}</p>` : ''}
         ${u.interests?.length ? `<div class="chips">${u.interests.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : ''}
@@ -121,7 +122,14 @@ export default async function swipe(view) {
       try {
         const r = await api('/swipe', { body: { to: u.id, dir } });
         if (r.match) showMatch(r.user, r.chatId);
-      } catch (er) { toast(er.message); }
+      } catch (er) {
+        if (/hakkın bitti/.test(er.message)) {
+          // Sınır doldu: kartı geri koy
+          history.pop(); deck.unshift(u);
+          setTimeout(render, 300);
+          if (state.badges.plus) toast(er.message); else plusSheet(er.message);
+        } else toast(er.message);
+      }
       if (deck.length < 3) {
         const more = await api('/swipe/deck').catch(() => []);
         const have = new Set([...deck.map((x) => x.id), ...history.map((x) => x.id)]);
@@ -138,12 +146,17 @@ export default async function swipe(view) {
   view.querySelector('.nope').onclick = () => top()?.('left');
   view.querySelector('.like').onclick = () => top()?.('right');
   view.querySelector('.super').onclick = () => top()?.('super');
-  view.querySelector('.undo').onclick = () => {
-    const u = history.pop();
-    if (!u) return toast('Geri alınacak kart yok.');
-    deck.unshift(u); render();
-    toast('Son kart geri getirildi. Beğendiysen eşleşme korunur.');
+  view.querySelector('.undo').onclick = async () => {
+    try {
+      const r = await api('/swipe/undo', { body: {} });
+      history.pop();
+      deck = deck.filter((x) => x.id !== r.card.id);
+      deck.unshift(r.card); render();
+    } catch (er) {
+      if (/SwipeUp\+/.test(er.message)) plusSheet('Yanlışlıkla mı geçtin? SwipeUp+ ile son kaydırmanı geri al.'); else toast(er.message);
+    }
   };
+  view.querySelector('.bst').onclick = () => openBoost();
   const key = (e) => {
     if (e.target.matches('input, textarea')) return;
     if (e.key === 'ArrowLeft') top()?.('left');
@@ -192,6 +205,25 @@ export function openFilters(onSave) {
           Object.assign(state.me, u); close(); onSave?.();
         } catch (er) { toast(er.message); }
       };
+    },
+  });
+}
+
+async function openBoost() {
+  const st = await api('/store').catch(() => null);
+  if (!st) return;
+  const left = st.boostUntil ? Math.max(1, Math.round((st.boostUntil - Date.now()) / 60000)) : 0;
+  sheet(null, `<div class="plus-sheet"><div class="plus-badge boost">${icon('bolt')}</div><h2>Boost</h2>
+    ${left ? `<p>Profilin şu an öne çıkıyor. <b>${left} dakika</b> kaldı.</p>` : `<p class="muted">${st.boostMinutes} dakika boyunca bölgendeki herkesin destesinde en üstte görün.</p>
+    <button class="btn primary block go">${st.freeBoost ? 'Ücretsiz boost kullan (SwipeUp+)' : `${st.boostCoins} jeton ile boost`}</button>
+    <p class="muted" style="font-size:13px;margin-top:10px">Bakiyen: ${st.coins} jeton · <a class="link" href="#/store">Jeton al</a></p>`}</div>`, {
+    onMount(sh, close) {
+      sh.querySelector('.go')?.addEventListener('click', async () => {
+        try {
+          await api('/boost', { body: {} });
+          close(); toast(`Boost açıldı! ${st.boostMinutes} dakika öne çıkacaksın ⚡`);
+        } catch (er) { if (/jeton/i.test(er.message)) { close(); needCoins(er.message); } else toast(er.message); }
+      });
     },
   });
 }

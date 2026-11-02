@@ -1,7 +1,8 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, num, toggleLike, heartBurst, onDoubleTap, openComments, sharePost, saved, toast, on, paintLike,
+  state, api, esc, num, toggleLike, heartBurst, onDoubleTap, openComments, sharePost, saved, toast, on, paintLike, richText, nm,
 } from '../core.js';
+import { applyEdit } from '../components.js';
 
 export default async function reels(view, focusId) {
   view.innerHTML = `<div class="reels-top">
@@ -29,8 +30,10 @@ export default async function reels(view, focusId) {
   sndBtn.onclick = () => setMuted(!state.muted);
 
   let io;
+  let edits = [];
   const paint = (items) => {
     io?.disconnect();
+    edits.forEach((f) => f()); edits = [];
     if (!items.length) {
       box.innerHTML = `<div class="empty" style="color:#aaa;padding-top:40vh">Henüz dalga yok. <a class="link" href="#/create/reel">İlk dalgayı sen paylaş</a></div>`;
       return;
@@ -47,9 +50,10 @@ export default async function reels(view, focusId) {
         <a href="#/u/${esc(r.user.username)}" aria-label="Profil"><img class="mini" src="${esc(r.user.avatar)}" alt=""></a>
       </div>
       <div class="meta">
-        <div class="row"><a href="#/u/${esc(r.user.username)}" class="row" style="gap:10px"><img class="av av-32" src="${esc(r.user.avatar)}" alt=""><span class="u">${esc(r.user.username)}</span></a>
+        <div class="row"><a href="#/u/${esc(r.user.username)}" class="row" style="gap:10px"><img class="av av-32" src="${esc(r.user.avatar)}" alt=""><span class="u">${nm(r.user, 'username')}</span></a>
           ${r.user.id !== state.me.id && !fol.has(r.user.id) ? `<button class="btn ghost follow" data-uid="${esc(r.user.id)}">Takip et</button>` : ''}</div>
-        ${r.caption ? `<div class="cap">${esc(r.caption)}</div>` : ''}
+        ${r.caption ? `<div class="cap">${richText(r.caption)}</div>` : ''}
+        <div class="snd-line">${icon('music')}<span>${esc(r.edit?.audioTitle || (r.edit?.audio ? 'Müzik' : `Orijinal ses · ${r.user.username}`))}</span>${r.edit?.speed && r.edit.speed !== 1 ? `<span class="chip-s">${r.edit.speed}x</span>` : ''}</div>
       </div>
       <div class="progress"><i></i></div>
     </section>`).join('');
@@ -71,7 +75,10 @@ export default async function reels(view, focusId) {
       sv.onclick = () => { const s = saved.toggle(r.id); sv.innerHTML = icon('bookmark', '', s ? 'fill="currentColor"' : ''); };
       sec.querySelector('.cap')?.addEventListener('click', (e) => e.currentTarget.classList.toggle('open'));
       const bar = sec.querySelector('.progress i');
-      v.addEventListener('timeupdate', () => { if (v.duration) bar.style.width = `${(v.currentTime / v.duration) * 100}%`; });
+      edits.push(applyEdit(v, r.edit));
+      const t0 = r.edit?.start || 0;
+      v.addEventListener('timeupdate', () => { const t1 = r.edit?.end || v.duration; if (t1) bar.style.width = `${Math.min(100, ((v.currentTime - t0) / (t1 - t0)) * 100)}%`; });
+      sec.querySelector('.cap')?.querySelectorAll('a').forEach((a) => a.addEventListener('click', (e) => e.stopPropagation()));
       v.addEventListener('error', () => { sec.querySelector('.shade').insertAdjacentHTML('afterend', '<div class="empty" style="position:absolute;inset:0;padding-top:45%;color:#bbb">Video yüklenemedi.</div>'); });
     });
 
@@ -109,5 +116,5 @@ export default async function reels(view, focusId) {
     r.likeCount = likeCount;
     paintLike(box.querySelector(`[data-id="${CSS.escape(id)}"] .like`), r);
   });
-  return () => { io?.disconnect(); off(); box.querySelectorAll('video').forEach((v) => { v.pause(); v.removeAttribute('src'); v.load(); }); };
+  return () => { io?.disconnect(); off(); edits.forEach((f) => f()); box.querySelectorAll('video').forEach((v) => { v.pause(); v.removeAttribute('src'); v.load(); }); };
 }

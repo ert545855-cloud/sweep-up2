@@ -1,13 +1,11 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, ago, avatar, on, refreshBadges, toast, emit,
+  state, api, esc, ago, avatar, on, refreshBadges, toast, emit, notifHref,
 } from '../core.js';
 import { notifSettings } from './profile.js';
 
-const href = (n) => ({
-  match: '#/chats', live: `#/live/${n.fromId}`, follow: `#/u/${n.from?.username}`, super: '#/likes', liked: '#/likes', group: '#/chats', missed: '#/chats', announce: '#/notifications', warning: '#/notifications', report: '#/notifications',
-}[n.type] || (n.ref ? `#/p/${n.ref}` : '#/notifications'));
-const sysIcon = (t) => ({ announce: 'bell', warning: 'flag', report: 'check' }[t] || 'heart');
+const href = notifHref;
+const sysIcon = (t) => ({ announce: 'bell', warning: 'flag', report: 'check', order: 'coin', verify: 'shield' }[t] || 'heart');
 
 export default async function notifications(view) {
   view.innerHTML = `<header class="topbar bordered">
@@ -24,6 +22,7 @@ export default async function notifications(view) {
   const row = (n) => `<a class="notif ${n.read ? '' : 'unread'}" href="${esc(href(n))}">
       ${n.from ? avatar(n.from, 44, { ring: true }) : `<span class="ic">${icon(sysIcon(n.type), '', n.type === 'liked' ? 'fill="currentColor"' : '')}</span>`}
       <div class="t">${esc(n.text)} <span class="muted">${ago(n.at)}</span></div>
+      ${n.type === 'follow_request' ? '<span class="btn sm">İncele</span>' : ''}
       ${n.type === 'follow' && n.from && !following.has(n.from.id) ? `<button class="btn primary fb" data-id="${esc(n.from.id)}">Takip et</button>` : ''}
       ${n.type === 'match' ? `<span style="color:var(--hot)">${icon('heart', '', 'fill="currentColor"')}</span>` : ''}
       ${n.type === 'live' ? `<span style="color:var(--hot)">${icon('live')}</span>` : ''}

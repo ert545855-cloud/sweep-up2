@@ -9,11 +9,11 @@ const { nanoid } = require('nanoid');
 const DAY = 86400000;
 const CATS = {
   gelir: ['Reklam', 'Abonelik', 'Uygulama içi satış', 'Sponsorluk', 'Bağış', 'Diğer'],
-  gider: ['Sunucu', 'Alan adı', 'Reklam ve pazarlama', 'Maaş', 'Yazılım', 'Vergi', 'Diğer'],
+  gider: ['Sunucu', 'Alan adı', 'Reklam ve pazarlama', 'Maaş', 'Yayıncı / falcı ödemesi', 'Yazılım', 'Vergi', 'Diğer'],
 };
 
 module.exports = function mountAdmin(app, ctx) {
-  const { store, io, emitTo, notify, brief, isOnline, online, removeChat, limited, ipOf, secret } = ctx;
+  const { store, io, emitTo, notify, brief, isOnline, online, removeChat, limited, ipOf, secret, eco } = ctx;
   const SECRET = () => secret() + ':admin';
   const now = () => Date.now();
 
@@ -23,7 +23,7 @@ module.exports = function mountAdmin(app, ctx) {
   });
   const adminOut = (a) => ({ id: a.id, username: a.username, name: a.name, role: a.role, createdAt: a.createdAt, lastLogin: a.lastLogin || null });
   const userRow = (u) => ({
-    ...brief(u), email: u.email || null, age: u.age, city: u.city, status: statusOf(u), banReason: u.banReason || null, bannedUntil: u.bannedUntil || null,
+    ...brief(u), email: u.email || null, age: u.age, city: u.city, status: statusOf(u), coins: u.coins || 0, earnings: u.earnings || 0, plusUntil: u.plusUntil || null, birthdate: u.birthdate || null, banReason: u.banReason || null, bannedUntil: u.bannedUntil || null,
     posts: store.filter('posts', (p) => p.userId === u.id).length,
     reports: store.filter('reports', (r) => r.to === u.id).length,
     matches: store.filter('matches', (m) => m.users.includes(u.id)).length,
@@ -134,6 +134,13 @@ module.exports = function mountAdmin(app, ctx) {
       falTotal: falMsgs.length,
       reportsOpen: store.filter('reports', (r) => r.status === 'open').length,
       appealsOpen: store.filter('appeals', (a) => a.status === 'open').length,
+      ordersOpen: store.filter('orders', (o) => o.status === 'paid' || o.status === 'pending').length,
+      ordersPaid: store.filter('orders', (o) => o.status === 'paid').length,
+      verifyOpen: store.filter('verifications', (v) => v.status === 'pending').length,
+      flagsOpen: store.filter('flags', (f) => f.status === 'open').length,
+      payoutsOpen: store.filter('payouts', (p) => p.status === 'pending').length,
+      plusUsers: users.filter((u) => (u.plusUntil || 0) > t).length,
+      verifiedUsers: users.filter((u) => u.verified).length,
       income: sum('gelir'), expense: sum('gider'),
       store: store.kind, mediaMB: +((store.mediaBytes || 0) / 1048576).toFixed(1),
       series: { users: series(users, 'createdAt'), messages: series(msgs), matches: series(store.all('matches')) },
@@ -217,15 +224,7 @@ module.exports = function mountAdmin(app, ctx) {
     if (u.role === 'falci') return res.status(400).json({ error: 'Falcı Teyze hesabı silinemez.' });
     kickSockets(u.id, { reason: 'Hesap silindi' });
     const id = u.id;
-    store.filter('posts', (p) => p.userId === id).forEach((p) => store.del('posts', p.id));
-    store.filter('stories', (s) => s.userId === id).forEach((s) => store.del('stories', s.id));
-    ['follows', 'swipes', 'blocks'].forEach((c) => store.filter(c, (x) => x.from === id || x.to === id).forEach((x) => store.del(c, x.id)));
-    store.filter('matches', (m) => m.users.includes(id)).forEach((m) => store.del('matches', m.id));
-    store.filter('chats', (c) => !c.isGroup && c.members.includes(id)).forEach((c) => removeChat(c.id));
-    store.filter('chats', (c) => c.isGroup && c.members.includes(id)).forEach((c) => store.update('chats', c.id, { members: c.members.filter((m) => m !== id) }));
-    store.filter('notifications', (n) => n.userId === id || n.fromId === id).forEach((n) => store.del('notifications', n.id));
-    store.filter('pushSubs', (s) => s.userId === id).forEach((s) => store.del('pushSubs', s.id));
-    store.del('users', id);
+    ctx.purgeUser(id);
     audit(req.admin, 'hesabı sildi', id, `@${u.username}`);
     res.json({ ok: true });
   });
@@ -342,8 +341,17 @@ module.exports = function mountAdmin(app, ctx) {
     const answered = list.filter((m) => m.fal.status === 'answered' && m.fal.answeredAt);
     const avgMin = answered.length ? Math.round(answered.reduce((a, m) => a + (m.fal.answeredAt - m.at), 0) / answered.length / 60000) : null;
     const byType = list.reduce((a, m) => ((a[m.fal.type] = (a[m.fal.type] || 0) + 1), a), {});
+    const f = store.find('users', (u) => u.role === 'falci');
+    const falTx = store.filter('coin_tx', (x) => x.reason === 'fal');
+    const s = eco.get();
     res.json({
       total: list.length, pending: list.length - answered.length, avgMin, byType,
+      prices: s.falPrices, share: s.falciShare, coinTL: s.coinTL,
+      falci: f ? {
+        ...brief(f), balance: f.earnings || 0, total: f.earnedTotal || 0,
+        balanceTL: +((f.earnings || 0) * s.coinTL).toFixed(2), totalTL: +((f.earnedTotal || 0) * s.coinTL).toFixed(2),
+      } : null,
+      paidCount: falTx.length, coinsSpent: falTx.reduce((a, x) => a - x.delta, 0),
       items: list.slice(0, 100).map((m) => ({ ...m.fal, user: brief(store.get('users', m.from)), at: m.at })),
     });
   });
@@ -395,6 +403,199 @@ module.exports = function mountAdmin(app, ctx) {
     if (!a || a.role === 'owner') return res.status(400).json({ error: 'Sahip yönetici silinemez.' });
     store.del('adm_admins', a.id);
     audit(req.admin, 'yönetici sildi', null, a.username);
+    res.json({ ok: true });
+  });
+
+
+  // ================= Ekonomi: ayarlar, siparişler, ödemeler =================
+  app.get('/api/admin/economy', adminAuth, (req, res) => res.json(eco.get()));
+  app.put('/api/admin/economy', adminAuth, owner, (req, res) => {
+    const b = req.body || {};
+    const n = (v, lo, hi, d) => (Number.isFinite(+v) ? Math.max(lo, Math.min(hi, +v)) : d);
+    const cur = eco.get();
+    const patch = {};
+    if (b.bank) {
+      const iban = String(b.bank.iban || '').replace(/\s+/g, '').toUpperCase();
+      if (iban && !/^TR\d{24}$/.test(iban)) return res.status(400).json({ error: 'IBAN geçersiz (TR ile başlayan 26 karakter).' });
+      patch.bank = { iban, name: String(b.bank.name || '').slice(0, 80), bankName: String(b.bank.bankName || '').slice(0, 60), note: String(b.bank.note || '').slice(0, 200) };
+    }
+    if (Array.isArray(b.coinPacks)) patch.coinPacks = b.coinPacks.slice(0, 6).map((p, i) => ({ id: String(p.id || `c${i}`).slice(0, 12), coins: n(p.coins, 1, 100000, 100) | 0, price: n(p.price, 0.01, 100000, 10), tag: String(p.tag || '').slice(0, 20) || undefined }));
+    if (Array.isArray(b.plusPlans)) patch.plusPlans = b.plusPlans.slice(0, 4).map((p, i) => ({ id: String(p.id || `p${i}`).slice(0, 12), days: n(p.days, 1, 3650, 30) | 0, price: n(p.price, 0.01, 100000, 10), tag: String(p.tag || '').slice(0, 20) || undefined }));
+    if (Array.isArray(b.gifts)) patch.gifts = b.gifts.slice(0, 12).map((g, i) => ({ id: String(g.id || `g${i}`).slice(0, 12), em: String(g.em || '🎁').slice(0, 4), name: String(g.name || 'Hediye').slice(0, 20), coins: n(g.coins, 1, 100000, 10) | 0 }));
+    if (b.falPrices) patch.falPrices = Object.fromEntries(['kahve', 'tarot', 'burc', 'uyum'].map((k) => [k, n(b.falPrices[k], 0, 10000, cur.falPrices[k]) | 0]));
+    ['boostCoins', 'boostMinutes', 'freeLikes', 'freeSupers', 'plusSupers'].forEach((k) => { if (b[k] !== undefined) patch[k] = n(b[k], 0, 100000, cur[k]) | 0; });
+    ['creatorShare', 'falciShare'].forEach((k) => { if (b[k] !== undefined) patch[k] = n(b[k], 0, 1, cur[k]); });
+    if (b.coinTL !== undefined) patch.coinTL = n(b.coinTL, 0, 100, cur.coinTL);
+    eco.save(patch);
+    audit(req.admin, 'ekonomi ayarlarını güncelledi', null, Object.keys(patch).join(', '));
+    res.json(eco.get());
+  });
+
+  const orderRow = (o) => ({ ...o, user: store.get('users', o.userId) ? userRow(store.get('users', o.userId)) : null });
+  app.get('/api/admin/orders', adminAuth, (req, res) => {
+    const st = String(req.query.status || 'open');
+    const list = store.filter('orders', (o) => st === 'all' || (st === 'open' ? ['pending', 'paid'].includes(o.status) : o.status === st))
+      .sort((a, b) => (b.status === 'paid') - (a.status === 'paid') || b.at - a.at).slice(0, 300);
+    const month = new Date(); month.setDate(1); month.setHours(0, 0, 0, 0);
+    const approved = store.filter('orders', (o) => o.status === 'approved' && o.closedAt >= month.getTime());
+    res.json({ items: list.map(orderRow), monthTotal: approved.reduce((a, o) => a + o.amount, 0), monthCount: approved.length });
+  });
+  app.post('/api/admin/orders/:id', adminAuth, (req, res) => {
+    const o = store.get('orders', req.params.id);
+    if (!o || !['pending', 'paid'].includes(o.status)) return res.status(404).json({ error: 'Sipariş bulunamadı ya da sonuçlanmış.' });
+    const approve = !!req.body?.approve;
+    const note = String(req.body?.note || '').slice(0, 300);
+    const p = eco.product(o.productId);
+    if (approve) {
+      if (o.kind === 'coins') eco.addCoins(o.userId, p ? p.coins : parseInt(o.title, 10) || 0, 'purchase', { ref: o.id });
+      if (o.kind === 'plus') eco.grantPlus(o.userId, p ? p.days : 30);
+      const day = new Date(); const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+      store.put('adm_ledger', {
+        id: nanoid(10), type: 'gelir', amount: o.amount, date: ymd, category: o.kind === 'plus' ? 'Abonelik' : 'Uygulama içi satış',
+        note: `${o.code} · ${o.title} · @${store.get('users', o.userId)?.username || '?'}${o.sender ? ` · gönderen: ${o.sender}` : ''}`,
+        currency: 'TRY', by: req.admin.username, auto: true, orderId: o.id, createdAt: now(),
+      });
+      notify(o.userId, { type: 'order', text: o.kind === 'plus' ? `✨ Ödemen onaylandı! SwipeUp+ üyeliğin aktif.` : `🪙 Ödemen onaylandı! ${o.title} hesabına eklendi.`, title: 'SwipeUp', url: '/#/store' });
+    } else {
+      notify(o.userId, { type: 'order', text: `Siparişin (${o.code}) onaylanmadı.${note ? ' ' + note : ' Ödeme bulunamadı.'}`, title: 'SwipeUp', url: '/#/store' });
+    }
+    store.update('orders', o.id, { status: approve ? 'approved' : 'rejected', note, closedAt: now(), by: req.admin.username });
+    emitTo(o.userId, 'wallet', {});
+    audit(req.admin, approve ? 'siparişi onayladı' : 'siparişi reddetti', o.userId, `${o.code} · ${o.amount} ₺`);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/admin/users/:id/grant', adminAuth, (req, res) => {
+    const u = store.get('users', req.params.id);
+    if (!u) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    const coins = parseInt(req.body?.coins, 10) || 0;
+    const days = parseInt(req.body?.plusDays, 10) || 0;
+    const note = String(req.body?.note || '').slice(0, 200);
+    if (!coins && !days) return res.status(400).json({ error: 'Jeton ya da gün gir.' });
+    if (coins) eco.addCoins(u.id, coins, 'admin', { note, by: req.admin.username });
+    if (days > 0) eco.grantPlus(u.id, days);
+    if (days < 0) store.update('users', u.id, { plusUntil: null });
+    const parts = [coins && `${coins > 0 ? '+' : ''}${coins} jeton`, days > 0 && `${days} gün SwipeUp+`].filter(Boolean).join(', ');
+    if (coins > 0 || days > 0) notify(u.id, { type: 'order', text: `🎁 SwipeUp ekibinden hediye: ${parts}${note ? ' · ' + note : ''}`, title: 'SwipeUp', url: '/#/store' });
+    emitTo(u.id, 'wallet', {});
+    audit(req.admin, 'jeton/üyelik verdi', u.id, `${parts || 'üyelik kaldırıldı'} ${note}`);
+    res.json(userRow(store.get('users', u.id)));
+  });
+
+  app.get('/api/admin/payouts', adminAuth, (req, res) => {
+    const s = eco.get();
+    const earners = store.filter('users', (u) => (u.earnedTotal || 0) > 0).sort((a, b) => (b.earnedTotal || 0) - (a.earnedTotal || 0)).slice(0, 50)
+      .map((u) => ({ ...brief(u), balance: u.earnings || 0, total: u.earnedTotal || 0, balanceTL: +((u.earnings || 0) * s.coinTL).toFixed(2) }));
+    res.json({
+      coinTL: s.coinTL, earners,
+      items: store.all('payouts').sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.at - a.at).slice(0, 200)
+        .map((p) => ({ ...p, user: brief(store.get('users', p.userId)) })),
+    });
+  });
+  app.post('/api/admin/payouts/:id', adminAuth, (req, res) => {
+    const p = store.get('payouts', req.params.id);
+    if (!p || p.status !== 'pending') return res.status(404).json({ error: 'Talep bulunamadı.' });
+    const paid = !!req.body?.paid;
+    const note = String(req.body?.note || '').slice(0, 300);
+    const u = store.get('users', p.userId);
+    if (paid) {
+      const day = new Date(); const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+      store.put('adm_ledger', { id: nanoid(10), type: 'gider', amount: p.amount, date: ymd, category: 'Yayıncı / falcı ödemesi', note: `@${u?.username || '?'} · ${p.coins} jeton · ${p.iban}`, currency: 'TRY', by: req.admin.username, auto: true, createdAt: now() });
+      notify(p.userId, { type: 'order', text: `💸 ${p.amount} ₺ kazanç ödemen hesabına gönderildi.`, title: 'SwipeUp', url: '/#/wallet' });
+    } else {
+      if (u) store.update('users', u.id, { earnings: (u.earnings || 0) + p.coins });
+      notify(p.userId, { type: 'order', text: `Ödeme talebin reddedildi, kazancın bakiyene geri eklendi.${note ? ' ' + note : ''}`, title: 'SwipeUp', url: '/#/wallet' });
+    }
+    store.update('payouts', p.id, { status: paid ? 'paid' : 'rejected', note, closedAt: now(), by: req.admin.username });
+    audit(req.admin, paid ? 'kazanç ödemesi yaptı' : 'ödeme talebini reddetti', p.userId, `${p.amount} ₺`);
+    res.json({ ok: true });
+  });
+  // Falcı Teyze gibi platform hesaplarının kazancını elden ödeyip sıfırlama
+  app.post('/api/admin/users/:id/settle', adminAuth, owner, (req, res) => {
+    const u = store.get('users', req.params.id);
+    if (!u || !(u.earnings > 0)) return res.status(400).json({ error: 'Ödenecek kazanç yok.' });
+    const s = eco.get();
+    const amount = +(u.earnings * s.coinTL).toFixed(2);
+    const day = new Date(); const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    if (req.body?.ledger !== false) store.put('adm_ledger', { id: nanoid(10), type: 'gider', amount, date: ymd, category: 'Yayıncı / falcı ödemesi', note: `@${u.username} · ${u.earnings} jeton`, currency: 'TRY', by: req.admin.username, auto: true, createdAt: now() });
+    store.update('users', u.id, { earnings: 0 });
+    audit(req.admin, 'kazancı ödendi olarak işaretledi', u.id, `${amount} ₺`);
+    res.json({ ok: true, amount });
+  });
+
+  app.get('/api/admin/legal', adminAuth, (req, res) => res.json(store.get('settings', 'legal') || {}));
+  app.put('/api/admin/legal', adminAuth, owner, (req, res) => {
+    const b = req.body || {};
+    const email = String(b.email || '').trim().slice(0, 120);
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'E-posta geçersiz.' });
+    const doc = store.put('settings', { id: 'legal', company: String(b.company || '').trim().slice(0, 120), email, address: String(b.address || '').trim().slice(0, 240) });
+    audit(req.admin, 'yasal iletişim bilgilerini güncelledi');
+    res.json(doc);
+  });
+
+  // ================= Profil doğrulama =================
+  app.get('/api/admin/verifications', adminAuth, (req, res) => {
+    const st = String(req.query.status || 'pending');
+    res.json(store.filter('verifications', (v) => st === 'all' || v.status === st).sort((a, b) => b.at - a.at).slice(0, 200).map((v) => {
+      const u = store.get('users', v.userId);
+      return { ...v, poseInfo: require('./features').POSES.find((p) => p.id === v.pose) || { text: v.pose }, user: u ? { ...userRow(u), photos: u.photos || [], avatar: u.avatar } : null };
+    }));
+  });
+  app.post('/api/admin/verifications/:id', adminAuth, (req, res) => {
+    const v = store.get('verifications', req.params.id);
+    if (!v || v.status !== 'pending') return res.status(404).json({ error: 'Başvuru bulunamadı.' });
+    const approve = !!req.body?.approve;
+    const note = String(req.body?.note || '').slice(0, 200);
+    store.update('verifications', v.id, { status: approve ? 'approved' : 'rejected', note, by: req.admin.username, closedAt: now() });
+    if (approve) store.update('users', v.userId, { verified: true, verifiedAt: now() });
+    else store.update('users', v.userId, { verifyPose: null });
+    notify(v.userId, { type: 'verify', text: approve ? '✅ Profilin doğrulandı! Artık adının yanında mavi tik var.' : `Doğrulama onaylanmadı.${note ? ' ' + note : ''} Yeni bir poz ile tekrar deneyebilirsin.`, title: 'SwipeUp', url: '/#/verify' });
+    audit(req.admin, approve ? 'profili doğruladı' : 'doğrulamayı reddetti', v.userId, note);
+    res.json({ ok: true });
+  });
+  app.post('/api/admin/users/:id/unverify', adminAuth, (req, res) => {
+    const u = store.get('users', req.params.id);
+    if (!u) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    store.update('users', u.id, { verified: false });
+    audit(req.admin, 'mavi tiki kaldırdı', u.id);
+    res.json(userRow(u));
+  });
+
+  // ================= Otomatik moderasyon işaretleri =================
+  app.get('/api/admin/flags', adminAuth, (req, res) => {
+    const st = String(req.query.status || 'open');
+    res.json(store.filter('flags', (f) => st === 'all' || f.status === st).sort((a, b) => (b.level === 'high') - (a.level === 'high') || b.at - a.at).slice(0, 300).map((f) => {
+      const m = store.get('messages', f.ref);
+      const ctxMsgs = m ? store.filter('messages', (x) => x.chatId === m.chatId && Math.abs(x.at - m.at) < 30 * 60000 && !x.system).sort((a, b) => a.at - b.at)
+        .filter((x, i, arr) => Math.abs(arr.findIndex((y) => y.id === m.id) - i) <= 3)
+        .map((x) => ({ id: x.id, text: x.deleted ? '(silindi)' : x.location ? `📍 Konum${x.location.label ? ': ' + x.location.label : ''}` : x.text || (x.mediaType === 'audio' ? '🎤 Sesli mesaj' : x.media ? '📷 Medya' : ''), from: store.get('users', x.from)?.username, at: x.at, flagged: x.id === m.id })) : [];
+      const chat = store.get('chats', f.chatId);
+      return {
+        ...f, user: store.get('users', f.userId) ? userRow(store.get('users', f.userId)) : null,
+        to: chat ? chat.members.filter((x) => x !== f.userId).map((x) => brief(store.get('users', x))).filter(Boolean).slice(0, 3) : [],
+        context: ctxMsgs, userFlags: store.filter('flags', (x) => x.userId === f.userId).length,
+      };
+    }));
+  });
+  app.post('/api/admin/flags/:id', adminAuth, (req, res) => {
+    const f = store.get('flags', req.params.id);
+    if (!f) return res.status(404).json({ error: 'Kayıt bulunamadı.' });
+    const action = String(req.body?.action || 'dismiss');
+    const note = String(req.body?.note || '').slice(0, 300);
+    const u = store.get('users', f.userId);
+    let did = 'yoksaydı';
+    if (action === 'delete') { deleteContent(f.ref); did = 'mesajı sildi'; }
+    if (action === 'warn' && u) {
+      notify(u.id, { type: 'warning', text: `⚠️ SwipeUp ekibinden uyarı: ${note || 'Mesajlarında hakaret/tehdit tespit edildi. Lütfen topluluk kurallarına uy.'}`, title: 'SwipeUp', url: '/#/notifications' });
+      did = 'uyardı';
+    }
+    if ((action === 'suspend' || action === 'ban') && u) {
+      deleteContent(f.ref);
+      banUser(req.admin, u, { days: action === 'suspend' ? Math.max(1, parseInt(req.body?.days, 10) || 7) : null, reason: note || `Otomatik moderasyon: ${f.reason}` });
+      did = action === 'suspend' ? 'askıya aldı' : 'yasakladı';
+    }
+    store.update('flags', f.id, { status: action === 'dismiss' ? 'dismissed' : 'resolved', resolution: did, by: req.admin.username, closedAt: now() });
+    audit(req.admin, `moderasyon: ${did}`, f.userId, note || f.reason);
     res.json({ ok: true });
   });
 

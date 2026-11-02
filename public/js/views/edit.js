@@ -21,7 +21,7 @@ export default function edit(view) {
       <label>Kullanıcı adı<input class="field" name="username" value="${esc(me.username)}" autocapitalize="none" maxlength="24"></label>
       <label>Biyografi<textarea class="field" name="bio" maxlength="150" rows="3" placeholder="Kendinden kısaca bahset">${esc(me.bio || '')}</textarea></label>
       <div class="two">
-        <label>Yaş<input class="field" name="age" type="number" min="18" max="99" inputmode="numeric" value="${esc(me.age || '')}"></label>
+        <label>Yaş<input class="field" name="age" type="number" min="18" max="99" inputmode="numeric" value="${esc(me.age || '')}" ${me.birthdate ? 'readonly title="Doğum tarihinden hesaplanır"' : ''}></label>
         <label>Şehir<input class="field" name="city" value="${esc(me.city || '')}" maxlength="40"></label>
       </div>
       <div class="two">
@@ -64,7 +64,7 @@ export default function edit(view) {
       const u = await api('/me', {
         method: 'PATCH',
         body: {
-          name: f.name.value, username: f.username.value, bio: f.bio.value, age: f.age.value || null,
+          name: f.name.value, username: f.username.value, bio: f.bio.value, ...(me.birthdate ? {} : { age: f.age.value || null }),
           city: f.city.value, gender: f.gender.value || null, lookingFor: f.lookingFor.value,
           interests: f.interests.value.split(',').map((s) => s.trim()).filter(Boolean),
           photos, avatar: avatarUrl,

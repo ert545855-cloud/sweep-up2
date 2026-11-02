@@ -1,7 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, num, avatar, sheet, toast, openChatWith, saved, enablePush, disablePush, pushEnabled, pushHint,
-  blockUser, reportUser, unmatchUser, lastSeen, isOn, SKINS, applySkin, currentSkin,
+  state, api, esc, num, avatar, sheet, toast, openChatWith, saved, enablePush, disablePush, pushEnabled, pushHint, blockUser, reportUser, unmatchUser, lastSeen, isOn, SKINS, applySkin, currentSkin, nm, richText,
 } from '../core.js';
 import { gridTile } from '../components.js';
 
@@ -54,8 +53,8 @@ function peopleSheet(title, userId, which) {
   sheet(title, '<div class="pl"><div class="spinner"></div></div>', {
     async onMount(sh) {
       const us = await api(`/users/${userId}/${which}`);
-      sh.querySelector('.pl').innerHTML = us.length ? us.map((u) => `<a class="list-item" href="#/u/${esc(u.username)}">${avatar(u, 44)}<div><div class="b">${esc(u.name)}</div><div class="sub">@${esc(u.username)}</div></div></a>`).join('')
-        : '<div class="empty">Henüz kimse yok.</div>';
+      sh.querySelector('.pl').innerHTML = us.length ? us.map((u) => `<a class="list-item" href="#/u/${esc(u.username)}">${avatar(u, 44)}<div><div class="b">${nm(u)}</div><div class="sub">@${esc(u.username)}</div></div></a>`).join('')
+        : '<div class="empty">Henüz kimse yok ya da hesap gizli.</div>';
     },
   });
 }
@@ -81,10 +80,10 @@ export default async function profile(view, username) {
         ${u.live || u.hasStory ? `<div class="ring ${u.live ? 'live' : ''}"><img class="av" src="${esc(u.avatar)}" alt=""></div>` : `<img class="av" src="${esc(u.avatar)}" alt="">`}
         ${u.live ? '<span class="live-tag">CANLI</span>' : self && !u.hasStory ? `<span class="plus">${icon('plus')}</span>` : (!self && isOn(u) ? '<i class="online"></i>' : '')}
       </${avHref ? 'a' : 'div'}>
-      <h2>${esc(u.name)}</h2>
+      <h2>${nm(u)}${u.plus ? `<span class="plus-chip">${icon('crown')}+</span>` : ''}</h2>
       ${u.role === 'falci' ? '<span class="chip uv" style="margin-top:8px">🔮 Falcı</span>' : ''}
-      <div class="handle">@${esc(u.username)}${!self ? ` · ${esc(lastSeen(u))}` : ''}</div>
-      ${u.bio ? `<p class="bio">${esc(u.bio)}</p>` : (self ? '<a class="link" href="#/edit" style="margin-top:6px">Biyografi ekle</a>' : '')}
+      <div class="handle">${u.privacy?.private ? `${icon('lock', '', 'style="width:13px;height:13px;vertical-align:-1px"')} ` : ''}@${esc(u.username)}${!self && lastSeen(u) ? ` · ${esc(lastSeen(u))}` : ''}</div>
+      ${u.bio ? `<p class="bio">${richText(u.bio)}</p>` : (self ? '<a class="link" href="#/edit" style="margin-top:6px">Biyografi ekle</a>' : '')}
       ${meta.length || u.interests?.length || (!self && (u.followsYou || u.matched)) ? `<div class="chips">
         ${meta.map((m) => `<span class="chip">${esc(m)}</span>`).join('')}
         ${(u.interests || []).map((t) => `<span class="chip uv">${esc(t)}</span>`).join('')}
@@ -92,18 +91,18 @@ export default async function profile(view, username) {
       </div>` : ''}
     </section>
     <div class="stats">
-      <div><b>${num(u.posts.length)}</b><span>gönderi</span></div>
+      <div><b>${num(u.postCount ?? u.posts.length)}</b><span>gönderi</span></div>
       <button class="fl"><b>${num(u.followers)}</b><span>takipçi</span></button>
       <button class="fg"><b>${num(u.following)}</b><span>takip</span></button>
     </div>
     <div class="profile-btns">
       ${self
-    ? `<a class="btn" href="#/edit">Profili düzenle</a><button class="btn share">Paylaş</button>`
+    ? `<a class="btn" href="#/edit">Profili düzenle</a><button class="btn share">Paylaş</button>${u.verified ? '' : `<a class="btn sq" href="#/verify" aria-label="Profilini doğrula">${icon('shield', '', 'style="width:18px;height:18px"')}</a>`}`
     : u.blockedByMe
       ? '<button class="btn primary unb">Engeli kaldır</button>'
       : u.role === 'falci'
         ? `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : 'Takip et'}</button><a class="btn" href="#/fal">🔮 Fal baktır</a><button class="btn sq msg" aria-label="Mesaj gönder">${icon('send', '', 'style="width:18px;height:18px"')}</button>`
-        : `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button><button class="btn msg">${icon('send')} Mesaj</button>`}
+        : `<button class="btn ${u.isFollowing || u.requested ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : u.requested ? 'İstek gönderildi' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button><button class="btn msg">${icon('send')} Mesaj</button>`}
     </div>
     <div class="tabs">
       ${tabs.map((t, i) => `<button data-t="${t}" class="${i ? '' : 'on'}" aria-label="${{ grid: 'Gönderiler', reels: 'Dalgalar', saved: 'Kaydedilenler' }[t]}">${icon({ grid: 'grid', reels: 'reels', saved: 'bookmark' }[t])}</button>`).join('')}
@@ -112,6 +111,10 @@ export default async function profile(view, username) {
 
   const body = view.querySelector('.tab-body');
   const showTab = async (t) => {
+    if (u.locked && t !== 'saved') {
+      body.innerHTML = `<div class="empty" style="padding-top:28px"><div class="big">${icon('lock')}</div><h2>Bu hesap gizli</h2>Gönderilerini ve hikayelerini görmek için takip et.</div>`;
+      return;
+    }
     view.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
     let items = t === 'grid' ? posts : reels;
     if (t === 'saved') {
@@ -148,10 +151,14 @@ export default async function profile(view, username) {
   const fb = view.querySelector('.follow');
   if (fb) fb.onclick = async () => {
     try {
+      const was = u.isFollowing;
       const r = await api(`/users/${u.id}/follow`, { body: {} });
-      fb.textContent = r.following ? 'Takiptesin' : 'Takip et';
-      fb.classList.toggle('primary', !r.following);
-      view.querySelector('.fl b').textContent = num((u.followers += r.following ? 1 : -1));
+      u.isFollowing = r.following; u.requested = !!r.requested;
+      fb.textContent = r.following ? 'Takiptesin' : r.requested ? 'İstek gönderildi' : 'Takip et';
+      fb.classList.toggle('primary', !r.following && !r.requested);
+      if (r.requested) toast('Takip isteği gönderildi.');
+      if (was !== r.following) view.querySelector('.fl b').textContent = num((u.followers += r.following ? 1 : -1));
+      if (u.locked && r.following) profile(view, username);
     } catch (e) { toast(e.message); }
   };
   view.querySelector('.msg')?.addEventListener('click', () => openChatWith(u.id).catch((e) => toast(e.message)));

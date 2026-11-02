@@ -96,13 +96,14 @@ export function connectSocket() {
     if (e.message === 'unauthorized') logout();
     if (e.message === 'banned') { s.disconnect(); api('/me').then((m) => m.ban && emit('banned', m.ban)).catch(() => {}); }
   });
+  s.on('account:deleted', () => logout());
   s.on('account:banned', () => { api('/me').then((m) => m.ban && emit('banned', m.ban)).catch(() => {}); });
   s.on('connect', () => s.emit('visibility', document.visibilityState === 'visible'));
   document.addEventListener('visibilitychange', () => s.emit('visibility', document.visibilityState === 'visible'));
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',
     'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'people:new', 'likes:new',
     'call:incoming', 'call:accepted', 'call:ended', 'call:taken', 'call:signal',
-    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended']
+    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'wallet', 'people:gone']
     .forEach((ev) => s.on(ev, (d) => emit(ev, d)));
   s.on('presence', (d) => { state.presence.set(d.userId, d); emit('presence', d); });
   s.on('presence:all', (ids) => { ids.forEach((id) => state.presence.set(id, { userId: id, online: true })); emit('presence', {}); });
@@ -142,6 +143,58 @@ export function lastSeen(u) {
 export const num = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '') + ' Mn' : n >= 1e4 ? (n / 1e3).toFixed(1).replace('.0', '') + ' B' : n.toLocaleString('tr-TR'));
 export const media = (src) => (src && src.startsWith('/media/') ? src : src);
 export const isVideo = (src) => /\.(mp4|webm|mov)(\?|$)/i.test(src || '');
+
+// Bildirime dokununca gidilecek yer
+export function notifHref(n) {
+  if (n.url && n.url.startsWith('/#/')) return n.url.slice(1);
+  return ({
+    match: '#/chats', live: `#/live/${n.fromId}`, follow: `#/u/${n.from?.username}`, follow_ok: `#/u/${n.from?.username}`, follow_request: '#/requests',
+    super: '#/likes', liked: '#/likes', group: '#/chats', missed: '#/chats', order: '#/store', verify: '#/verify', story_answer: '#/stories/me',
+    announce: '#/notifications', warning: '#/notifications', report: '#/notifications',
+  }[n.type]) || (n.ref ? `#/p/${n.ref}` : '#/notifications');
+}
+
+// #etiket ve @bahsetme bağlantılı metin
+export function richText(text) {
+  return esc(text)
+    .replace(/(^|[\s(])#([\p{L}\p{N}_]{2,40})/gu, (m, a, t) => `${a}<a class="tag" href="#/tag/${encodeURIComponent(t.toLocaleLowerCase('tr-TR'))}">#${t}</a>`)
+    .replace(/(^|[\s(])@([a-z0-9._]{3,24})/gi, (m, a, u) => `${a}<a class="tag" href="#/u/${u.toLowerCase()}">@${u}</a>`);
+}
+// Ad + mavi tik + SwipeUp+ rozeti
+export const tick = (u) => (u?.verified ? `<span class="vtick" title="Doğrulanmış profil">${icon('verified')}</span>` : '');
+export const nm = (u, field = 'name') => `${esc(u?.[field] || u?.username || '')}${tick(u)}`;
+// Fotoğraf / video filtreleri (yalnız görüntüde uygulanır)
+export const FILTERS = [
+  ['', 'Normal', 'none'],
+  ['sicak', 'Sıcak', 'sepia(.25) saturate(1.35) hue-rotate(-8deg) brightness(1.04)'],
+  ['soguk', 'Soğuk', 'saturate(1.1) hue-rotate(12deg) brightness(1.03) contrast(1.05)'],
+  ['vintage', 'Vintage', 'sepia(.45) contrast(.9) brightness(1.08) saturate(.85)'],
+  ['siyahbeyaz', 'S/B', 'grayscale(1) contrast(1.12)'],
+  ['canli', 'Canlı', 'saturate(1.7) contrast(1.08)'],
+  ['pastel', 'Pastel', 'saturate(.7) brightness(1.12) contrast(.92)'],
+  ['dram', 'Dram', 'contrast(1.35) saturate(1.15) brightness(.92)'],
+  ['gece', 'Gece', 'hue-rotate(200deg) saturate(.8) brightness(.85) contrast(1.2)'],
+];
+export const filterCss = (id) => (FILTERS.find((f) => f[0] === id) || FILTERS[0])[2];
+
+// SwipeUp+ tanıtımı / jeton yetersiz
+export function plusSheet(reason) {
+  sheet(null, `<div class="plus-sheet">
+    <div class="plus-badge">${icon('crown')}</div>
+    <h2>SwipeUp<span>+</span></h2>
+    ${reason ? `<p class="muted">${esc(reason)}</p>` : ''}
+    <ul class="perks">
+      <li>${icon('heart')}<span><b>Sınırsız beğeni</b>Günlük sınır yok</span></li>
+      <li>${icon('eye')}<span><b>Seni beğenenleri gör</b>Kim olduğunu hemen öğren</span></li>
+      <li>${icon('undo')}<span><b>Geri al</b>Yanlışlıkla geçtiğin kişiye dön</span></li>
+      <li>${icon('star')}<span><b>Her gün 5 süper beğeni</b>Öne çık</span></li>
+      <li>${icon('bolt')}<span><b>Haftada 1 ücretsiz boost</b>30 dakika en üstte</span></li>
+    </ul>
+    <a class="btn primary block" href="#/store">Planları gör</a></div>`);
+}
+export function needCoins(msg) {
+  toast(msg || 'Jetonun yetmiyor.', { title: 'Jeton gerekli', href: '#/store', ms: 5000 });
+}
 
 export function el(html) {
   const t = document.createElement('template');
@@ -362,7 +415,7 @@ export function openComments(post) {
     footer: `<form class="comment-input">${avatar(state.me, 32, { dot: false })}<input name="t" placeholder="${esc(post.user.username)} için yorum ekle..." autocomplete="off" maxlength="500"><button class="link">Paylaş</button></form>`,
     async onMount(sh) {
       const list = sh.querySelector('.cl');
-      const row = (c) => `<div class="comment">${avatar(c.user, 32, { dot: false })}<div class="t"><span class="b">${esc(c.user?.username)}</span><span class="muted">${ago(c.at)}</span><div>${esc(c.text)}</div></div></div>`;
+      const row = (c) => `<div class="comment">${avatar(c.user, 32, { dot: false })}<div class="t"><span class="b">${nm(c.user, 'username')}</span><span class="muted">${ago(c.at)}</span><div>${richText(c.text)}</div></div></div>`;
       try {
         const cs = await api(`/posts/${post.id}/comments`);
         list.innerHTML = cs.length ? cs.map(row).join('') : '<div class="empty"><h2>Henüz yorum yok</h2>Sohbeti başlat.</div>';

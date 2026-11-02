@@ -1,12 +1,26 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, clock, dayLabel, lastSeen, avatar, toast, pickFile, compressImage, uploadFile, refreshBadges,
-  el, sheet, audioRecorder, fmtDur, reportUser,
+  state, api, esc, on, clock, dayLabel, lastSeen, avatar, toast, pickFile, compressImage, uploadFile, refreshBadges, el, sheet, audioRecorder, fmtDur, reportUser, nm,
 } from '../core.js';
 import { startCall } from '../calls.js';
 import { FAL_TYPES, zodiacOf } from '../fal-data.js';
 
 const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
+
+// OpenStreetMap karolarıyla küçük harita önizlemesi
+function mapHtml(lat, lng) {
+  const z = 15; const n = 2 ** z;
+  const x = ((lng + 180) / 360) * n;
+  const r = (lat * Math.PI) / 180;
+  const y = ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n;
+  const tx = Math.floor(x); const ty = Math.floor(y);
+  const ox = 120 - ((x - tx) * 256 + 256); const oy = 75 - ((y - ty) * 256 + 256);
+  let tiles = '';
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) tiles += `<img src="https://tile.openstreetmap.org/${z}/${tx + i}/${ty + j}.png" style="left:${(i + 1) * 256}px;top:${(j + 1) * 256}px" alt="" loading="lazy">`;
+  return `<span class="map"><span class="tiles" style="transform:translate(${ox}px,${oy}px)">${tiles}</span><span class="pin">${icon('mapPin')}</span><small class="osm">© OpenStreetMap</small></span>`;
+}
+const TTL_OPTS = [[0, 'Kapalı'], [3600000, '1 saat'], [86400000, '24 saat'], [604800000, '7 gün']];
+const ttlLabel = (t) => (TTL_OPTS.find((x) => x[0] === t) || [0, ''])[1];
 
 function waveBars(id, n = 28) {
   let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
@@ -27,12 +41,14 @@ export default async function chat(view, chatId) {
   const s = state.socket;
   let replyTo = null;
   let blocked = !!data.blocked;
+  let ttl = data.ttl || 0;
 
   view.innerHTML = `<div class="chat">
     <header class="topbar bordered">
       <a class="ib" href="#/chats" aria-label="Geri">${icon('back')}</a>
       <a class="who" href="#/chat/${esc(chatId)}/info">${avatar(other, 40, { ring: true, dot: !isGroup })}
-        <div class="grow"><div class="n ellipsis">${esc(other.name)}</div><div class="s ellipsis"></div></div></a>
+        <div class="grow"><div class="n ellipsis">${nm(other)}</div><div class="s ellipsis"></div></div></a>
+      <button class="ib ttl-ind" aria-label="Kaybolan mesajlar" ${ttl ? '' : 'hidden'}>${icon('timer')}</button>
       ${isGroup ? '' : `<button class="ib vc" aria-label="Sesli ara">${icon('phone')}</button><button class="ib vv" aria-label="Görüntülü ara">${icon('video')}</button>`}
     </header>
     <div class="msgs" role="log" aria-live="polite"></div>
@@ -84,7 +100,7 @@ export default async function chat(view, chatId) {
       <div class="wave">${waveBars(m.id).map((h) => `<i style="height:${h}%"></i>`).join('')}</div><span class="dur">${fmtDur(m.duration || 0)}</span></div>`;
 
   const bubbleInner = (m) => {
-    const meta = `<span class="meta">${clock(m.at)}<span class="tk">${tick(m)}</span></span>`;
+    const meta = `<span class="meta">${m.expiresAt ? icon('timer', 'ttl-i') : ''}${clock(m.at)}<span class="tk">${tick(m)}</span></span>`;
     if (m.deleted) return `<div class="msg deleted">${icon('block', '', 'style="width:14px;height:14px;vertical-align:-2px"')} Bu mesaj silindi${meta}</div>`;
     const reply = m.reply ? `<span class="reply"><b>${esc(m.reply.from === state.me.id ? 'Sen' : (m.reply.fromName || ''))}</b>${esc(m.reply.text || { audio: '🎤 Sesli mesaj', video: '🎥 Video', image: '📷 Fotoğraf' }[m.reply.mediaType] || '')}</span>` : '';
     const story = m.story ? `<span class="story-ref">${m.story.media ? `<img src="${esc(m.story.media)}" alt="">` : ''}<span>Hikayeye yanıt</span></span>` : '';
@@ -97,6 +113,11 @@ export default async function chat(view, chatId) {
         ${z ? `<div class="fq-line">${z[2]} ${z[1]}${f.partner ? '' : ''}</div>` : ''}
         ${f.partner ? `<div class="fq-line">💞 ${esc(f.name)} & ${esc(f.partner.name)}${zodiacOf(f.partner.zodiac) ? ` (${zodiacOf(f.partner.zodiac)[2]} ${zodiacOf(f.partner.zodiac)[1]})` : ''}</div>` : ''}
         ${f.note ? `<p class="fq-note">${esc(f.note)}</p>` : ''}${meta}</div>`;
+    }
+    if (m.location) {
+      const l = m.location;
+      return `<div class="msg loc"><a href="https://maps.google.com/?q=${l.lat},${l.lng}" target="_blank" rel="noopener">${mapHtml(l.lat, l.lng)}
+        <span class="loc-t">${icon('mapPin')}<span><b>${esc(l.label || 'Konum')}</b><small>Haritada aç</small></span></span></a>${meta}</div>`;
     }
     if (m.mediaType === 'audio') return `<div class="msg">${reply}${audioHtml(m)}${meta}</div>`;
     if (m.media) {
@@ -273,7 +294,8 @@ export default async function chat(view, chatId) {
       if (c !== chatId) return;
       const d = await api(`/chats/${chatId}`).catch(() => null); if (!d) return;
       members.clear(); (d.members || []).forEach((m) => members.set(m.id, m));
-      view.querySelector('.who .n').textContent = d.other.name; paintStatus();
+      view.querySelector('.who .n').innerHTML = nm(d.other); paintStatus();
+      ttl = d.ttl || 0; view.querySelector('.ttl-ind').hidden = !ttl;
     }),
     on('blocked', ({ by }) => { if (!isGroup && by === other.id) { blocked = true; paintComposer(); } }),
     on('user:blocked', (id) => { if (!isGroup && id === other.id) location.hash = '#/chats'; }),
@@ -317,7 +339,7 @@ export default async function chat(view, chatId) {
         <div class="box">
           <button type="button" class="icon-btn pic" aria-label="Fotoğraf veya video gönder">${icon('image')}</button>
           <textarea rows="1" placeholder="Mesaj yaz..." aria-label="Mesaj yaz" maxlength="4000"></textarea>
-          <button type="button" class="icon-btn cam" aria-label="Fotoğraf çek">${icon('camera')}</button>
+          <button type="button" class="icon-btn more-b" aria-label="Diğer">${icon('plusSq')}</button>
         </div>
         <button class="go" aria-label="Basılı tutarak sesli mesaj kaydet">${icon('mic')}</button>
       </form>`;
@@ -355,7 +377,20 @@ export default async function chat(view, chatId) {
       } catch (er) { toast(er.message); }
     };
     comp.querySelector('.pic').onclick = () => sendMedia('image/*,video/*');
-    comp.querySelector('.cam').onclick = () => sendMedia('image/*', 'environment');
+    comp.querySelector('.more-b').onclick = () => sheet(null, `<div class="menu">
+      <button data-a="cam">${icon('camera')}Fotoğraf çek</button>
+      <button data-a="loc">${icon('mapPin')}Konum gönder</button>
+      <button data-a="ttl">${icon('timer')}<span class="grow">Kaybolan mesajlar</span><span class="muted">${ttlLabel(ttl)}</span></button></div>`, {
+      onMount(sh, close) {
+        sh.querySelector('.menu').onclick = (e) => {
+          const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+          close();
+          if (a === 'cam') sendMedia('image/*', 'environment');
+          if (a === 'loc') shareLocation();
+          if (a === 'ttl') ttlSheet();
+        };
+      },
+    });
 
     // Basılı tut → sesli mesaj
     const rec = audioRecorder();
@@ -399,6 +434,33 @@ export default async function chat(view, chatId) {
     go.addEventListener('click', (e) => { if (!hasText()) e.preventDefault(); });
   }
   paintComposer();
+
+  function shareLocation() {
+    if (!navigator.geolocation) return toast('Bu cihaz konum paylaşmayı desteklemiyor.');
+    toast('Konum alınıyor…', { ms: 1500 });
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const { latitude: lat, longitude: lng } = pos.coords;
+      sheet('Konum gönder', `<div style="padding:0 16px 16px;display:grid;gap:12px"><div class="msg loc" style="max-width:none">${mapHtml(lat, lng)}</div>
+        <input class="field lb" maxlength="80" placeholder="Etiket (ör. Kadıköy iskelesi)"><button class="btn primary block">Gönder</button></div>`, {
+        onMount(sh, close) {
+          sh.querySelector('.btn').onclick = async () => { close(); await send({ location: { lat, lng, label: sh.querySelector('.lb').value } }); };
+        },
+      });
+    }, () => toast('Konum izni verilmedi.'), { enableHighAccuracy: true, timeout: 12000 });
+  }
+  function ttlSheet() {
+    sheet('Kaybolan mesajlar', `<p class="muted" style="margin:0 16px 10px">Açıkken yeni mesajlar seçtiğin süre sonunda herkes için silinir.${isGroup ? ' Grupta bunu yöneticiler değiştirebilir.' : ''}</p>
+      <div class="menu">${TTL_OPTS.map(([v, l]) => `<button data-v="${v}">${icon('timer')}<span class="grow">${l}</span>${v === ttl ? icon('check') : ''}</button>`).join('')}</div>`, {
+      onMount(sh, close) {
+        sh.querySelector('.menu').onclick = async (e) => {
+          const b = e.target.closest('[data-v]'); if (!b) return;
+          close();
+          try { const c = await api(`/chats/${chatId}/ttl`, { method: 'PATCH', body: { ttl: +b.dataset.v } }); ttl = c.ttl; view.querySelector('.ttl-ind').hidden = !ttl; } catch (er) { toast(er.message); }
+        };
+      },
+    });
+  }
+  view.querySelector('.ttl-ind').onclick = ttlSheet;
 
   return () => { stopTyping(); offs.forEach((f) => f()); document.removeEventListener('visibilitychange', vis); document.querySelector('.emoji-pop')?.remove(); playing?.a.pause(); refreshBadges(); };
 }

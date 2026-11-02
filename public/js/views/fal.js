@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, toast, avatar, pickFile, compressImage, uploadFile, ago, on, el,
+  state, api, esc, toast, avatar, pickFile, compressImage, uploadFile, ago, on, el, needCoins,
 } from '../core.js';
 import {
   FAL_TYPES, TAROT, TAROT_POS, ZODIAC, zodiacOf, seeded,
@@ -10,14 +10,25 @@ const head = (title, to = '#/fal') => `<header class="topbar"><a class="ib" href
 const note = '<p class="fal-note">Fallar eğlence amaçlıdır.</p>';
 const statusChip = (s) => (s === 'answered' ? '<span class="chip fal-ok">Cevaplandı</span>' : '<span class="chip fal-wait-chip">Bekliyor</span>');
 
+let shop = null;
+const loadShop = async () => { shop = await api('/store').catch(() => shop); return shop; };
+
 async function send(body, btn) {
+  const s = shop || await loadShop();
+  const price = s?.falPrices?.[body.type] || 0;
+  if (price && s.coins < price) { needCoins(`Bu fal ${price} jeton, bakiyen ${s.coins}. Jeton alıp tekrar dene.`); return; }
+  if (price && !confirm(`${FAL_TYPES[body.type].name} ${price} jeton. Bakiyenden düşülsün ve gönderilsin mi?`)) return;
   btn.disabled = true;
   const old = btn.innerHTML; btn.innerHTML = 'Gönderiliyor...';
   try {
     const r = await api('/fal', { body });
+    if (shop) shop.coins = r.coins;
     toast('Falın Falcı Teyze’ye gönderildi. Cevabı Mesajlar’a gelecek. 🔮', { ms: 4500 });
     location.hash = `#/chat/${r.chatId}`;
-  } catch (e) { toast(e.message); btn.disabled = false; btn.innerHTML = old; }
+  } catch (e) {
+    if (/jeton/i.test(e.message)) needCoins(e.message); else toast(e.message);
+    btn.disabled = false; btn.innerHTML = old;
+  }
 }
 
 const noteField = (ph) => `<label class="form" style="padding:0;gap:6px"><span class="b" style="font-size:13.5px">Falcı Teyze’ye notun</span>
@@ -32,10 +43,15 @@ async function hub(view) {
     <div class="fal-grid">
       ${Object.entries(FAL_TYPES).map(([k, t]) => `<a class="fal-tile" href="#/fal/${k}"><span class="em">${t.em}</span><b>${t.name}</b><span>${{
     kahve: 'Fincanının fotoğraflarını gönder.', tarot: 'Üç kart çek, Falcı Teyze yorumlasın.', burc: 'Burcunu ve sorunu yaz.', uyum: 'Biriyle aranızdaki uyuma baksın.',
-  }[k]}</span></a>`).join('')}
+  }[k]}</span><em class="price" data-k="${k}"></em></a>`).join('')}
     </div>
+    <a class="fal-bal" href="#/store">${icon('coin')}<span>Bakiye: <b class="cb">…</b> jeton</span><span class="link">Jeton al</span></a>
     <div class="mine"></div>${note}`;
-  const [f, mine] = await Promise.all([api('/fal/falci').catch(() => null), api('/fal/mine').catch(() => [])]);
+  const [f, mine] = await Promise.all([api('/fal/falci').catch(() => null), api('/fal/mine').catch(() => []), loadShop()]);
+  if (shop) {
+    view.querySelector('.cb').textContent = shop.coins;
+    view.querySelectorAll('.price').forEach((p) => { const v = shop.falPrices[p.dataset.k]; p.textContent = v ? `${v} jeton` : 'Ücretsiz'; });
+  } else view.querySelector('.fal-bal').hidden = true;
   const hero = view.querySelector('.fal-hero');
   if (f) {
     hero.querySelector('.fz').outerHTML = `<a href="#/u/${esc(f.username)}"><img class="av av-56" src="${esc(f.avatar)}" alt="Falcı Teyze profili"></a>`;

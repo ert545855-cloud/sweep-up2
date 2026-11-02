@@ -156,3 +156,28 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 
 #toasts { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; z-index: 60; width: min(420px, calc(100% - 24px)); }
 .toast { background: var(--text); color: var(--bg); padding: 11px 14px; border-radius: 12px; font-weight: 600; box-shadow: 0 10px 30px -10px rgba(0,0,0,.4); animation: dr .2s; }
+
+/* Yeni bölümler */
+.vt { display: inline-flex; color: #1d9bf0; vertical-align: -3px; margin-left: 3px; }
+.vt svg { width: 15px; height: 15px; }
+.chip.gold { background: linear-gradient(120deg, #ffe7a3, #f0c25a); color: #4a3300; margin-left: 4px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.convo { display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--soft); font-size: 13.5px; }
+.convo .hit { background: color-mix(in srgb, var(--bad) 14%, transparent); border-radius: 6px; padding: 2px 6px; margin: 0 -6px; }
+.vgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.vcard .pb { display: grid; gap: 10px; }
+.pose-req { padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--info) 12%, transparent); font-size: 13.5px; }
+.vimgs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.vimgs figure { margin: 0; display: grid; gap: 2px; }
+.vimgs img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 10px; background: var(--soft); }
+.vimgs figure:first-child img { outline: 2px solid var(--info); outline-offset: 1px; }
+.vimgs figcaption { font-size: 11px; color: var(--muted); text-align: center; }
+.vcard .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.vcard .acts .field { flex: 1 1 100%; }
+.eco .fgrid { display: grid; gap: 10px; }
+.eco .fgrid label { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.eco .fgrid label .field { color: var(--text); }
+.erow { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+.erow .field { flex: 1 1 80px; }
+.savebar { grid-column: 1 / -1; position: sticky; bottom: 12px; display: flex; justify-content: flex-end; }
+.savebar .btn { height: 44px; padding: 0 22px; box-shadow: 0 10px 30px -10px rgba(0,0,0,.35); }

@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, isOn, toast, enablePush, pushSupported, pushEnabled, pushHint, logo, openChatWith,
+  state, api, esc, on, isOn, toast, enablePush, pushSupported, pushEnabled, pushHint, logo, openChatWith, nm,
 } from '../core.js';
 import { postCard, wirePost, autoplay } from '../components.js';
 
@@ -62,7 +62,7 @@ export default async function feed(view) {
       <div class="people-row">${list.map((u) => `<div class="person-card">
         ${Date.now() - (u.createdAt || 0) < 3 * 86400000 ? '<span class="new">YENİ</span>' : ''}
         <a href="#/u/${esc(u.username)}" class="av-wrap" data-presence="${esc(u.id)}"><img class="av av-56" src="${esc(u.avatar)}" alt="">${isOn(u) ? '<i class="online"></i>' : ''}</a>
-        <a href="#/u/${esc(u.username)}" class="n ellipsis">${esc(u.name)}</a>
+        <a href="#/u/${esc(u.username)}" class="n ellipsis">${nm(u)}</a>
         <span class="s ellipsis">${isOn(u) ? 'çevrimiçi' : '@' + esc(u.username)}</span>
         <button class="btn primary sm msg" data-id="${esc(u.id)}">Mesaj</button></div>`).join('')}</div>`;
   };

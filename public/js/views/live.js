@@ -1,5 +1,29 @@
 import { icon } from '../icons.js';
-import { state, api, esc, on, toast, el } from '../core.js';
+import {
+  state, api, esc, on, toast, el, sheet, needCoins, tick,
+} from '../core.js';
+
+// Hediye seçici
+async function giftSheet(hostId) {
+  const g = await api('/gifts').catch(() => null);
+  if (!g) return;
+  sheet('Hediye gönder', `<div class="gift-grid">${g.gifts.map((x) => `<button data-g="${esc(x.id)}"><span class="em">${x.em}</span><b>${esc(x.name)}</b><small>${x.coins} jeton</small></button>`).join('')}</div>
+    <div class="gift-foot"><span>Bakiye: <b class="bal">${g.coins}</b> jeton</span><a class="link" href="#/store">Jeton al</a></div>`, {
+    onMount(sh) {
+      sh.querySelector('.gift-grid').onclick = (e) => {
+        const b = e.target.closest('[data-g]'); if (!b) return;
+        b.disabled = true;
+        state.socket.emit('live:gift', { hostId, giftId: b.dataset.g }, (r) => {
+          b.disabled = false;
+          if (r?.error) { if (r.needCoins) needCoins('Bu hediye için jetonun yetmiyor.'); else toast(r.error); return; }
+          sh.querySelector('.bal').textContent = r.coins;
+          state.me.coins = r.coins;
+          b.classList.add('sent'); setTimeout(() => b.classList.remove('sent'), 500);
+        });
+      };
+    },
+  });
+}
 
 const rtcConfig = () => ({ iceServers: state.config?.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] });
 
@@ -30,12 +54,13 @@ function chrome(view, user, { host }) {
     <div class="shade"></div>
     <div class="lt">
       <img class="av av-32" src="${esc(user.avatar)}" alt="">
-      <span class="u">${esc(user.username)}</span>
+      <span class="u">${esc(user.username)}${tick(user)}</span>
+      <span class="badge-g" hidden>${icon('gift')}<span class="gc">0</span></span>
       <span class="badge-live" hidden>CANLI</span>
       <span class="badge-v" hidden>${icon('eye')}<span class="vc">0</span></span>
       <button class="x" aria-label="${host ? 'Yayını bitir' : 'Kapat'}">${icon('close')}</button>
     </div>
-    <div class="hearts"></div>
+    <div class="hearts"></div><div class="gifts-fx"></div>
     <div class="comments" aria-live="polite"></div>
     <div class="slot"></div>
   </div>`;
@@ -53,18 +78,28 @@ function wireChat(root, hostId) {
     const h = el(`<i style="--dx:${Math.round(Math.random() * 60 - 40)}px">${['❤️', '💖', '💜', '🧡', '💛'][Math.floor(Math.random() * 5)]}</i>`);
     hearts.append(h); setTimeout(() => h.remove(), 2300);
   };
+  const fx = root.querySelector('.gifts-fx');
+  const addGift = (gv) => {
+    const b = root.querySelector('.badge-g'); b.hidden = false; b.querySelector('.gc').textContent = gv.total;
+    cm.append(el(`<div class="c gift"><img class="av av-32" src="${esc(gv.user?.avatar)}" alt=""><div><b>${esc(gv.user?.username)}</b>${gv.gift.em} ${esc(gv.gift.name)} gönderdi</div></div>`));
+    while (cm.children.length > 40) cm.firstElementChild.remove();
+    const big = el(`<div class="gfx ${gv.gift.coins >= 150 ? 'huge' : ''}"><span>${gv.gift.em}</span><b>${esc(gv.user?.username)}</b></div>`);
+    fx.append(big); setTimeout(() => big.remove(), 2600);
+  };
   const offs = [
+    on('live:gift', (gv) => { if (gv.hostId === hostId) addGift(gv); }),
     on('live:comment', (c) => { if (c.hostId === hostId) addComment(c); }),
     on('live:heart', (h) => { if (h.hostId === hostId) addHeart(); }),
     on('live:count', ({ hostId: h, viewers }) => { if (h === hostId) root.querySelector('.vc').textContent = viewers; }),
   ];
-  const bar = el(`<form class="lb"><input placeholder="Yorum yap..." maxlength="200" aria-label="Yorum"><button type="button" class="hb" aria-label="Kalp gönder">${icon('heart')}</button><button type="button" class="sh" aria-label="Paylaş">${icon('send')}</button></form>`);
+  const bar = el(`<form class="lb"><input placeholder="Yorum yap..." maxlength="200" aria-label="Yorum">${hostId !== state.me.id ? `<button type="button" class="gb" aria-label="Hediye gönder">${icon('gift')}</button>` : ''}<button type="button" class="hb" aria-label="Kalp gönder">${icon('heart')}</button><button type="button" class="sh" aria-label="Paylaş">${icon('send')}</button></form>`);
   bar.onsubmit = (e) => {
     e.preventDefault();
     const inp = bar.querySelector('input'); const text = inp.value.trim(); if (!text) return;
     state.socket.emit('live:comment', { hostId, text }); inp.value = '';
   };
   bar.querySelector('.hb').onclick = () => state.socket.emit('live:heart', { hostId });
+  bar.querySelector('.gb')?.addEventListener('click', () => giftSheet(hostId));
   bar.querySelector('.sh').onclick = async () => {
     const url = `${location.origin}/#/live/${hostId}`;
     if (navigator.share) navigator.share({ title: 'Canlı yayın', url }).catch(() => {});

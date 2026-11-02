@@ -14,6 +14,15 @@ Kaydırarak tanış, reels izle, hikaye paylaş, canlı yayın aç, mesajlaş ve
 - **Temalar:** Gün batımı (açık/koyu), Pembe rüya, Gece moru ve Altın. Seçilen tema hesapta saklanır, her cihazda aynı görünür.
 - **Fal:** Kahve falı (fincan fotoğrafları), tarot, burç yorumu ve aşk uyumu istekleri **Falcı Teyze** hesabının mesaj kutusuna düşer; cevabı o hesaptan bir kişi yazar (yazı ya da sesli mesaj). Falcı Teyze'nin "Fal kuyruğu" ekranında bekleyen ve cevaplanan istekler listelenir.
 - **Yönetim paneli (`/admin`):** Ayrı giriş ve ayrı yönetici verisiyle (gelir-gider, notlar, duyurular, işlem kaydı) çalışır, uygulama verisini okur ve uygulamaya etki eder: kullanıcıları uyarma, askıya alma, yasaklama, şikayetleri sonuçlandırma, itirazları kabul/ret, içerik kaldırma, herkese duyuru, fal istatistikleri, gelir-gider takibi ve CSV dışa aktarma.
+- **SwipeUp+ ve jeton:** Ücretsiz üyelikte günlük beğeni/süper beğeni sınırı; SwipeUp+ ile sınırsız beğeni, seni beğenenleri görme, geri alma, günde 5 süper beğeni ve haftada 1 ücretsiz boost. Jetonla boost, canlı yayın hediyeleri ve ücretli fal. Ödemeler havale/EFT siparişiyle alınır: kullanıcı sipariş kodunu açıklamaya yazar, yönetim panelinde onaylanınca ürün anında tanımlanır ve gelir olarak kaydedilir.
+- **Canlı yayın hediyeleri:** İzleyiciler jetonla hediye gönderir; yayıncının payı "Kazançlarım"a eklenir, 100 ₺ olunca IBAN'a ödeme talebi açılır.
+- **Gizlilik:** Gizli hesap (takip isteği onayı), son görülmeyi gizleme, okundu bilgisini kapatma, kaydırma destesinde görünmeme.
+- **Hikaye çıkartmaları:** Metin, anket (sonuçlar canlı), soru kutusu (yanıtlar sahibine), müzik ve @bahsetme.
+- **Gönderiler:** 10 fotoğrafa kadar kaydırmalı gönderi, fotoğraf filtreleri, #etiket sayfaları ve @bahsetme bildirimleri.
+- **Dalga düzenleme:** Kırpma, hız (0.5x–2x), filtre ve kendi müziğini ekleme (oynatırken uygulanır).
+- **Mesajlar:** Kaybolan mesajlar (1 saat / 24 saat / 7 gün) ve haritalı konum paylaşma.
+- **Otomatik moderasyon:** Yorum, açıklama, biyografi ve canlı yorumlardaki küfürler yıldızlanır; mesajlardaki tehdit ve ağır hakaretler yönetim paneline düşer.
+- **Güven ve yasal:** Kayıtta doğum tarihi zorunlu (18 yaş altı kabul edilmez), selfie + poz ile mavi tik doğrulaması, gizlilik politikası, kullanım koşulları, KVKK aydınlatma metni, topluluk kuralları, uygulama içinden hesap silme ve "verilerimi indir".
 - **Bildirimler:** Uygulama açıkken üstte banner, kapalıyken Web Push (Android / masaüstü; iPhone'da ana ekrana eklenmiş uygulama).
 
 ## Teknoloji

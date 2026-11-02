@@ -13,6 +13,8 @@ const { nanoid, customAlphabet } = require('nanoid');
 const { Server } = require('socket.io');
 const store = require('./server/store');
 const mail = require('./server/mail');
+const moderation = require('./server/moderation');
+const eco = require('./server/economy')(store);
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -32,22 +34,55 @@ const calls = new Map(); // callId -> { id, chatId, from, to, video, state, at, 
 
 const isOnline = (id) => (online.get(id)?.size || 0) > 0;
 const emitTo = (userId, ev, data) => online.get(userId)?.forEach((s) => s.emit(ev, data));
+const followOk = (a, b) => { const f = store.get('follows', `${a}_${b}`); return !!f && f.status !== 'pending'; };
+const isPlus = (u) => !!u && (u.plusUntil || 0) > Date.now();
+const priv = (u) => (u && u.privacy) || {};
+// Gizli hesabın içeriğini kim görebilir
+const canSee = (viewerId, owner) => !!owner && (owner.id === viewerId || !priv(owner).private || followOk(viewerId, owner.id));
+const hasRead = (m, uid) => m.readBy.includes(uid) || (m.seenBy || []).includes(uid);
 const isBlocked = (a, b) => !!(a && b && (store.get('blocks', `${a}_${b}`) || store.get('blocks', `${b}_${a}`)));
+const trLower = (t) => String(t || '').toLocaleLowerCase('tr-TR');
+const extractTags = (t) => [...new Set([...String(t || '').matchAll(/#([\p{L}\p{N}_]{2,40})/gu)].map((m) => trLower(m[1])))].slice(0, 30);
+const extractMentions = (t) => [...new Set([...String(t || '').matchAll(/@([a-z0-9._]{3,24})/gi)].map((m) => m[1].toLowerCase()))].slice(0, 20);
+function ageOf(bd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(bd || ''));
+  if (!m) return null;
+  const b = new Date(+m[1], +m[2] - 1, +m[3]);
+  if (Number.isNaN(b.getTime()) || b.getMonth() !== +m[2] - 1) return null;
+  const t = new Date();
+  let a = t.getFullYear() - b.getFullYear();
+  if (t.getMonth() < b.getMonth() || (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())) a--;
+  return a >= 0 && a < 120 ? a : null;
+}
+// Bahsedilen kullanıcılara bildirim
+function notifyMentions(text, from, url, what) {
+  extractMentions(text).forEach((un) => {
+    const t = store.find('users', (u) => u.username === un);
+    if (t && t.id !== from.id) notify(t.id, { type: 'mention', fromId: from.id, text: `${from.username} seni ${what} bahsetti: ${String(text).slice(0, 80)}`, url });
+  });
+}
 
 function pub(u, viewerId) {
   if (!u) return null;
-  const { passHash, recoveryHash, email, lat, lng, ...rest } = u;
+  const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, ...rest } = u;
+  const self = viewerId === u.id;
+  const hidden = !self && priv(u).hideLastSeen;
+  const fdoc = viewerId && !self ? store.get('follows', `${viewerId}_${u.id}`) : null;
   return {
     ...rest,
-    online: isOnline(u.id),
+    privacy: self ? priv(u) : { private: !!priv(u).private },
+    online: hidden ? false : isOnline(u.id),
+    lastSeen: hidden ? null : u.lastSeen,
     live: lives.has(u.id),
-    ...(viewerId === u.id ? { email: email || '', hasLocation: lat != null } : {}),
-    ...(viewerId && viewerId !== u.id ? { isFollowing: !!store.get('follows', `${viewerId}_${u.id}`), distanceKm: distance(store.get('users', viewerId), u) } : {}),
+    plus: isPlus(u), verified: !!u.verified,
+    ...(self ? { email: email || '', hasLocation: lat != null, birthdate: birthdate || null, coins: coins || 0, earnings: earnings || 0, needsBirthdate: !birthdate } : {}),
+    ...(viewerId && !self ? { isFollowing: !!fdoc && fdoc.status !== 'pending', requested: fdoc?.status === 'pending', distanceKm: distance(store.get('users', viewerId), u) } : {}),
   };
 }
 const brief = (u) => u && ({
   id: u.id, username: u.username, name: u.name, avatar: u.avatar,
-  online: isOnline(u.id), live: lives.has(u.id), lastSeen: u.lastSeen, createdAt: u.createdAt, role: u.role || null,
+  online: priv(u).hideLastSeen ? false : isOnline(u.id), live: lives.has(u.id), lastSeen: priv(u).hideLastSeen ? null : u.lastSeen,
+  createdAt: u.createdAt, role: u.role || null, verified: !!u.verified, plus: isPlus(u),
 });
 
 function distance(a, b) {
@@ -61,6 +96,7 @@ function distance(a, b) {
 function postOut(p, viewerId) {
   return {
     ...p,
+    items: p.items || [{ media: p.media, type: p.type === 'reel' ? 'video' : 'image', poster: p.poster || null }],
     user: brief(store.get('users', p.userId)),
     likeCount: p.likes.length,
     liked: p.likes.includes(viewerId),
@@ -120,7 +156,7 @@ async function notify(userId, n) {
   if (!['message', 'call'].includes(n.type)) {
     const doc = store.put('notifications', {
       id: nanoid(12), userId, type: n.type, fromId: n.fromId || null,
-      ref: n.ref || null, text: n.text, at: now(), read: false,
+      ref: n.ref || null, text: n.text, url: n.url || null, at: now(), read: false,
     });
     emitTo(userId, 'notification', { ...doc, from: n.type === 'liked' ? null : brief(from) });
   }
@@ -148,22 +184,22 @@ function chatBetween(a, b) {
 const groupAvatar = (name) => `https://api.dicebear.com/9.x/shapes/svg?seed=${encodeURIComponent(name)}&backgroundColor=ff8a3d,ff3d6e,1fbf6a,2b9bff`;
 
 function chatOut(c, me) {
-  const msgs = store.filter('messages', (m) => m.chatId === c.id);
+  const msgs = store.filter('messages', (m) => m.chatId === c.id && !(m.expiresAt && m.expiresAt < now()));
   msgs.sort((x, y) => x.at - y.at);
   const visible = msgs.filter((m) => !(m.hiddenFor || []).includes(me));
   const last = visible[visible.length - 1] || null;
-  const unread = visible.filter((m) => m.from !== me && !m.system && !m.readBy.includes(me)).length;
+  const unread = visible.filter((m) => m.from !== me && !m.system && !hasRead(m, me)).length;
   if (c.isGroup) {
     return {
       id: c.id, isGroup: true, name: c.name, admins: c.admins,
       other: { id: c.id, name: c.name, avatar: c.avatar, isGroup: true, username: '' },
       members: c.members.map((m) => brief(store.get('users', m))).filter(Boolean),
       last: last && { ...last, fromName: store.get('users', last.from)?.name?.split(' ')[0] },
-      unread, lastAt: c.lastAt,
+      unread, lastAt: c.lastAt, ttl: c.ttl || 0,
     };
   }
   const otherId = c.members.find((m) => m !== me) || me;
-  return { id: c.id, other: brief(store.get('users', otherId)), last, unread, lastAt: c.lastAt, blocked: isBlocked(me, otherId) };
+  return { id: c.id, other: brief(store.get('users', otherId)), last, unread, lastAt: c.lastAt, blocked: isBlocked(me, otherId), ttl: c.ttl || 0 };
 }
 
 function msgOut(m) {
@@ -172,9 +208,13 @@ function msgOut(m) {
   return m;
 }
 
-function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal }) {
+function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal, location }) {
   text = String(text || '').slice(0, 4000).trim();
-  if (!text && !media && !fal) return null;
+  let loc = null;
+  if (location && Number.isFinite(+location.lat) && Number.isFinite(+location.lng)) {
+    loc = { lat: Math.round(+location.lat * 1e5) / 1e5, lng: Math.round(+location.lng * 1e5) / 1e5, label: String(location.label || '').slice(0, 80) };
+  }
+  if (!text && !media && !fal && !loc) return null;
   if (!chat.isGroup) {
     const other = chat.members.find((m) => m !== fromId);
     if (isBlocked(fromId, other)) return null;
@@ -190,8 +230,9 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
     id: nanoid(14), chatId: chat.id, from: fromId, text,
     media: media || null, mediaType: ['image', 'video', 'audio'].includes(mediaType) ? mediaType : (media ? 'image' : null),
     duration: duration ? Math.min(600, Math.round(duration)) : null,
-    reply, story: story || null, fal: fal || null, system: !!system, reactions: {},
+    reply, story: story || null, fal: fal || null, location: loc, system: !!system, reactions: {},
     at: now(), readBy: [fromId], deliveredTo: [fromId],
+    expiresAt: chat.ttl && !system ? now() + chat.ttl : null,
   });
   store.update('chats', chat.id, { lastAt: msg.at });
   for (const m of chat.members) if (m !== fromId && isOnline(m)) msg.deliveredTo.push(m);
@@ -199,13 +240,18 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
   chat.members.forEach((m) => emitTo(m, 'message', msg));
   if (system) return msg;
   const sender = store.get('users', fromId);
+  // Otomatik moderasyon: hakaret / tehdit içeren mesajlar yönetime düşer
+  const fl = text && moderation.flag(text);
+  if (fl) {
+    store.put('flags', { id: nanoid(12), kind: 'message', userId: fromId, chatId: chat.id, ref: msg.id, text: text.slice(0, 500), level: fl.level, reason: fl.reason, status: 'open', at: now() });
+  }
   if (sender?.role === 'falci' && !fal) {
     store.filter('messages', (m) => m.chatId === chat.id && m.fal && m.fal.status === 'pending').forEach((m) => {
       m.fal.status = 'answered'; m.fal.answeredAt = now(); store.update('messages', m.id, {});
       chat.members.forEach((x) => emitTo(x, 'message:update', msgOut(m)));
     });
   }
-  const preview = fal ? `🔮 Yeni ${FAL_TYPES[fal.type]} isteği` : text || { video: '🎥 Video', audio: '🎤 Sesli mesaj' }[msg.mediaType] || '📷 Fotoğraf';
+  const preview = fal ? `🔮 Yeni ${FAL_TYPES[fal.type]} isteği` : loc ? '📍 Konum' : text || { video: '🎥 Video', audio: '🎤 Sesli mesaj' }[msg.mediaType] || '📷 Fotoğraf';
   chat.members.filter((m) => m !== fromId).forEach((m) => {
     notify(m, {
       type: 'message', fromId, tag: 'chat-' + chat.id,
@@ -241,7 +287,7 @@ app.use(express.json({ limit: '1mb' }));
 
 const adminApi = require('./server/admin')(app, {
   store, io, emitTo, notify, brief, isOnline, online, lives, removeChat, limited, ipOf,
-  secret: () => JWT_SECRET, endLive: (id) => endLive(id),
+  secret: () => JWT_SECRET, endLive: (id) => endLive(id), eco, purgeUser: (id) => purgeUser(id),
 });
 app.get('/admin', (req, res, next) => (req.originalUrl.split('?')[0].endsWith('/') ? next() : res.redirect('/admin/')));
 
@@ -269,25 +315,30 @@ function iceServers(userId) {
 app.get('/api/config', (req, res) => {
   let uid = null;
   try { uid = jwt.verify((req.headers.authorization || '').slice(7), JWT_SECRET).id; } catch {}
-  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled() });
+  const { id, ...legal } = store.get('settings', 'legal') || {};
+  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal });
 });
 
 // ---------- Kimlik ----------
 app.post('/api/auth/register', wrap(async (req, res) => {
   if (limited('reg:' + ipOf(req), 8, 3600000)) return res.status(429).json({ error: 'Çok fazla kayıt denemesi. Bir saat sonra tekrar dene.' });
-  let { username, name, password, email } = req.body || {};
+  let { username, name, password, email, birthdate, accept } = req.body || {};
   username = String(username || '').toLowerCase().trim();
   name = String(name || '').trim().slice(0, 40);
   email = String(email || '').toLowerCase().trim();
   if (!/^[a-z0-9._]{3,24}$/.test(username)) return res.status(400).json({ error: 'Kullanıcı adı 3–24 karakter olmalı; harf, rakam, nokta ve alt çizgi kullanılabilir.' });
   if (String(password || '').length < 6) return res.status(400).json({ error: 'Şifre en az 6 karakter olmalı.' });
+  const age = ageOf(birthdate);
+  if (age == null) return res.status(400).json({ error: 'Doğum tarihini gir.' });
+  if (age < 18) return res.status(403).json({ error: 'SwipeUp’ı kullanmak için 18 yaşından büyük olmalısın.' });
+  if (!accept) return res.status(400).json({ error: 'Devam etmek için Kullanım Koşulları’nı ve Gizlilik Politikası’nı kabul etmelisin.' });
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'E-posta adresi geçersiz.' });
   if (store.find('users', (u) => u.username === username)) return res.status(409).json({ error: 'Bu kullanıcı adı alınmış.' });
   if (email && store.find('users', (u) => u.email === email)) return res.status(409).json({ error: 'Bu e-posta ile kayıtlı bir hesap var.' });
   const code = recoveryCode();
   const u = store.put('users', {
     id: nanoid(10), username, name: name || username, email: email || null,
-    bio: '', age: null, gender: null, lookingFor: 'all', city: '', interests: [],
+    bio: '', age, birthdate, consentAt: now(), gender: null, lookingFor: 'all', city: '', interests: [],
     prefs: { ageMin: 18, ageMax: 99, maxKm: null },
     avatar: `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(username)}&backgroundColor=ffe3dc`,
     photos: [], passHash: await bcrypt.hash(password, 10), recoveryHash: await bcrypt.hash(code, 8),
@@ -386,10 +437,27 @@ app.patch('/api/me', auth, (req, res) => {
   const b = req.body || {};
   const patch = {};
   if (b.name !== undefined) patch.name = String(b.name).trim().slice(0, 40) || req.user.username;
-  if (b.bio !== undefined) patch.bio = String(b.bio).slice(0, 150);
+  if (b.bio !== undefined) patch.bio = moderation.mask(String(b.bio).slice(0, 150));
   if (b.avatar !== undefined) patch.avatar = String(b.avatar).slice(0, 500);
   if (b.city !== undefined) patch.city = String(b.city).slice(0, 40);
-  if (b.age !== undefined) patch.age = b.age ? Math.max(18, Math.min(99, parseInt(b.age, 10) || 18)) : null;
+  if (b.age !== undefined && !req.user.birthdate) patch.age = b.age ? Math.max(18, Math.min(99, parseInt(b.age, 10) || 18)) : null;
+  if (b.birthdate !== undefined && !req.user.birthdate) {
+    const a = ageOf(b.birthdate);
+    if (a == null) return res.status(400).json({ error: 'Doğum tarihi geçersiz.' });
+    if (a < 18) {
+      store.update('users', req.user.id, { status: 'banned', banReason: '18 yaşından küçükler SwipeUp’ı kullanamaz.', bannedAt: now() });
+      return res.status(403).json({ error: 'SwipeUp’ı kullanmak için 18 yaşından büyük olmalısın.' });
+    }
+    patch.birthdate = b.birthdate; patch.age = a;
+  }
+  if (b.privacy && typeof b.privacy === 'object') {
+    const cur = priv(req.user);
+    const np = { ...cur };
+    ['private', 'hideLastSeen', 'hideRead', 'hideFromDeck'].forEach((k) => { if (b.privacy[k] !== undefined) np[k] = !!b.privacy[k]; });
+    patch.privacy = np;
+    // Gizli hesap kapatılınca bekleyen istekleri kabul et
+    if (cur.private && !np.private) store.filter('follows', (f) => f.to === req.user.id && f.status === 'pending').forEach((f) => store.update('follows', f.id, { status: null }));
+  }
   if (b.gender !== undefined) patch.gender = ['k', 'e', 'd'].includes(b.gender) ? b.gender : null;
   if (b.lookingFor !== undefined) patch.lookingFor = ['k', 'e', 'all'].includes(b.lookingFor) ? b.lookingFor : 'all';
   if (Array.isArray(b.interests)) patch.interests = b.interests.map((s) => String(s).slice(0, 24)).slice(0, 8);
@@ -420,7 +488,9 @@ app.patch('/api/me', auth, (req, res) => {
     if (store.find('users', (u) => u.username === un && u.id !== req.user.id)) return res.status(409).json({ error: 'Bu kullanıcı adı alınmış.' });
     patch.username = un;
   }
-  res.json(pub(store.update('users', req.user.id, patch), req.user.id));
+  const out = pub(store.update('users', req.user.id, patch), req.user.id);
+  if (patch.privacy) broadcastPresence(req.user.id);
+  res.json(out);
 });
 
 // ---------- Web push ----------
@@ -509,30 +579,48 @@ app.get('/api/feed', auth, (req, res) => {
   const following = new Set(store.filter('follows', (f) => f.from === me).map((f) => f.to));
   following.add(me);
   // Herkesin gönderileri; takip ettiklerin biraz öne çıkar
-  const posts = store.filter('posts', (p) => p.type === 'image' && !isBlocked(me, p.userId));
+  const posts = store.filter('posts', (p) => p.type === 'image' && !isBlocked(me, p.userId) && canSee(me, store.get('users', p.userId)));
   posts.sort((a, b) => (b.createdAt + (following.has(b.userId) ? 6 * 3600000 : 0)) - (a.createdAt + (following.has(a.userId) ? 6 * 3600000 : 0)));
   res.json(posts.slice(0, 80).map((p) => postOut(p, me)));
 });
 
 app.get('/api/reels', auth, (req, res) => {
-  const posts = store.filter('posts', (p) => p.type === 'reel' && !isBlocked(req.user.id, p.userId));
+  const posts = store.filter('posts', (p) => p.type === 'reel' && !isBlocked(req.user.id, p.userId) && canSee(req.user.id, store.get('users', p.userId)));
   posts.sort((a, b) => b.createdAt - a.createdAt);
   res.json(posts.slice(0, 60).map((p) => postOut(p, req.user.id)));
 });
 
 app.get('/api/explore', auth, (req, res) => {
-  const posts = store.filter('posts', (p) => !isBlocked(req.user.id, p.userId));
+  const posts = store.filter('posts', (p) => !isBlocked(req.user.id, p.userId) && canSee(req.user.id, store.get('users', p.userId)));
   posts.sort((a, b) => (b.likes.length + b.createdAt / 3.6e6) - (a.likes.length + a.createdAt / 3.6e6));
   res.json(posts.slice(0, 60).map((p) => postOut(p, req.user.id)));
 });
 
 app.post('/api/posts', auth, (req, res) => {
-  const { type, media, caption, poster } = req.body || {};
-  if (!['image', 'reel'].includes(type) || !media) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç.' });
+  const b = req.body || {};
+  const type = b.type;
+  const raw = Array.isArray(b.items) && b.items.length ? b.items : (b.media ? [{ media: b.media, type: type === 'reel' ? 'video' : 'image', poster: b.poster }] : []);
+  const items = raw.filter((i) => i && isMedia(i.media)).slice(0, type === 'reel' ? 1 : 10).map((i) => ({
+    media: String(i.media), type: i.type === 'video' ? 'video' : 'image', poster: isMedia(i.poster) ? i.poster : null, filter: FILTERS.includes(i.filter) ? i.filter : null,
+  }));
+  if (!['image', 'reel'].includes(type) || !items.length) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç.' });
+  let edit = null;
+  if (type === 'reel' && b.edit && typeof b.edit === 'object') {
+    const e = b.edit;
+    const num = (v, lo, hi) => (Number.isFinite(+v) ? Math.max(lo, Math.min(hi, +v)) : null);
+    edit = {
+      start: num(e.start, 0, 3600) || 0, end: num(e.end, 0, 3600), speed: [0.5, 0.75, 1, 1.5, 2].includes(+e.speed) ? +e.speed : 1,
+      filter: FILTERS.includes(e.filter) ? e.filter : null, audio: isMedia(e.audio) ? e.audio : null,
+      audioTitle: String(e.audioTitle || '').slice(0, 60), muteOriginal: !!e.muteOriginal && isMedia(e.audio),
+    };
+    if (edit.end != null && edit.end <= edit.start + 0.5) edit.end = null;
+  }
+  const caption = moderation.mask(String(b.caption || '').slice(0, 2200));
   const p = store.put('posts', {
-    id: nanoid(10), userId: req.user.id, type, media: String(media), poster: poster || null,
-    caption: String(caption || '').slice(0, 2200), likes: [], comments: [], createdAt: now(),
+    id: nanoid(10), userId: req.user.id, type, media: items[0].media, poster: items[0].poster || null, items, edit,
+    caption, tags: extractTags(caption), likes: [], comments: [], createdAt: now(),
   });
+  notifyMentions(caption, req.user, type === 'reel' ? `/#/dalga/${p.id}` : `/#/p/${p.id}`, type === 'reel' ? 'bir dalgada' : 'bir gönderide');
   store.filter('follows', (f) => f.to === req.user.id).forEach((f) => notify(f.from, {
     type: 'post', fromId: req.user.id, ref: p.id,
     text: `${req.user.username} yeni bir ${type === 'reel' ? 'dalga' : 'gönderi'} paylaştı.`,
@@ -543,7 +631,7 @@ app.post('/api/posts', auth, (req, res) => {
 
 app.get('/api/posts/:id', auth, (req, res) => {
   const p = store.get('posts', req.params.id);
-  if (!p || isBlocked(req.user.id, p.userId)) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
+  if (!p || isBlocked(req.user.id, p.userId) || !canSee(req.user.id, store.get('users', p.userId))) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
   res.json(postOut(p, req.user.id));
 });
 
@@ -577,28 +665,63 @@ app.get('/api/posts/:id/comments', auth, (req, res) => {
 
 app.post('/api/posts/:id/comments', auth, (req, res) => {
   const p = store.get('posts', req.params.id);
-  const text = String(req.body?.text || '').trim().slice(0, 500);
+  const text = moderation.mask(String(req.body?.text || '').trim().slice(0, 500));
   if (!p || !text) return res.status(400).json({ error: 'Yorum boş olamaz.' });
+  if (!canSee(req.user.id, store.get('users', p.userId))) return res.status(403).json({ error: 'Bu gönderiye yorum yapamazsın.' });
   if (isBlocked(req.user.id, p.userId)) return res.status(403).json({ error: 'Bu gönderiye yorum yapamazsın.' });
   if (limited('cm:' + req.user.id, 30, 600000)) return res.status(429).json({ error: 'Çok hızlı yorum yapıyorsun, biraz bekle.' });
   const c = { id: nanoid(10), userId: req.user.id, text, at: now() };
   p.comments.push(c);
   store.update('posts', p.id, {});
   notify(p.userId, { type: 'comment', fromId: req.user.id, ref: p.id, text: `${req.user.username} yorum yaptı: ${text.slice(0, 80)}`, url: `/#/p/${p.id}` });
+  notifyMentions(text, req.user, `/#/p/${p.id}`, 'bir yorumda');
   res.json({ ...c, user: brief(req.user) });
 });
 
 // ---------- Hikayeler (24 saat) ----------
 const storyAlive = (s) => now() - s.at < DAY;
+const FILTERS = ['sicak', 'soguk', 'vintage', 'siyahbeyaz', 'canli', 'pastel', 'dram', 'gece'];
+function cleanSticker(st) {
+  if (!st || typeof st !== 'object') return null;
+  const y = Math.max(5, Math.min(90, +st.y || 60));
+  const base = { id: nanoid(6), type: st.type, y };
+  if (st.type === 'poll') {
+    const options = (Array.isArray(st.options) ? st.options : []).map((o) => moderation.mask(String(o || '').trim().slice(0, 30))).filter(Boolean).slice(0, 4);
+    if (options.length < 2) return null;
+    return { ...base, q: moderation.mask(String(st.q || '').trim().slice(0, 80)), options };
+  }
+  if (st.type === 'question') return { ...base, q: moderation.mask(String(st.q || 'Bana bir soru sor').trim().slice(0, 80)) };
+  if (st.type === 'music' && isMedia(st.src)) return { ...base, src: st.src, title: String(st.title || 'Müzik').slice(0, 60), start: Math.max(0, +st.start || 0) };
+  if (st.type === 'text') {
+    const text = moderation.mask(String(st.text || '').trim().slice(0, 120));
+    return text ? { ...base, text, color: /^#[0-9a-f]{6}$/i.test(st.color) ? st.color : '#ffffff' } : null;
+  }
+  if (st.type === 'mention') {
+    const u = store.find('users', (x) => x.username === String(st.username || '').toLowerCase());
+    return u ? { ...base, username: u.username, userId: u.id } : null;
+  }
+  return null;
+}
+function stickersOut(s, me) {
+  return (s.stickers || []).map((st) => {
+    if (st.type !== 'poll') return st;
+    const votes = Object.entries(s.votes || {}).filter(([, v]) => v.sticker === st.id);
+    const counts = st.options.map((_, i) => votes.filter(([, v]) => v.option === i).length);
+    return { ...st, counts, total: votes.length, mine: (s.votes || {})[me]?.sticker === st.id ? s.votes[me].option : null };
+  });
+}
 app.get('/api/stories', auth, (req, res) => {
   const me = req.user.id;
   const following = new Set(store.filter('follows', (f) => f.from === me).map((f) => f.to));
   const byUser = new Map();
-  store.filter('stories', (s) => storyAlive(s) && !isBlocked(me, s.userId))
+  store.filter('stories', (s) => storyAlive(s) && !isBlocked(me, s.userId) && canSee(me, store.get('users', s.userId)))
     .sort((a, b) => a.at - b.at)
     .forEach((s) => {
       if (!byUser.has(s.userId)) byUser.set(s.userId, []);
-      byUser.get(s.userId).push({ id: s.id, media: s.media, mediaType: s.mediaType, at: s.at, seen: s.viewers.includes(me), viewerCount: s.userId === me ? s.viewers.length : undefined });
+      byUser.get(s.userId).push({
+        id: s.id, media: s.media, mediaType: s.mediaType, at: s.at, seen: s.viewers.includes(me), viewerCount: s.userId === me ? s.viewers.length : undefined,
+        stickers: stickersOut(s, me),
+      });
     });
   const out = [...byUser.entries()].map(([uid, items]) => ({ user: brief(store.get('users', uid)), items, allSeen: items.every((i) => i.seen) }));
   out.sort((a, b) => (b.user.id === me) - (a.user.id === me) || a.allSeen - b.allSeen || (b.items.at(-1).at - a.items.at(-1).at));
@@ -607,7 +730,8 @@ app.get('/api/stories', auth, (req, res) => {
 app.post('/api/stories', auth, (req, res) => {
   const { media, mediaType } = req.body || {};
   if (!media) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç.' });
-  const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: String(media), mediaType: mediaType === 'video' ? 'video' : 'image', at: now(), viewers: [] });
+  const stickers = (Array.isArray(req.body.stickers) ? req.body.stickers : []).slice(0, 4).map(cleanSticker).filter(Boolean);
+  const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: String(media), mediaType: mediaType === 'video' ? 'video' : 'image', at: now(), viewers: [], stickers, votes: {}, answers: [] });
   io.emit('stories:update', { userId: req.user.id });
   res.json(s);
 });
@@ -620,7 +744,15 @@ app.post('/api/stories/:id/view', auth, (req, res) => {
 app.get('/api/stories/:id/viewers', auth, (req, res) => {
   const s = store.get('stories', req.params.id);
   if (!s || s.userId !== req.user.id) return res.status(404).json({ error: 'Hikaye bulunamadı.' });
-  res.json(s.viewers.map((id) => brief(store.get('users', id))).filter(Boolean));
+  const viewers = s.viewers.map((id) => {
+    const u = brief(store.get('users', id));
+    if (!u) return null;
+    const v = (s.votes || {})[id];
+    const st = v && (s.stickers || []).find((x) => x.id === v.sticker);
+    return { ...u, vote: st ? st.options[v.option] : null };
+  }).filter(Boolean);
+  if (req.query.full) return res.json({ viewers, answers: (s.answers || []).map((a) => ({ ...a, user: brief(store.get('users', a.userId)) })).filter((a) => a.user), stickers: stickersOut(s, req.user.id) });
+  res.json(viewers);
 });
 app.delete('/api/stories/:id', auth, (req, res) => {
   const s = store.get('stories', req.params.id);
@@ -657,16 +789,19 @@ app.get('/api/users/:username', auth, (req, res) => {
   if (!u) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
   const blockedByMe = !!store.get('blocks', `${req.user.id}_${u.id}`);
   if (isBlocked(req.user.id, u.id) && !blockedByMe) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
-  const posts = blockedByMe ? [] : store.filter('posts', (p) => p.userId === u.id).sort((a, b) => b.createdAt - a.createdAt);
+  const locked = !canSee(req.user.id, u);
+  const posts = blockedByMe || locked ? [] : store.filter('posts', (p) => p.userId === u.id).sort((a, b) => b.createdAt - a.createdAt);
   const mid = [req.user.id, u.id].sort().join('_');
   res.json({
     ...pub(u, req.user.id),
-    followers: store.filter('follows', (f) => f.to === u.id).length,
-    following: store.filter('follows', (f) => f.from === u.id).length,
-    followsYou: !!store.get('follows', `${u.id}_${req.user.id}`),
+    followers: store.filter('follows', (f) => f.to === u.id && f.status !== 'pending').length,
+    following: store.filter('follows', (f) => f.from === u.id && f.status !== 'pending').length,
+    followsYou: followOk(u.id, req.user.id),
+    locked,
+    postCount: store.filter('posts', (p) => p.userId === u.id).length,
     matched: !!store.get('matches', mid),
     blockedByMe,
-    hasStory: store.filter('stories', (s) => s.userId === u.id && storyAlive(s)).length > 0,
+    hasStory: !locked && store.filter('stories', (s) => s.userId === u.id && storyAlive(s)).length > 0,
     posts: posts.map((p) => postOut(p, req.user.id)),
   });
 });
@@ -674,7 +809,9 @@ app.get('/api/users/:username', auth, (req, res) => {
 app.get('/api/users/:id/:list', auth, (req, res, next) => {
   if (!['followers', 'following'].includes(req.params.list)) return next();
   const key = req.params.list === 'followers' ? ['to', 'from'] : ['from', 'to'];
-  const ids = store.filter('follows', (f) => f[key[0]] === req.params.id).map((f) => f[key[1]]);
+  const owner = store.get('users', req.params.id);
+  if (owner && !canSee(req.user.id, owner)) return res.json([]);
+  const ids = store.filter('follows', (f) => f[key[0]] === req.params.id && f.status !== 'pending').map((f) => f[key[1]]);
   res.json(ids.filter((id) => !isBlocked(req.user.id, id)).map((id) => brief(store.get('users', id))).filter(Boolean));
 });
 
@@ -684,7 +821,12 @@ app.post('/api/users/:id/follow', auth, (req, res) => {
   const id = `${req.user.id}_${t.id}`;
   if (store.get('follows', id)) {
     store.del('follows', id);
-    return res.json({ following: false });
+    return res.json({ following: false, requested: false });
+  }
+  if (priv(t).private) {
+    store.put('follows', { id, from: req.user.id, to: t.id, at: now(), status: 'pending' });
+    notify(t.id, { type: 'follow_request', fromId: req.user.id, text: `${req.user.username} seni takip etmek istiyor.`, url: '/#/requests' });
+    return res.json({ following: false, requested: true });
   }
   store.put('follows', { id, from: req.user.id, to: t.id, at: now() });
   notify(t.id, { type: 'follow', fromId: req.user.id, text: `${req.user.username} seni takip etmeye başladı.`, url: `/#/u/${req.user.username}` });
@@ -735,31 +877,40 @@ app.get('/api/swipe/deck', auth, (req, res) => {
   const me = req.user;
   const prefs = me.prefs || { ageMin: 18, ageMax: 99, maxKm: null };
   const swiped = new Set(store.filter('swipes', (s) => s.from === me.id).map((s) => s.to));
-  let deck = store.filter('users', (u) => u.id !== me.id && u.role !== 'falci' && isActive(u) && !swiped.has(u.id) && !isBlocked(me.id, u.id));
+  let deck = store.filter('users', (u) => u.id !== me.id && u.role !== 'falci' && isActive(u) && !priv(u).hideFromDeck && !swiped.has(u.id) && !isBlocked(me.id, u.id));
   if (me.lookingFor && me.lookingFor !== 'all') deck = deck.filter((u) => u.gender === me.lookingFor || !u.gender);
   deck = deck.filter((u) => !u.age || (u.age >= prefs.ageMin && u.age <= prefs.ageMax));
   if (prefs.maxKm && me.lat != null) deck = deck.filter((u) => { const d = distance(me, u); return d == null || d <= prefs.maxKm; });
   const likedMe = new Set(store.filter('swipes', (s) => s.to === me.id && s.dir !== 'left').map((s) => s.from));
   rankPeople(deck);
-  res.json(deck.slice(0, 40).map((u) => {
-    const posts = store.filter('posts', (p) => p.userId === u.id && p.type === 'image').slice(0, 3).map((p) => p.media);
-    const photos = [...(u.photos || []), ...posts].filter(Boolean);
-    return {
-      ...brief(u), age: u.age, city: u.city, bio: u.bio, interests: u.interests || [],
-      distanceKm: distance(me, u), likedYou: likedMe.has(u.id),
-      photos: photos.length ? photos : [u.avatar],
-    };
-  }));
+  const t = now();
+  deck.sort((a, b) => ((b.boostUntil || 0) > t) - ((a.boostUntil || 0) > t));
+  res.json(deck.slice(0, 40).map((u) => cardOut(me, u, likedMe.has(u.id))));
 });
+function cardOut(me, u, likedYou) {
+  const posts = store.filter('posts', (p) => p.userId === u.id && p.type === 'image' && canSee(me.id, u)).slice(0, 3).map((p) => p.media);
+  const photos = [...(u.photos || []), ...posts].filter(Boolean);
+  return {
+    ...brief(u), age: u.age, city: u.city, bio: u.bio, interests: u.interests || [],
+    distanceKm: distance(me, u), likedYou: eco.isPlus(me) ? likedYou : false,
+    boosted: (u.boostUntil || 0) > now(),
+    photos: photos.length ? photos : [u.avatar],
+  };
+}
 
 app.get('/api/likes', auth, (req, res) => {
   const me = req.user.id;
   const mySwipes = new Set(store.filter('swipes', (s) => s.from === me).map((s) => s.to));
   const list = store.filter('swipes', (s) => s.to === me && s.dir !== 'left' && !mySwipes.has(s.from) && !isBlocked(me, s.from))
     .sort((a, b) => b.at - a.at)
-    .map((s) => { const u = store.get('users', s.from); return u && { ...brief(u), age: u.age, city: u.city, super: s.dir === 'super', at: s.at, photo: (u.photos || [])[0] || u.avatar }; })
+    .map((s) => { const u = store.get('users', s.from); return u && isActive(u) && { ...brief(u), age: u.age, city: u.city, super: s.dir === 'super', at: s.at, photo: (u.photos || [])[0] || u.avatar }; })
     .filter(Boolean);
-  res.json(list);
+  if (eco.isPlus(req.user)) return res.json({ plus: true, count: list.length, items: list });
+  // Ücretsiz üyeler: süper beğeniler açık, diğerleri bulanık ve kimliksiz
+  res.json({
+    plus: false, count: list.length,
+    items: list.map((x) => (x.super ? x : { locked: true, super: false, at: x.at, photo: x.photo })),
+  });
 });
 
 app.post('/api/swipe', auth, (req, res) => {
@@ -767,7 +918,15 @@ app.post('/api/swipe', auth, (req, res) => {
   const t = store.get('users', to);
   if (!t || t.id === req.user.id || !['left', 'right', 'super'].includes(dir) || isBlocked(req.user.id, to)) return res.status(400).json({ error: 'Geçersiz istek.' });
   const me = req.user;
+  if (dir !== 'left') {
+    const q = eco.quota(me);
+    if (dir === 'super' && q.supersLeft <= 0) return res.status(402).json({ error: q.plus ? 'Bugünkü süper beğeni hakkın bitti.' : 'Bugünkü süper beğeni hakkın bitti. SwipeUp+ ile her gün 5 süper beğeni.', limit: 'super' });
+    if (dir === 'right' && q.likesLeft === 0) return res.status(402).json({ error: 'Bugünkü beğeni hakkın bitti. SwipeUp+ ile sınırsız beğen.', limit: 'likes' });
+    const d = { ...q.d, likes: q.d.likes + (dir === 'right' ? 1 : 0), supers: q.d.supers + (dir === 'super' ? 1 : 0) };
+    store.update('users', me.id, { daily: d });
+  }
   store.put('swipes', { id: `${me.id}_${t.id}`, from: me.id, to: t.id, dir, at: now() });
+  store.update('users', me.id, { lastSwipe: t.id });
   if (dir === 'left') return res.json({ match: false });
 
   const back = () => store.get('swipes', `${t.id}_${me.id}`);
@@ -823,8 +982,10 @@ app.post('/api/chats', auth, (req, res) => {
 app.get('/api/chats/:id', auth, (req, res) => {
   const c = store.get('chats', req.params.id);
   if (!c || !c.members.includes(req.user.id)) return res.status(404).json({ error: 'Sohbet bulunamadı.' });
-  const msgs = store.filter('messages', (m) => m.chatId === c.id && !(m.hiddenFor || []).includes(req.user.id)).sort((a, b) => a.at - b.at);
-  res.json({ ...chatOut(c, req.user.id), messages: msgs.slice(-400).map(msgOut) });
+  const t = now();
+  const msgs = store.filter('messages', (m) => m.chatId === c.id && !(m.hiddenFor || []).includes(req.user.id) && !(m.expiresAt && m.expiresAt < t)).sort((a, b) => a.at - b.at);
+  const noReceipts = priv(req.user).hideRead;
+  res.json({ ...chatOut(c, req.user.id), messages: msgs.slice(-400).map((m) => (noReceipts ? { ...msgOut(m), readBy: [m.from] } : msgOut(m))) });
 });
 
 app.post('/api/chats/:id/messages', auth, (req, res) => {
@@ -915,6 +1076,8 @@ app.post('/api/fal', auth, (req, res) => {
   if (isBlocked(req.user.id, f.id)) return res.status(403).json({ error: 'Fal isteği gönderilemedi.' });
   const b = req.body || {};
   if (!FAL_TYPES[b.type]) return res.status(400).json({ error: 'Fal türünü seç.' });
+  const price = Math.max(0, parseInt(eco.get().falPrices[b.type], 10) || 0);
+  if (price && (req.user.coins || 0) < price) return res.status(402).json({ error: `Bu fal ${price} jeton. Jetonun yetmiyor.`, need: price, coins: req.user.coins || 0 });
   if (limited('fal:' + req.user.id, 5, DAY)) return res.status(429).json({ error: 'Bugün en fazla 5 fal isteği gönderebilirsin. Yarın tekrar dene.' });
   const images = (Array.isArray(b.images) ? b.images : []).filter(isMedia).slice(0, 3);
   if (b.type === 'kahve' && !images.length) return res.status(400).json({ error: 'Kahve falı için en az bir fincan fotoğrafı ekle.' });
@@ -930,12 +1093,16 @@ app.post('/api/fal', auth, (req, res) => {
   const zodiac = zodiacs.includes(b.zodiac) ? b.zodiac : (req.user.zodiac || null);
   const payload = {
     id: nanoid(8), type: b.type, note: String(b.note || '').trim().slice(0, 1000), images, cards, partner, zodiac,
-    name: req.user.name, status: 'pending', at: now(),
+    name: req.user.name, status: 'pending', at: now(), price,
   };
   const chat = chatBetween(req.user.id, f.id);
   const msg = sendMessage(chat, req.user.id, { text: payload.note, fal: payload });
   if (!msg) return res.status(400).json({ error: 'Fal isteği gönderilemedi.' });
-  res.json({ ok: true, chatId: chat.id, messageId: msg.id });
+  if (price) {
+    eco.spend(req.user.id, price, 'fal', { ref: msg.id });
+    eco.earn(f.id, Math.round(price * eco.get().falciShare), 'fal', { ref: msg.id, fromId: req.user.id });
+  }
+  res.json({ ok: true, chatId: chat.id, messageId: msg.id, coins: store.get('users', req.user.id).coins || 0 });
 });
 
 app.get('/api/fal/mine', auth, (req, res) => {
@@ -968,16 +1135,24 @@ app.get('/api/badges', auth, (req, res) => {
   const me = req.user.id;
   const notifs = store.filter('notifications', (n) => n.userId === me && !n.read).length;
   const chats = new Set(store.filter('chats', (c) => c.members.includes(me)).map((c) => c.id));
-  const msgs = store.filter('messages', (m) => chats.has(m.chatId) && m.from !== me && !m.system && !m.readBy.includes(me) && !(m.hiddenFor || []).includes(me));
+  const msgs = store.filter('messages', (m) => chats.has(m.chatId) && m.from !== me && !m.system && !hasRead(m, me) && !(m.hiddenFor || []).includes(me) && !(m.expiresAt && m.expiresAt < now()));
   const mySwipes = new Set(store.filter('swipes', (s) => s.from === me).map((s) => s.to));
   const likes = store.filter('swipes', (s) => s.to === me && s.dir !== 'left' && !mySwipes.has(s.from)).length;
   const fal = req.user.role === 'falci' ? store.filter('messages', (m) => m.fal?.status === 'pending' && chats.has(m.chatId)).length : 0;
-  res.json({ notifications: notifs, messages: new Set(msgs.map((m) => m.chatId)).size, likes, fal });
+  const requests = store.filter('follows', (f) => f.to === me && f.status === 'pending').length;
+  res.json({ notifications: notifs, messages: new Set(msgs.map((m) => m.chatId)).size, likes, fal, requests, coins: req.user.coins || 0, plus: eco.isPlus(req.user) });
 });
 
 // ---------- Canlı ----------
 const liveOut = (l) => ({ userId: l.userId, title: l.title, startedAt: l.startedAt, viewers: l.viewers.size, user: brief(store.get('users', l.userId)) });
 app.get('/api/lives', auth, (req, res) => res.json([...lives.values()].map(liveOut)));
+
+// ---------- Ek özellikler (mağaza, doğrulama, gizlilik, çıkartmalar, etiketler…) ----------
+const featureCtx = {
+  store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
+  isBlocked, limited, isMedia, cardOut, purgeUser, moderation,
+};
+require('./server/features')(app, featureCtx);
 
 // ---------- Statik ----------
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -1008,6 +1183,7 @@ io.use((socket, next) => {
 
 function broadcastPresence(userId) {
   const u = store.get('users', userId);
+  if (priv(u).hideLastSeen) return io.emit('presence', { userId, online: false, lastSeen: null });
   io.emit('presence', { userId, online: isOnline(userId), lastSeen: u?.lastSeen });
 }
 
@@ -1053,7 +1229,7 @@ io.on('connection', (socket) => {
   });
 
   socket.emit('lives', [...lives.values()].map(liveOut));
-  socket.emit('presence:all', [...online.keys()].filter(isOnline));
+  socket.emit('presence:all', [...online.keys()].filter((id) => isOnline(id) && !priv(store.get('users', id)).hideLastSeen));
   // Çalan bir arama varsa (uygulama bildirimden açıldıysa) tekrar göster
   for (const c of calls.values()) {
     if (c.to === uid && c.state === 'ringing') socket.emit('call:incoming', { callId: c.id, chatId: c.chatId, video: c.video, from: brief(store.get('users', c.from)) });
@@ -1106,10 +1282,18 @@ io.on('connection', (socket) => {
   socket.on('read', ({ chatId }) => {
     const c = store.get('chats', chatId);
     if (!c || !c.members.includes(uid)) return;
+    const me = store.get('users', uid);
+    if (priv(me).hideRead) {
+      // Okundu bilgisi kapalı: okundu sayılır ama karşı tarafa mavi tik gitmez
+      store.filter('messages', (m) => m.chatId === chatId && !hasRead(m, uid)).forEach((m) => {
+        m.seenBy = [...(m.seenBy || []), uid]; store.update('messages', m.id, {});
+      });
+      return emitTo(uid, 'read', { chatId, userId: uid, at: now() });
+    }
     store.filter('messages', (m) => m.chatId === chatId && !m.readBy.includes(uid)).forEach((m) => {
       m.readBy.push(uid); store.update('messages', m.id, {});
     });
-    c.members.forEach((m) => emitTo(m, 'read', { chatId, userId: uid, at: now() }));
+    c.members.forEach((m) => { if (m === uid || !priv(store.get('users', m)).hideRead) emitTo(m, 'read', { chatId, userId: uid, at: now() }); });
   });
 
   // ---- Sesli / görüntülü arama ----
@@ -1183,7 +1367,19 @@ io.on('connection', (socket) => {
   socket.on('live:comment', ({ hostId, text }) => {
     text = String(text || '').trim().slice(0, 200);
     if (!text || !lives.has(hostId) || limited('lc:' + uid, 20, 30000)) return;
-    io.to(`live:${hostId}`).emit('live:comment', { hostId, user: brief(store.get('users', uid)), text, at: now() });
+    io.to(`live:${hostId}`).emit('live:comment', { hostId, user: brief(store.get('users', uid)), text: moderation.mask(text), at: now() });
+  });
+  socket.on('live:gift', ({ hostId, giftId }, ack) => {
+    const l = lives.get(hostId);
+    const gift = eco.get().gifts.find((g) => g.id === giftId);
+    if (!l || !gift || hostId === uid) return ack?.({ error: 'Hediye gönderilemedi.' });
+    if (limited('gift:' + uid, 20, 10000)) return ack?.({ error: 'Biraz yavaş 🙂' });
+    if (!eco.spend(uid, gift.coins, 'gift', { to: hostId, gift: gift.id })) return ack?.({ error: 'Jetonun yetmiyor.', needCoins: true });
+    eco.earn(hostId, Math.round(gift.coins * eco.get().creatorShare), 'gift', { fromId: uid, gift: gift.id });
+    l.gifts = (l.gifts || 0) + gift.coins;
+    const user = brief(store.get('users', uid));
+    io.to(`live:${hostId}`).emit('live:gift', { hostId, gift, user, total: l.gifts, at: now() });
+    ack?.({ ok: true, coins: store.get('users', uid).coins || 0 });
   });
   socket.on('live:heart', ({ hostId }) => { if (lives.has(hostId) && !limited('lh:' + uid, 30, 10000)) io.to(`live:${hostId}`).emit('live:heart', { hostId }); });
 
@@ -1202,6 +1398,27 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// Bir hesabı ve izlerini tamamen sil (hesap silme / yönetici silmesi)
+function purgeUser(id) {
+  online.get(id)?.forEach((s) => { s.emit('account:deleted', {}); s.disconnect(true); });
+  endLive(id);
+  store.filter('posts', (p) => p.userId === id).forEach((p) => store.del('posts', p.id));
+  store.filter('posts', (p) => p.likes.includes(id) || p.comments.some((c) => c.userId === id))
+    .forEach((p) => store.update('posts', p.id, { likes: p.likes.filter((x) => x !== id), comments: p.comments.filter((c) => c.userId !== id) }));
+  store.filter('stories', (s) => s.userId === id).forEach((s) => store.del('stories', s.id));
+  ['follows', 'swipes', 'blocks'].forEach((c) => store.filter(c, (x) => x.from === id || x.to === id).forEach((x) => store.del(c, x.id)));
+  store.filter('matches', (m) => m.users.includes(id)).forEach((m) => store.del('matches', m.id));
+  store.filter('chats', (c) => !c.isGroup && c.members.includes(id)).forEach((c) => removeChat(c.id));
+  store.filter('chats', (c) => c.isGroup && c.members.includes(id)).forEach((c) => store.update('chats', c.id, { members: c.members.filter((m) => m !== id), admins: (c.admins || []).filter((m) => m !== id) }));
+  store.filter('messages', (m) => m.from === id).forEach((m) => store.del('messages', m.id));
+  store.filter('notifications', (n) => n.userId === id || n.fromId === id).forEach((n) => store.del('notifications', n.id));
+  store.filter('pushSubs', (s) => s.userId === id).forEach((s) => store.del('pushSubs', s.id));
+  store.filter('verifications', (v) => v.userId === id).forEach((v) => store.del('verifications', v.id));
+  store.del('resets', id);
+  store.del('users', id);
+  io.emit('people:gone', { id });
+}
 
 // Eski sürümden kalan örnek hesapları ve izlerini tamamen sil
 function purgeDemo() {

@@ -1,9 +1,9 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, ago, on, avatar, openChatWith, sheet, refreshBadges,
+  state, api, esc, ago, on, avatar, openChatWith, sheet, refreshBadges, nm,
 } from '../core.js';
 
-const preview = (m) => m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf');
+const preview = (m) => (m.location ? '📍 Konum' : m.fal ? '🔮 Fal isteği' : '') || m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf');
 
 export default async function chats(view) {
   view.innerHTML = `<header class="topbar">
@@ -49,7 +49,7 @@ export default async function chats(view) {
     items.sort((a, b) => (b.last?.at || b.lastAt) - (a.last?.at || a.lastAt));
     listEl.innerHTML = items.length ? `<div class="section-t"><span>Sohbetler</span></div>${items.map((c) => `<a class="list-item chat-item" href="#/chat/${esc(c.id)}">
         ${avatar(c.other, 56, { ring: true, dot: !c.isGroup })}
-        <div class="grow"><div class="row" style="gap:6px"><span class="ellipsis grow ${c.unread ? 'b' : ''}" style="font-weight:${c.unread ? 700 : 600}">${esc(c.other.name)}</span><span class="muted" style="font-size:12px">${c.last ? ago(c.last.at) : ''}</span></div>
+        <div class="grow"><div class="row" style="gap:6px"><span class="ellipsis grow ${c.unread ? 'b' : ''}" style="font-weight:${c.unread ? 700 : 600}">${nm(c.other)}</span><span class="muted" style="font-size:12px">${c.last ? ago(c.last.at) : ''}</span></div>
         <div class="last ${c.unread ? 'unread' : ''}"><span class="ellipsis grow">${lastText(c)}</span>${c.unread ? `<span class="unread-n">${c.unread}</span>` : ''}</div></div></a>`).join('')}`
       : `<div class="empty"><div class="big">${icon('send')}</div><h2>Henüz sohbet yok</h2>Kaydırıp eşleştiğinde ya da birine yazdığında sohbetlerin burada görünür.<p><a class="btn primary" href="#/swipe">Keşfetmeye başla</a></p></div>`;
   };
@@ -64,7 +64,7 @@ export default async function chats(view) {
     sheet('Yeni mesaj', `<div class="search-bar" style="position:static"><label class="sw">${icon('search')}<input class="field" placeholder="Kişi ara"></label></div><div class="res"></div>`, {
       async onMount(sh) {
         const res = sh.querySelector('.res');
-        const show = (us) => { res.innerHTML = us.filter((u) => u.id !== state.me.id).map((u) => `<button class="list-item" data-id="${esc(u.id)}">${avatar(u, 44)}<div><div class="b">${esc(u.name)}</div><div class="sub">@${esc(u.username)}${u.online ? ' · çevrimiçi' : ''}</div></div></button>`).join(''); };
+        const show = (us) => { res.innerHTML = us.filter((u) => u.id !== state.me.id).map((u) => `<button class="list-item" data-id="${esc(u.id)}">${avatar(u, 44)}<div><div class="b">${nm(u)}</div><div class="sub">@${esc(u.username)}${u.online ? ' · çevrimiçi' : ''}</div></div></button>`).join(''); };
         show(await api('/people'));
         let t;
         sh.querySelector('input').oninput = (e) => {

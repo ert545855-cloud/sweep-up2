@@ -1,16 +1,16 @@
 import { icon } from '../icons.js';
 import {
-  api, toast, pickFile, compressImage, uploadFile, esc, state,
+  api, toast, compressImage, uploadFile, esc, state, sheet, FILTERS, filterCss, fmtDur,
 } from '../core.js';
 
 // Videodan kapak karesi üret
-function posterFrom(file) {
+function posterFrom(file, at = 0.5) {
   return new Promise((resolve) => {
     const v = document.createElement('video');
     v.muted = true; v.playsInline = true; v.preload = 'auto';
     v.src = URL.createObjectURL(file);
     const done = (b) => { URL.revokeObjectURL(v.src); resolve(b); };
-    v.onloadeddata = () => { v.currentTime = Math.min(0.5, (v.duration || 1) / 2); };
+    v.onloadeddata = () => { v.currentTime = Math.min(Math.max(at, 0.1), (v.duration || 1) - 0.1); };
     v.onseeked = () => {
       const s = Math.min(1, 720 / Math.max(v.videoWidth, v.videoHeight));
       const c = document.createElement('canvas');
@@ -23,10 +23,28 @@ function posterFrom(file) {
   });
 }
 
+function pickFiles(accept, multiple) {
+  return new Promise((resolve) => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = accept; inp.multiple = !!multiple;
+    inp.onchange = () => resolve([...inp.files]);
+    inp.click();
+  });
+}
+
+const STICKER_COLORS = ['#ffffff', '#111111', '#ff3d6e', '#ffb020', '#22c55e', '#3b82f6', '#a855f7'];
+const SPEEDS = [0.5, 0.75, 1, 1.5, 2];
+
 export default function create(view, kind) {
   let mode = ['reel', 'story'].includes(kind) ? kind : 'image';
   const TITLES = { image: 'Yeni gönderi', reel: 'Yeni dalga', story: 'Yeni hikaye' };
-  let file = null;
+  let items = []; // gönderi: [{file,url,filter}]
+  let cur = 0;
+  let file = null; // dalga / hikaye
+  let fileUrl = null;
+  let edit = { start: 0, end: null, speed: 1, filter: '', audio: null, audioTitle: '', muteOriginal: false };
+  let stickers = [];
+  let audioEl = null;
 
   view.innerHTML = `<header class="topbar bordered">
       <button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Kapat">${icon('close')}</button>
@@ -40,73 +58,301 @@ export default function create(view, kind) {
         <button data-m="reel" class="${mode === 'reel' ? 'on' : ''}">Dalga</button>
         <button data-m="live">Canlı</button>
       </div>
-      <button class="picker"></button>
-      <textarea class="field cap" placeholder="Açıklama yaz..." maxlength="2200" rows="3"></textarea>
+      <div class="picker"></div>
+      <div class="tools"></div>
+      <textarea class="field cap" placeholder="Açıklama yaz... #etiket ve @kullanıcı ekleyebilirsin" maxlength="2200" rows="3"></textarea>
       <div class="bar" hidden><i></i></div>
       <button class="btn primary block go2" disabled>Paylaş</button>
     </div>`;
 
   const picker = view.querySelector('.picker');
+  const tools = view.querySelector('.tools');
   const title = view.querySelector('.center');
   const goBtns = view.querySelectorAll('.go, .go2');
-  const paintPicker = () => {
+  const ready = () => (mode === 'image' ? items.length > 0 : !!file);
+  const stopAudio = () => { if (audioEl) { audioEl.pause(); audioEl = null; } };
+
+  const filterStrip = (active, sample) => `<div class="fstrip">${FILTERS.map(([id, name, css]) => `<button data-f="${id}" class="${(active || '') === id ? 'on' : ''}">
+      <span style="background-image:url('${sample}');filter:${css}"></span>${name}</button>`).join('')}</div>`;
+
+  // ---------- Önizleme ----------
+  function paint() {
     picker.className = `picker ${mode !== 'image' ? 'reel' : ''}`;
     title.textContent = TITLES[mode];
     view.querySelector('.cap').hidden = mode === 'story';
-    if (file) {
-      const url = URL.createObjectURL(file);
-      picker.innerHTML = file.type.startsWith('video') ? `<video src="${url}" autoplay muted loop playsinline></video>` : `<img src="${url}" alt="Önizleme">`;
-    } else {
-      picker.innerHTML = `<div>${icon(mode === 'reel' ? 'video' : 'image', '', 'style="width:56px;height:56px;margin:0 auto 10px"')}
+    goBtns.forEach((b) => { b.disabled = !ready(); });
+    tools.innerHTML = '';
+    if (!ready()) {
+      stopAudio();
+      picker.innerHTML = `<button class="pick-empty">${icon(mode === 'reel' ? 'video' : 'image', '', 'style="width:56px;height:56px;margin:0 auto 10px"')}
         <div class="b" style="color:var(--text)">${{ reel: 'Video seç', story: 'Fotoğraf ya da video seç', image: 'Fotoğraf seç' }[mode]}</div>
-        <div>${{ reel: 'Dikey video önerilir, en fazla 40 MB', story: '24 saat sonra kendiliğinden kaybolur', image: 'Galeriden seç ya da fotoğraf çek' }[mode]}</div></div>`;
+        <div>${{ reel: 'Dikey video önerilir, en fazla 40 MB', story: '24 saat sonra kendiliğinden kaybolur', image: 'En fazla 10 fotoğraf seçebilirsin' }[mode]}</div></button>`;
+      picker.querySelector('.pick-empty').onclick = choose;
+      return;
     }
-    goBtns.forEach((b) => { b.disabled = !file; });
-  };
-  paintPicker();
+    if (mode === 'image') return paintImages();
+    if (mode === 'reel') return paintReel();
+    return paintStory();
+  }
+
+  function paintImages() {
+    const it = items[cur];
+    picker.innerHTML = `<img src="${it.url}" alt="Önizleme" style="filter:${filterCss(it.filter)}">${items.length > 1 ? `<span class="car-n">${cur + 1}/${items.length}</span>` : ''}`;
+    tools.innerHTML = `<div class="thumbs">${items.map((x, i) => `<button class="th ${i === cur ? 'on' : ''}" data-i="${i}"><img src="${x.url}" style="filter:${filterCss(x.filter)}" alt=""><i data-rm="${i}" aria-label="Kaldır">${icon('close')}</i></button>`).join('')}
+      ${items.length < 10 ? `<button class="th add" aria-label="Fotoğraf ekle">${icon('plus')}</button>` : ''}</div>
+      <div class="tl">Filtre</div>${filterStrip(it.filter, it.url)}`;
+    tools.querySelector('.thumbs').onclick = (e) => {
+      const rm = e.target.closest('[data-rm]');
+      if (rm) { items.splice(+rm.dataset.rm, 1); cur = Math.min(cur, items.length - 1); return paint(); }
+      if (e.target.closest('.add')) return choose();
+      const th = e.target.closest('[data-i]'); if (th) { cur = +th.dataset.i; paint(); }
+    };
+    tools.querySelector('.fstrip').onclick = (e) => {
+      const b = e.target.closest('[data-f]'); if (!b) return;
+      items[cur].filter = b.dataset.f; paint();
+    };
+  }
+
+  function paintReel() {
+    picker.innerHTML = `<video src="${fileUrl}" autoplay muted loop playsinline style="filter:${filterCss(edit.filter)}"></video>`;
+    const v = picker.querySelector('video');
+    tools.innerHTML = `<div class="etabs"><button data-t="trim" class="on">${icon('scissors')}Kırp</button><button data-t="speed">${icon('gauge')}Hız</button><button data-t="filter">${icon('wand')}Filtre</button><button data-t="music">${icon('music')}Müzik</button></div><div class="epane"></div>`;
+    const pane = tools.querySelector('.epane');
+    const sync = () => {
+      v.playbackRate = edit.speed;
+      v.style.filter = filterCss(edit.filter);
+      if (edit.audio && !audioEl) { audioEl = new Audio(URL.createObjectURL(edit.audio)); audioEl.loop = true; audioEl.play().catch(() => {}); }
+      if (!edit.audio) stopAudio();
+      v.muted = true;
+    };
+    v.addEventListener('loadedmetadata', () => { if (edit.start) v.currentTime = edit.start; showTab(tab); });
+    v.addEventListener('timeupdate', () => {
+      const end = edit.end || v.duration;
+      if (v.currentTime >= end || v.currentTime < edit.start - 0.3) { v.currentTime = edit.start; if (audioEl) audioEl.currentTime = 0; }
+    });
+    let tab = 'trim';
+    const showTab = (t) => {
+      tab = t;
+      tools.querySelectorAll('.etabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
+      const dur = v.duration || 0;
+      if (t === 'trim') {
+        const end = edit.end || dur;
+        pane.innerHTML = dur ? `<div class="trim"><div class="row"><span>Başlangıç <b class="ts">${fmtDur(edit.start)}</b></span><span class="sp"></span><span>Bitiş <b class="te">${fmtDur(end)}</b></span></div>
+          <input type="range" class="rs" min="0" max="${dur}" step="0.1" value="${edit.start}" aria-label="Başlangıç">
+          <input type="range" class="re" min="0" max="${dur}" step="0.1" value="${end}" aria-label="Bitiş">
+          <div class="muted" style="font-size:13px">Süre: <b class="tl2">${fmtDur(end - edit.start)}</b></div></div>` : '<div class="muted">Video yükleniyor…</div>';
+        const rs = pane.querySelector('.rs'); const re = pane.querySelector('.re');
+        if (!rs) return;
+        const upd = () => {
+          let s = +rs.value; let e = +re.value;
+          if (e - s < 1) { if (document.activeElement === rs) s = Math.max(0, e - 1); else e = Math.min(dur, s + 1); rs.value = s; re.value = e; }
+          edit.start = s; edit.end = e >= dur - 0.05 ? null : e;
+          pane.querySelector('.ts').textContent = fmtDur(s); pane.querySelector('.te').textContent = fmtDur(e); pane.querySelector('.tl2').textContent = fmtDur(e - s);
+          v.currentTime = document.activeElement === re ? Math.max(s, e - 1) : s;
+        };
+        rs.oninput = upd; re.oninput = upd;
+      }
+      if (t === 'speed') {
+        pane.innerHTML = `<div class="chips">${SPEEDS.map((x) => `<button class="chip ${edit.speed === x ? 'on' : ''}" data-s="${x}">${x}x</button>`).join('')}</div>`;
+        pane.onclick = (e) => { const b = e.target.closest('[data-s]'); if (!b) return; edit.speed = +b.dataset.s; sync(); showTab('speed'); };
+      }
+      if (t === 'filter') {
+        pane.innerHTML = filterStrip(edit.filter, '');
+        pane.querySelectorAll('.fstrip span').forEach((sp) => { sp.style.backgroundImage = 'linear-gradient(135deg,#ff8a3d,#7c3aed 60%,#22c55e)'; });
+        pane.onclick = (e) => { const b = e.target.closest('[data-f]'); if (!b) return; edit.filter = b.dataset.f; sync(); showTab('filter'); };
+      }
+      if (t === 'music') {
+        pane.innerHTML = edit.audio ? `<div class="list-item" style="padding:8px 0">${icon('music')}<div class="grow"><input class="field" name="at" value="${esc(edit.audioTitle)}" maxlength="60" placeholder="Şarkı adı"></div><button class="ib rm" aria-label="Müziği kaldır">${icon('trash')}</button></div>
+          <label class="switch-row"><input type="checkbox" class="mo" ${edit.muteOriginal ? 'checked' : ''}> Videonun kendi sesini kapat</label>`
+          : `<button class="btn outline block addm">${icon('music')} Telefonundan şarkı seç</button><p class="muted" style="font-size:13px;margin:8px 2px 0">Kendi ses dosyanı ekle (mp3, m4a). Telif hakkı sende olmayan müzikleri kullanmamaya dikkat et.</p>`;
+        pane.onclick = null;
+        pane.querySelector('.addm')?.addEventListener('click', async () => {
+          const [f] = await pickFiles('audio/*');
+          if (!f) return;
+          if (f.size > 15 * 1024 * 1024) return toast('Ses dosyası en fazla 15 MB olabilir.');
+          edit.audio = f; edit.audioTitle = f.name.replace(/\.[^.]+$/, '').slice(0, 60); edit.muteOriginal = true;
+          stopAudio(); sync(); showTab('music');
+        });
+        pane.querySelector('.rm')?.addEventListener('click', () => { edit.audio = null; edit.audioTitle = ''; edit.muteOriginal = false; sync(); showTab('music'); });
+        pane.querySelector('[name=at]')?.addEventListener('input', (e) => { edit.audioTitle = e.target.value; });
+        pane.querySelector('.mo')?.addEventListener('change', (e) => { edit.muteOriginal = e.target.checked; });
+      }
+    };
+    tools.querySelector('.etabs').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) showTab(b.dataset.t); };
+    sync(); showTab('trim');
+    picker.insertAdjacentHTML('beforeend', `<button class="swap" aria-label="Başka video seç">${icon('video')}</button>`);
+    picker.querySelector('.swap').onclick = choose;
+  }
+
+  // ---------- Hikaye çıkartmaları ----------
+  function stickerHtml(s, i) {
+    const style = `top:${s.y}%`;
+    if (s.type === 'text') return `<div class="stk txt" data-i="${i}" style="${style};color:${s.color}">${esc(s.text)}</div>`;
+    if (s.type === 'poll') return `<div class="stk poll" data-i="${i}" style="${style}"><b>${esc(s.q || 'Anket')}</b>${s.options.map((o) => `<span>${esc(o)}</span>`).join('')}</div>`;
+    if (s.type === 'question') return `<div class="stk q" data-i="${i}" style="${style}"><b>${esc(s.q)}</b><span>Bir şey yaz…</span></div>`;
+    if (s.type === 'music') return `<div class="stk mu" data-i="${i}" style="${style}">${icon('music')}<span>${esc(s.title)}</span></div>`;
+    if (s.type === 'mention') return `<div class="stk men" data-i="${i}" style="${style}">@${esc(s.username)}</div>`;
+    return '';
+  }
+  function paintStory() {
+    const vid = file.type.startsWith('video');
+    picker.innerHTML = `${vid ? `<video src="${fileUrl}" autoplay muted loop playsinline></video>` : `<img src="${fileUrl}" alt="Önizleme">`}
+      <div class="stk-layer">${stickers.map(stickerHtml).join('')}</div>
+      <button class="swap" aria-label="Başka dosya seç">${icon('image')}</button>`;
+    picker.querySelector('.swap').onclick = choose;
+    tools.innerHTML = `<div class="stk-tools">
+      <button data-k="text">${icon('text')}Metin</button><button data-k="poll">${icon('poll')}Anket</button>
+      <button data-k="question">${icon('question')}Soru</button><button data-k="music">${icon('music')}Müzik</button><button data-k="mention">${icon('at')}Bahset</button></div>
+      <p class="muted" style="font-size:12.5px;margin:6px 2px 0">Çıkartmayı yukarı-aşağı sürükleyerek taşı, kaldırmak için dokun.</p>`;
+    tools.querySelector('.stk-tools').onclick = (e) => { const b = e.target.closest('[data-k]'); if (b) addSticker(b.dataset.k); };
+    // sürükle / kaldır
+    picker.querySelectorAll('.stk').forEach((elx) => {
+      let y0 = null; let moved = false;
+      elx.addEventListener('pointerdown', (e) => { y0 = e.clientY; moved = false; elx.setPointerCapture(e.pointerId); });
+      elx.addEventListener('pointermove', (e) => {
+        if (y0 === null) return;
+        const r = picker.getBoundingClientRect();
+        const y = Math.max(5, Math.min(90, ((e.clientY - r.top) / r.height) * 100));
+        if (Math.abs(e.clientY - y0) > 4) moved = true;
+        if (moved) { elx.style.top = `${y}%`; stickers[+elx.dataset.i].y = Math.round(y); }
+      });
+      elx.addEventListener('pointerup', () => {
+        if (!moved && confirm('Bu çıkartma kaldırılsın mı?')) {
+          const s = stickers.splice(+elx.dataset.i, 1)[0];
+          if (s.type === 'music') stopAudio();
+          paint();
+        }
+        y0 = null;
+      });
+    });
+    const mu = stickers.find((s) => s.type === 'music');
+    if (mu && !audioEl) { audioEl = new Audio(URL.createObjectURL(mu.file)); audioEl.loop = true; audioEl.play().catch(() => {}); }
+  }
+  function addSticker(k) {
+    if (stickers.length >= 4) return toast('En fazla 4 çıkartma ekleyebilirsin.');
+    if (['poll', 'question', 'music'].includes(k) && stickers.some((s) => s.type === k)) return toast('Bu çıkartmadan bir tane ekleyebilirsin.');
+    if (k === 'music') {
+      pickFiles('audio/*').then(([f]) => {
+        if (!f) return;
+        if (f.size > 15 * 1024 * 1024) return toast('Ses dosyası en fazla 15 MB olabilir.');
+        stickers.push({ type: 'music', file: f, title: f.name.replace(/\.[^.]+$/, '').slice(0, 60), y: 78 });
+        stopAudio(); paint();
+      });
+      return;
+    }
+    const forms = {
+      text: `<textarea class="field" name="a" maxlength="120" rows="2" placeholder="Bir şey yaz"></textarea>
+        <div class="colors">${STICKER_COLORS.map((c, i) => `<label><input type="radio" name="c" value="${c}" ${i ? '' : 'checked'}><i style="background:${c}"></i></label>`).join('')}</div>`,
+      poll: `<input class="field" name="a" maxlength="80" placeholder="Soru (ör. Hangisi daha güzel?)">
+        <input class="field" name="o1" maxlength="30" placeholder="1. seçenek" value="Evet"><input class="field" name="o2" maxlength="30" placeholder="2. seçenek" value="Hayır">
+        <input class="field" name="o3" maxlength="30" placeholder="3. seçenek (isteğe bağlı)">`,
+      question: '<input class="field" name="a" maxlength="80" value="Bana bir soru sor">',
+      mention: '<input class="field" name="a" maxlength="25" placeholder="kullanıcı adı" autocapitalize="off">',
+    };
+    const titles = { text: 'Metin ekle', poll: 'Anket ekle', question: 'Soru kutusu', mention: 'Birinden bahset' };
+    sheet(titles[k], `<form class="form">${forms[k]}<button class="btn primary block">Ekle</button></form>`, {
+      onMount(sh, close) {
+        const f = sh.querySelector('form');
+        setTimeout(() => f.a?.focus(), 50);
+        f.onsubmit = async (e) => {
+          e.preventDefault();
+          const a = f.a.value.trim();
+          if (k === 'text') { if (!a) return; stickers.push({ type: 'text', text: a, color: f.c.value, y: 30 }); }
+          if (k === 'poll') {
+            const options = [f.o1.value, f.o2.value, f.o3.value].map((x) => x.trim()).filter(Boolean);
+            if (options.length < 2) return toast('En az iki seçenek yaz.');
+            stickers.push({ type: 'poll', q: a, options, y: 55 });
+          }
+          if (k === 'question') stickers.push({ type: 'question', q: a || 'Bana bir soru sor', y: 45 });
+          if (k === 'mention') {
+            const un = a.replace(/^@/, '').toLowerCase();
+            try { await api(`/users/${encodeURIComponent(un)}`); } catch { return toast('Bu kullanıcı bulunamadı.'); }
+            stickers.push({ type: 'mention', username: un, y: 20 });
+          }
+          close(); paint();
+        };
+      },
+    });
+  }
+
+  // ---------- Dosya seçimi ----------
+  async function choose() {
+    const accept = { reel: 'video/*', story: 'image/*,video/*', image: 'image/*' }[mode];
+    const fs = await pickFiles(accept, mode === 'image');
+    if (!fs.length) return;
+    if (fs.some((f) => f.size > 40 * 1024 * 1024)) return toast('Dosya en fazla 40 MB olabilir.');
+    if (mode === 'image') {
+      const room = 10 - items.length;
+      if (fs.length > room) toast('En fazla 10 fotoğraf ekleyebilirsin.');
+      items.push(...fs.slice(0, room).map((f) => ({ file: f, url: URL.createObjectURL(f), filter: '' })));
+      cur = items.length - 1;
+    } else {
+      file = fs[0]; fileUrl = URL.createObjectURL(file);
+      edit = { start: 0, end: null, speed: 1, filter: '', audio: edit.audio, audioTitle: edit.audioTitle, muteOriginal: edit.muteOriginal };
+    }
+    paint();
+  }
 
   view.querySelector('.seg').onclick = (e) => {
     const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return;
     if (m === 'live') { location.hash = '#/live'; return; }
-    if (m !== mode) { mode = m; file = null; }
+    if (m !== mode) { mode = m; file = null; items = []; stickers = []; stopAudio(); edit = { start: 0, end: null, speed: 1, filter: '', audio: null, audioTitle: '', muteOriginal: false }; }
     view.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.m === mode));
-    paintPicker();
+    paint();
   };
-  picker.onclick = async () => {
-    const f = await pickFile({ reel: 'video/*', story: 'image/*,video/*', image: 'image/*' }[mode]);
-    if (!f) return;
-    if (f.size > 40 * 1024 * 1024) return toast('Dosya en fazla 40 MB olabilir.');
-    file = f; paintPicker();
-  };
+  paint();
 
+  // ---------- Paylaş ----------
   const bar = view.querySelector('.bar');
   const share = async () => {
-    if (!file) return;
+    if (!ready()) return;
     goBtns.forEach((b) => { b.disabled = true; });
     bar.hidden = false;
     const fill = bar.querySelector('i');
+    const prog = (base, span) => (p) => { fill.style.width = `${Math.round((base + p * span) * 100)}%`; };
     try {
-      let poster = null;
-      if (mode === 'reel') {
-        const pf = await posterFrom(file);
-        if (pf) poster = (await uploadFile(pf)).url;
+      if (mode === 'image') {
+        const out = [];
+        for (let i = 0; i < items.length; i++) {
+          const up = await uploadFile(await compressImage(items[i].file), prog(i / items.length, 1 / items.length));
+          out.push({ media: up.url, type: 'image', filter: items[i].filter || null });
+        }
+        const p = await api('/posts', { body: { type: 'image', items: out, caption: view.querySelector('.cap').value } });
+        toast('Gönderi paylaşıldı.');
+        location.hash = `#/p/${p.id}`;
+        return;
       }
       const isImg = file.type.startsWith('image/');
-      const up = await uploadFile(isImg ? await compressImage(file) : file, (p) => { fill.style.width = `${Math.round(p * 100)}%`; });
       if (mode === 'story') {
-        await api('/stories', { body: { media: up.url, mediaType: isImg ? 'image' : 'video' } });
+        const up = await uploadFile(isImg ? await compressImage(file) : file, prog(0, 0.8));
+        const st = [];
+        for (const s of stickers) {
+          if (s.type === 'music') { const a = await uploadFile(s.file, prog(0.8, 0.2)); st.push({ type: 'music', src: a.url, title: s.title, y: s.y }); } else st.push(s);
+        }
+        await api('/stories', { body: { media: up.url, mediaType: isImg ? 'image' : 'video', stickers: st } });
+        stopAudio();
         toast('Hikayen paylaşıldı.');
         location.hash = `#/stories/${state.me.id}`;
         return;
       }
-      const p = await api('/posts', { body: { type: mode, media: up.url, poster, caption: view.querySelector('.cap').value } });
-      toast(mode === 'reel' ? 'Dalga paylaşıldı.' : 'Gönderi paylaşıldı.');
-      location.hash = mode === 'reel' ? `#/dalga/${p.id}` : '#/me';
+      const pf = await posterFrom(file, edit.start + 0.3);
+      const poster = pf ? (await uploadFile(pf)).url : null;
+      const up = await uploadFile(file, prog(0, edit.audio ? 0.8 : 1));
+      let audio = null;
+      if (edit.audio) audio = (await uploadFile(edit.audio, prog(0.8, 0.2))).url;
+      const p = await api('/posts', {
+        body: {
+          type: 'reel', items: [{ media: up.url, type: 'video', poster }], caption: view.querySelector('.cap').value,
+          edit: { start: edit.start, end: edit.end, speed: edit.speed, filter: edit.filter || null, audio, audioTitle: edit.audioTitle, muteOriginal: edit.muteOriginal },
+        },
+      });
+      stopAudio();
+      toast('Dalga paylaşıldı.');
+      location.hash = `#/dalga/${p.id}`;
     } catch (e) {
       toast(e.message); bar.hidden = true; goBtns.forEach((b) => { b.disabled = false; });
     }
   };
   goBtns.forEach((b) => { b.onclick = share; });
-  return null;
+  return () => stopAudio();
 }
-export { esc };
