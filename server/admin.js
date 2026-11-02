@@ -770,5 +770,39 @@ module.exports = function mountAdmin(app, ctx) {
     res.json({ ok: true, removed, freedMB: +(freed / 1048576).toFixed(2), notified: notified.size });
   });
 
+
+  // ================= Veritabanı (Supabase / PostgreSQL) =================
+  app.get('/api/admin/database', adminAuth, async (req, res) => {
+    const cols = [...store.cols.entries()].map(([name, m]) => ({ name, count: m.size })).filter((c) => c.count).sort((a, b) => b.count - a.count);
+    const out = {
+      kind: store.kind, host: store.pgHost || null, schema: store.schema || null,
+      collections: cols, docs: cols.reduce((a, c) => a + c.count, 0),
+      mediaCount: store.mediaCount ?? store.all('media_meta').length, mediaMB: +((store.mediaBytes || 0) / 1048576).toFixed(1),
+      pending: store.pending?.size || 0, lastWrite: store.lastWrite || null, lastError: store.lastError || null,
+      migration: store.get('meta', 'migration'),
+      limitMB: store.kind === 'postgres' && /supabase/.test(store.pgHost || '') ? 500 : store.kind === 'redis' ? 25 : null,
+    };
+    if (store.pg) {
+      try {
+        const t = Date.now();
+        const r = await store.pg.query('select pg_database_size(current_database())::bigint as b, version() as v');
+        out.pingMs = Date.now() - t;
+        out.dbMB = +(r.rows[0].b / 1048576).toFixed(1);
+        out.version = String(r.rows[0].v).split(' on ')[0];
+        const t2 = await store.pg.query(`select pg_total_relation_size('${store.T('docs')}')::bigint as d, pg_total_relation_size('${store.T('media')}')::bigint as m`);
+        out.docsMB = +(t2.rows[0].d / 1048576).toFixed(1); out.mediaTableMB = +(t2.rows[0].m / 1048576).toFixed(1);
+        out.connected = true;
+      } catch (e) { out.connected = false; out.error = e.message; }
+    } else out.connected = true;
+    res.json(out);
+  });
+  app.get('/api/admin/database/backup', adminAuth, owner, (req, res) => {
+    const data = { exportedAt: new Date().toISOString(), kind: store.kind, collections: {} };
+    for (const [name, m] of store.cols) if (m.size) data.collections[name] = [...m.values()];
+    audit(req.admin, 'veritabanı yedeği indirdi');
+    res.setHeader('Content-Disposition', `attachment; filename="swipeup-yedek-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.type('application/json').send(JSON.stringify(data));
+  });
+
   return { statusOf, ensureAdmin: ctx.ensureAdmin };
 };

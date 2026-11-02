@@ -51,6 +51,7 @@ const SECTIONS = [
   ['announce', 'Bildirim gönder', 'bell'],
   ['notes', 'Notlar', 'edit'],
   ['audit', 'İşlem kaydı', 'eye'],
+  ['database', 'Veritabanı', 'grid'],
   ['settings', 'Ayarlar', 'settings'],
   ['admins', 'Yöneticiler', 'key'],
 ];
@@ -686,6 +687,39 @@ VIEWS.payouts = async (main) => {
     if (!ok) { note = prompt('Ret nedeni (kullanıcı görür):', ''); if (note === null) return; }
     try { await api(`/payouts/${b.closest('[data-id]').dataset.id}`, { body: { paid: ok, note } }); toast('Kaydedildi.'); VIEWS.payouts(main); refreshCounts(); } catch (er) { toast(er.message); }
   };
+};
+
+
+// ---- Veritabanı ----
+const COL_TR = { users: 'Kullanıcılar', messages: 'Mesajlar', notifications: 'Bildirimler', posts: 'Gönderiler', follows: 'Takipler', swipes: 'Kaydırmalar', matches: 'Eşleşmeler', chats: 'Sohbetler', stories: 'Hikayeler', pub_msgs: 'Genel sohbet', media_meta: 'Medya kayıtları', reports: 'Şikayetler', flags: 'Moderasyon', orders: 'Siparişler', coin_tx: 'Jeton hareketleri', earn_tx: 'Kazanç hareketleri', payouts: 'Ödeme talepleri', verifications: 'Doğrulamalar', blocks: 'Engellemeler', pushSubs: 'Bildirim abonelikleri', appeals: 'İtirazlar', settings: 'Ayarlar', meta: 'Sistem', adm_audit: 'Panel işlem kaydı', adm_ledger: 'Gelir-gider', adm_admins: 'Yöneticiler', adm_announcements: 'Bildirimler (panel)', adm_notes: 'Notlar', resets: 'Şifre sıfırlama', deleted_accounts: 'Silinen hesaplar' };
+VIEWS.database = async (main) => {
+  const d = await api('/database');
+  const name = d.kind === 'postgres' ? (/supabase/.test(d.host || '') ? 'Supabase (PostgreSQL)' : 'PostgreSQL') : d.kind === 'redis' ? 'Render Key Value' : 'Sunucu diski (geçici)';
+  const used = d.dbMB ?? d.mediaMB;
+  const pct = d.limitMB ? Math.min(100, Math.round((used / d.limitMB) * 100)) : null;
+  main.innerHTML = `${head('Veritabanı', 'Uygulama ve yönetim paneli verilerinin tutulduğu yer. Her değişiklik anında buraya yazılır.', S.me.role === 'owner' ? `<a class="btn" href="#" data-bk>${icon('download')} Yedek indir</a>` : '')}
+    <div class="stats">
+      <div class="stat"><b style="font-size:20px">${esc(name)}</b><span>${d.connected ? `<span class="chip ok">Bağlı</span>${d.pingMs != null ? ` · ${d.pingMs} ms` : ''}` : `<span class="chip bad">Bağlantı yok</span> ${esc(d.error || '')}`}</span></div>
+      <div class="stat"><b>${d.docs.toLocaleString('tr-TR')}</b><span>Kayıt</span></div>
+      <div class="stat"><b>${d.mediaCount}</b><span>Medya dosyası · ${d.mediaMB} MB</span></div>
+      <div class="stat"><b>${d.pending}</b><span>Yazılmayı bekleyen</span><span class="muted" style="font-size:11.5px">${d.lastWrite ? `Son yazma ${dt(d.lastWrite)}` : ''}</span></div>
+    </div>
+    ${pct != null ? `<div class="panel" style="margin-bottom:14px"><div class="pb"><div class="row"><b>Kullanılan alan</b><span class="muted" style="margin-left:auto">${used} MB / ${d.limitMB} MB (ücretsiz plan)</span></div>
+      <div class="dbbar"><i style="width:${pct}%;background:${pct > 85 ? 'var(--bad)' : pct > 60 ? 'var(--warn)' : 'var(--ok)'}"></i></div>
+      ${d.docsMB != null ? `<div class="muted" style="font-size:12.5px;margin-top:6px">Kayıtlar ${d.docsMB} MB · medya ${d.mediaTableMB} MB${d.version ? ` · ${esc(d.version)}` : ''}${d.host ? ` · ${esc(d.host)}${d.schema ? ` / şema ${esc(d.schema)}` : ''}` : ''}</div>` : ''}</div></div>` : ''}
+    ${d.lastError ? `<div class="case" style="background:color-mix(in srgb,var(--bad) 8%,transparent);border-radius:12px;margin-bottom:14px"><b>Son yazma hatası</b><div class="muted">${dt(d.lastError.at)} · ${esc(d.lastError.message)}</div></div>` : ''}
+    ${d.migration ? `<div class="panel" style="margin-bottom:14px"><div class="pb row" style="gap:12px">${icon('check')}<div><b>Taşıma tamamlandı</b><div class="muted">${dt(d.migration.at)} · Render Key Value’dan ${d.migration.docs} kayıt ve ${d.migration.media} medya (${d.migration.mediaMB} MB) taşındı.</div></div></div></div>` : ''}
+    <div class="panel"><div class="ph"><h3>Tablolar</h3></div><div class="tw"><table class="tbl"><thead><tr><th>Veri</th><th>Koleksiyon</th><th class="num">Kayıt</th></tr></thead><tbody>
+      ${d.collections.map((c) => `<tr><td>${esc(COL_TR[c.name] || c.name)}</td><td class="muted mono">${esc(c.name)}</td><td class="num">${c.count.toLocaleString('tr-TR')}</td></tr>`).join('')}</tbody></table></div></div>`;
+  main.querySelector('[data-bk]')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    try {
+      const r = await fetch('/api/admin/database/backup', { headers: { Authorization: 'Bearer ' + S.token } });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'İndirilemedi.');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = `swipeup-yedek-${today()}.json`; a.click();
+      toast('Yedek indirildi.');
+    } catch (er) { toast(er.message); }
+  });
 };
 
 // ---- Ayarlar: ödeme, fiyatlar, yasal ----

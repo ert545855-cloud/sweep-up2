@@ -58,6 +58,13 @@ npm start          # http://localhost:3000
 | `ADMIN_PASSWORD` | Yönetim panelindeki `admin` hesabının ilk şifresi. Panelden değiştirilirse bu değer artık uygulanmaz. |
 | `KEEP_ALIVE` | `0` verilirse sunucu kendini uyanık tutmaz. |
 
+### Veritabanı (Supabase)
+Veriler Supabase PostgreSQL'de, `swipeup` şemasında (`docs` ve `media` tabloları) tutulur; şema Data API'ye açık değildir, sunucu ayrı bir `swipeup_app` rolüyle bağlanır.
+- `DATABASE_URL`: Supabase bağlantı adresi (pooler, oturum modu 5432). `DATABASE_URL_FALLBACKS`: boşlukla ayrılmış yedek adresler, sırayla denenir.
+- `PG_SCHEMA=swipeup`
+- Tablo boşken ilk açılışta `REDIS_URL`'deki tüm veri ve medya otomatik taşınır (`MIGRATE_FROM_REDIS=0` ile kapatılır). PostgreSQL'e ulaşılamazsa uygulama Key Value ile çalışmaya devam eder.
+- Yönetim paneli → Veritabanı: bağlantı durumu, kullanılan alan, tablolar ve JSON yedek indirme.
+
 ## Render'da yayınlama
 
 Repodaki `render.yaml` bir web servisi ve ücretsiz bir Key Value deposu tanımlar. Render panelinde **New → Blueprint** ile bu repoyu seçmek yeterli.
