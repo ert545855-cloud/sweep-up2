@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: sweep-up
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sweep-up-db
+          property: connectionString
+
+databases:
+  - name: sweep-up-db
+    plan: free
+    region: frankfurt
