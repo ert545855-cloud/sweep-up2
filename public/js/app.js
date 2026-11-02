@@ -4,6 +4,7 @@ import {
 } from './core.js';
 import { initCalls } from './calls.js';
 import { checkVersion, recover, afterBoot } from './update.js';
+import { maybeShowInstall } from './install.js';
 
 const routes = [
   [/^\/?$/, 'feed', { tab: 'home' }],
@@ -29,6 +30,7 @@ const routes = [
   [/^\/p\/([\w-]+)$/, 'post', { tab: 'home' }],
   [/^\/(login|register|forgot)$/, 'auth', { tabs: false, public: true }],
   [/^\/legal\/(\w+)$/, 'legal', { tabs: false, any: true }],
+  [/^\/install$/, 'install', { tabs: false, any: true }],
   [/^\/store$/, 'store', { tabs: false }],
   [/^\/wallet$/, 'wallet', { tabs: false }],
   [/^\/verify$/, 'verify', { tabs: false }],
@@ -238,6 +240,8 @@ async function boot() {
   }
   if (!state.config) state.config = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
   afterBoot(state.config?.version);
+  // İlk ziyarette telefona yükleme kılavuzu (iPhone: Safari → Ana Ekrana Ekle)
+  setTimeout(maybeShowInstall, state.token ? 4000 : 1500);
   // Beklenmeyen modül hataları (eski sürüm kalıntısı) → güncelleme ekranı
   window.addEventListener('unhandledrejection', (e) => { recover(e.reason); });
   window.addEventListener('hashchange', router);

@@ -262,7 +262,7 @@ const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
 export function pushHint() {
   if (pushSupported()) return null;
-  if (isIOS() && !isStandalone()) return 'iPhone’da bildirim almak için Paylaş → Ana Ekrana Ekle ile uygulamayı yükle, sonra buradan aç.';
+  if (isIOS() && !isStandalone()) return 'iPhone’da bildirim almak için önce uygulamayı ana ekrana ekle (Ayarlar → Telefona yükle), sonra ana ekrandaki simgeden aç.';
   return 'Bu tarayıcı anlık bildirimleri desteklemiyor.';
 }
 function b64ToU8(b64) {
