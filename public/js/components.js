@@ -18,6 +18,20 @@ export function mediaHtml(p) {
   return `<div class="car"><div class="car-track">${items.map((it) => `<div class="car-cell">${oneMedia(it, p)}</div>`).join('')}</div>
     <span class="car-n">1/${items.length}</span><div class="car-dots">${items.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></div>`;
 }
+// Gönderi kutusunu ilk medyanın oranına göre ayarla (kırpmadan sığdır; 4:5 ile 1.91:1 arası)
+export function fitMedia(box) {
+  const first = box.querySelector('img, video');
+  if (!first) return;
+  const set = (w, h) => {
+    if (!w || !h) return;
+    const r = Math.max(0.8, Math.min(1.91, w / h));
+    box.style.aspectRatio = String(r);
+  };
+  if (first.tagName === 'IMG') {
+    if (first.complete && first.naturalWidth) set(first.naturalWidth, first.naturalHeight);
+    else first.addEventListener('load', () => set(first.naturalWidth, first.naturalHeight), { once: true });
+  } else first.addEventListener('loadedmetadata', () => set(first.videoWidth, first.videoHeight), { once: true });
+}
 export function wireCarousel(root) {
   const tr = root.querySelector('.car-track');
   if (!tr) return;
@@ -89,6 +103,7 @@ export function wirePost(root, p, onRemove) {
   likeBtn.onclick = () => toggleLike(p, likeBtn);
   const mediaBox = root.querySelector('.post-media');
   wireCarousel(mediaBox);
+  fitMedia(mediaBox);
   if (p.edit) applyEdit(mediaBox.querySelector('video'), p.edit);
   onDoubleTap(mediaBox, () => { heartBurst(mediaBox); toggleLike(p, likeBtn, true); }, () => {
     const v = mediaBox.querySelector('video');

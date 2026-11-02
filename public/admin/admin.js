@@ -57,7 +57,7 @@ const SECTIONS = [
 // ================= Giriş =================
 function login() {
   root.innerHTML = `<div class="login"><form>
-    <div class="brand"><span class="mark">${icon('arrowUp')}</span>swipeup <small>yönetim</small></div>
+    <div class="brand"><img class="mark" src="/icons/mark.png" alt="">swipeup <small>yönetim</small></div>
     <p>Yönetici hesabınla giriş yap.</p>
     <input class="field" name="u" placeholder="Kullanıcı adı" autocomplete="username" autocapitalize="none" required>
     <input class="field" name="p" type="password" placeholder="Şifre" autocomplete="current-password" required>
@@ -79,7 +79,7 @@ async function render() {
   const cur = (location.hash.slice(2) || 'overview').split('/')[0];
   const nav = (cls) => SECTIONS.map(([k, l, ic, cnt]) => `<a class="nav ${cur === k ? 'on' : ''}" href="#/${k}">${icon(ic)}<span>${l}</span>${cnt && S.counts[cnt] ? `<span class="n">${S.counts[cnt]}</span>` : ''}</a>`).join('');
   root.innerHTML = `<div class="shell">
-    <aside class="side"><div class="brand"><span class="mark">${icon('arrowUp')}</span>swipeup <small>yönetim</small></div>${nav()}
+    <aside class="side"><div class="brand"><img class="mark" src="/icons/mark.png" alt="">swipeup <small>yönetim</small></div>${nav()}
       <div class="who"><b>${esc(S.me.name)}</b><span class="muted">@${esc(S.me.username)} · ${S.me.role === 'owner' ? 'Sahip' : 'Yönetici'}</span>
       <div class="row"><a class="btn sm" href="/" target="_blank" rel="noopener">Uygulamayı aç</a><button class="btn sm lo">Çıkış</button></div></div></aside>
     <div><nav class="topnav">${nav()}</nav><main class="main"></main></div></div>`;

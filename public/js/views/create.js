@@ -2,6 +2,24 @@ import { icon } from '../icons.js';
 import {
   api, toast, compressImage, uploadFile, esc, state, sheet, FILTERS, filterCss, fmtDur,
 } from '../core.js';
+import { pickMusic, musicChip } from '../music.js';
+
+const musicUrl = (m) => (m.file ? (m._url ||= URL.createObjectURL(m.file)) : m.src);
+// Önizlemede yatay kaydırarak filtre değiştir (Instagram gibi)
+function swipeFilters(el, get, set) {
+  let x0 = null; let y0 = 0;
+  el.addEventListener('pointerdown', (e) => { if (e.target.closest('.stk, button')) return; x0 = e.clientX; y0 = e.clientY; });
+  el.addEventListener('pointerup', (e) => {
+    if (x0 === null) return;
+    const dx = e.clientX - x0; const dy = e.clientY - y0; x0 = null;
+    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
+    const i = FILTERS.findIndex((f) => f[0] === (get() || ''));
+    const n = FILTERS[(i + (dx < 0 ? 1 : -1) + FILTERS.length) % FILTERS.length];
+    set(n[0]);
+    const tag = document.createElement('div'); tag.className = 'fname'; tag.textContent = n[1];
+    el.append(tag); setTimeout(() => tag.remove(), 900);
+  });
+}
 
 // Videodan kapak karesi üret
 function posterFrom(file, at = 0.5) {
@@ -42,7 +60,8 @@ export default function create(view, kind) {
   let cur = 0;
   let file = null; // dalga / hikaye
   let fileUrl = null;
-  let edit = { start: 0, end: null, speed: 1, filter: '', audio: null, audioTitle: '', muteOriginal: false };
+  let edit = { start: 0, end: null, speed: 1, filter: '', music: null, muteOriginal: false };
+  let storyFilter = '';
   let stickers = [];
   let audioEl = null;
 
@@ -97,7 +116,7 @@ export default function create(view, kind) {
 
   function paintImages() {
     const it = items[cur];
-    picker.innerHTML = `<img src="${it.url}" alt="Önizleme" style="filter:${filterCss(it.filter)}">${items.length > 1 ? `<span class="car-n">${cur + 1}/${items.length}</span>` : ''}`;
+    picker.innerHTML = `<img src="${it.url}" alt="Önizleme" class="fit" style="filter:${filterCss(it.filter)}">${items.length > 1 ? `<span class="car-n">${cur + 1}/${items.length}</span>` : ''}`;
     tools.innerHTML = `<div class="thumbs">${items.map((x, i) => `<button class="th ${i === cur ? 'on' : ''}" data-i="${i}"><img src="${x.url}" style="filter:${filterCss(x.filter)}" alt=""><i data-rm="${i}" aria-label="Kaldır">${icon('close')}</i></button>`).join('')}
       ${items.length < 10 ? `<button class="th add" aria-label="Fotoğraf ekle">${icon('plus')}</button>` : ''}</div>
       <div class="tl">Filtre</div>${filterStrip(it.filter, it.url)}`;
@@ -121,8 +140,8 @@ export default function create(view, kind) {
     const sync = () => {
       v.playbackRate = edit.speed;
       v.style.filter = filterCss(edit.filter);
-      if (edit.audio && !audioEl) { audioEl = new Audio(URL.createObjectURL(edit.audio)); audioEl.loop = true; audioEl.play().catch(() => {}); }
-      if (!edit.audio) stopAudio();
+      if (edit.music && !audioEl) { audioEl = new Audio(musicUrl(edit.music)); audioEl.loop = true; audioEl.play().catch(() => {}); }
+      if (!edit.music) stopAudio();
       v.muted = true;
     };
     v.addEventListener('loadedmetadata', () => { if (edit.start) v.currentTime = edit.start; showTab(tab); });
@@ -162,19 +181,19 @@ export default function create(view, kind) {
         pane.onclick = (e) => { const b = e.target.closest('[data-f]'); if (!b) return; edit.filter = b.dataset.f; sync(); showTab('filter'); };
       }
       if (t === 'music') {
-        pane.innerHTML = edit.audio ? `<div class="list-item" style="padding:8px 0">${icon('music')}<div class="grow"><input class="field" name="at" value="${esc(edit.audioTitle)}" maxlength="60" placeholder="Şarkı adı"></div><button class="ib rm" aria-label="Müziği kaldır">${icon('trash')}</button></div>
+        pane.innerHTML = edit.music ? `<div class="mcard">${musicChip(edit.music)}<button class="ib ch" aria-label="Değiştir">${icon('music')}</button><button class="ib rm" aria-label="Müziği kaldır">${icon('trash')}</button></div>
           <label class="switch-row"><input type="checkbox" class="mo" ${edit.muteOriginal ? 'checked' : ''}> Videonun kendi sesini kapat</label>`
-          : `<button class="btn outline block addm">${icon('music')} Telefonundan şarkı seç</button><p class="muted" style="font-size:13px;margin:8px 2px 0">Kendi ses dosyanı ekle (mp3, m4a). Telif hakkı sende olmayan müzikleri kullanmamaya dikkat et.</p>`;
+          : `<button class="btn primary block addm">${icon('music')} Müzik ekle</button><p class="muted" style="font-size:13px;margin:8px 2px 0">Spotify kataloğundan şarkı ara ya da kendi ses dosyanı ekle.</p>`;
         pane.onclick = null;
-        pane.querySelector('.addm')?.addEventListener('click', async () => {
-          const [f] = await pickFiles('audio/*');
-          if (!f) return;
-          if (f.size > 15 * 1024 * 1024) return toast('Ses dosyası en fazla 15 MB olabilir.');
-          edit.audio = f; edit.audioTitle = f.name.replace(/\.[^.]+$/, '').slice(0, 60); edit.muteOriginal = true;
+        const choose = async () => {
+          const m = await pickMusic();
+          if (!m) return;
+          edit.music = m; edit.muteOriginal = true;
           stopAudio(); sync(); showTab('music');
-        });
-        pane.querySelector('.rm')?.addEventListener('click', () => { edit.audio = null; edit.audioTitle = ''; edit.muteOriginal = false; sync(); showTab('music'); });
-        pane.querySelector('[name=at]')?.addEventListener('input', (e) => { edit.audioTitle = e.target.value; });
+        };
+        pane.querySelector('.addm')?.addEventListener('click', choose);
+        pane.querySelector('.ch')?.addEventListener('click', choose);
+        pane.querySelector('.rm')?.addEventListener('click', () => { edit.music = null; edit.muteOriginal = false; sync(); showTab('music'); });
         pane.querySelector('.mo')?.addEventListener('change', (e) => { edit.muteOriginal = e.target.checked; });
       }
     };
@@ -190,20 +209,24 @@ export default function create(view, kind) {
     if (s.type === 'text') return `<div class="stk txt" data-i="${i}" style="${style};color:${s.color}">${esc(s.text)}</div>`;
     if (s.type === 'poll') return `<div class="stk poll" data-i="${i}" style="${style}"><b>${esc(s.q || 'Anket')}</b>${s.options.map((o) => `<span>${esc(o)}</span>`).join('')}</div>`;
     if (s.type === 'question') return `<div class="stk q" data-i="${i}" style="${style}"><b>${esc(s.q)}</b><span>Bir şey yaz…</span></div>`;
-    if (s.type === 'music') return `<div class="stk mu" data-i="${i}" style="${style}">${icon('music')}<span>${esc(s.title)}</span></div>`;
+    if (s.type === 'music') return `<div class="stk mu" data-i="${i}" style="${style}">${musicChip(s)}</div>`;
     if (s.type === 'mention') return `<div class="stk men" data-i="${i}" style="${style}">@${esc(s.username)}</div>`;
     return '';
   }
   function paintStory() {
     const vid = file.type.startsWith('video');
-    picker.innerHTML = `${vid ? `<video src="${fileUrl}" autoplay muted loop playsinline></video>` : `<img src="${fileUrl}" alt="Önizleme">`}
+    const fst = `style="filter:${filterCss(storyFilter)}"`;
+    picker.innerHTML = `${vid ? `<video src="${fileUrl}" autoplay muted loop playsinline class="fit" ${fst}></video>` : `<img src="${fileUrl}" class="blurbg" alt=""><img src="${fileUrl}" alt="Önizleme" class="fit" ${fst}>`}
       <div class="stk-layer">${stickers.map(stickerHtml).join('')}</div>
       <button class="swap" aria-label="Başka dosya seç">${icon('image')}</button>`;
     picker.querySelector('.swap').onclick = choose;
     tools.innerHTML = `<div class="stk-tools">
       <button data-k="text">${icon('text')}Metin</button><button data-k="poll">${icon('poll')}Anket</button>
       <button data-k="question">${icon('question')}Soru</button><button data-k="music">${icon('music')}Müzik</button><button data-k="mention">${icon('at')}Bahset</button></div>
-      <p class="muted" style="font-size:12.5px;margin:6px 2px 0">Çıkartmayı yukarı-aşağı sürükleyerek taşı, kaldırmak için dokun.</p>`;
+      <p class="muted" style="font-size:12.5px;margin:6px 2px 0">Efekt için fotoğrafı sağa-sola kaydır. Çıkartmayı sürükleyerek taşı, kaldırmak için dokun.</p>
+      <div class="tl">Efektler</div>${filterStrip(storyFilter, vid ? '' : fileUrl)}`;
+    if (vid) tools.querySelectorAll('.fstrip span').forEach((sp) => { sp.style.backgroundImage = 'linear-gradient(135deg,#ff8a3d,#7c3aed 60%,#22c55e)'; });
+    tools.querySelector('.fstrip').onclick = (e) => { const b = e.target.closest('[data-f]'); if (!b) return; storyFilter = b.dataset.f; paint(); };
     tools.querySelector('.stk-tools').onclick = (e) => { const b = e.target.closest('[data-k]'); if (b) addSticker(b.dataset.k); };
     // sürükle / kaldır
     picker.querySelectorAll('.stk').forEach((elx) => {
@@ -226,16 +249,15 @@ export default function create(view, kind) {
       });
     });
     const mu = stickers.find((s) => s.type === 'music');
-    if (mu && !audioEl) { audioEl = new Audio(URL.createObjectURL(mu.file)); audioEl.loop = true; audioEl.play().catch(() => {}); }
+    if (mu && !audioEl) { audioEl = new Audio(musicUrl(mu)); audioEl.loop = true; audioEl.play().catch(() => {}); }
   }
   function addSticker(k) {
     if (stickers.length >= 4) return toast('En fazla 4 çıkartma ekleyebilirsin.');
     if (['poll', 'question', 'music'].includes(k) && stickers.some((s) => s.type === k)) return toast('Bu çıkartmadan bir tane ekleyebilirsin.');
     if (k === 'music') {
-      pickFiles('audio/*').then(([f]) => {
-        if (!f) return;
-        if (f.size > 15 * 1024 * 1024) return toast('Ses dosyası en fazla 15 MB olabilir.');
-        stickers.push({ type: 'music', file: f, title: f.name.replace(/\.[^.]+$/, '').slice(0, 60), y: 78 });
+      pickMusic().then((m) => {
+        if (!m) return;
+        stickers.push({ type: 'music', ...m, y: 78 });
         stopAudio(); paint();
       });
       return;
@@ -288,7 +310,8 @@ export default function create(view, kind) {
       cur = items.length - 1;
     } else {
       file = fs[0]; fileUrl = URL.createObjectURL(file);
-      edit = { start: 0, end: null, speed: 1, filter: '', audio: edit.audio, audioTitle: edit.audioTitle, muteOriginal: edit.muteOriginal };
+      edit = { start: 0, end: null, speed: 1, filter: '', music: edit.music, muteOriginal: edit.muteOriginal };
+      storyFilter = '';
     }
     paint();
   }
@@ -296,10 +319,15 @@ export default function create(view, kind) {
   view.querySelector('.seg').onclick = (e) => {
     const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return;
     if (m === 'live') { location.hash = '#/live'; return; }
-    if (m !== mode) { mode = m; file = null; items = []; stickers = []; stopAudio(); edit = { start: 0, end: null, speed: 1, filter: '', audio: null, audioTitle: '', muteOriginal: false }; }
+    if (m !== mode) { mode = m; file = null; items = []; stickers = []; stopAudio(); storyFilter = ''; edit = { start: 0, end: null, speed: 1, filter: '', music: null, muteOriginal: false }; }
     view.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.m === mode));
     paint();
   };
+  swipeFilters(picker, () => (mode === 'image' ? items[cur]?.filter : mode === 'story' ? storyFilter : edit.filter), (f) => {
+    if (!ready()) return;
+    if (mode === 'image') items[cur].filter = f; else if (mode === 'story') storyFilter = f; else edit.filter = f;
+    if (mode === 'reel') { const v = picker.querySelector('video'); if (v) v.style.filter = filterCss(f); tools.querySelector('.etabs [data-t=filter]')?.click(); } else paint();
+  });
   paint();
 
   // ---------- Paylaş ----------
@@ -327,9 +355,12 @@ export default function create(view, kind) {
         const up = await uploadFile(isImg ? await compressImage(file) : file, prog(0, 0.8));
         const st = [];
         for (const s of stickers) {
-          if (s.type === 'music') { const a = await uploadFile(s.file, prog(0.8, 0.2)); st.push({ type: 'music', src: a.url, title: s.title, y: s.y }); } else st.push(s);
+          if (s.type === 'music') {
+            const src = s.file ? (await uploadFile(s.file, prog(0.8, 0.2))).url : s.src;
+            st.push({ type: 'music', src, title: s.title, artist: s.artist, cover: s.cover, spotifyUrl: s.spotifyUrl, y: s.y });
+          } else st.push(s);
         }
-        await api('/stories', { body: { media: up.url, mediaType: isImg ? 'image' : 'video', stickers: st } });
+        await api('/stories', { body: { media: up.url, mediaType: isImg ? 'image' : 'video', stickers: st, filter: storyFilter || null } });
         stopAudio();
         toast('Hikayen paylaşıldı.');
         location.hash = `#/stories/${state.me.id}`;
@@ -337,13 +368,17 @@ export default function create(view, kind) {
       }
       const pf = await posterFrom(file, edit.start + 0.3);
       const poster = pf ? (await uploadFile(pf)).url : null;
-      const up = await uploadFile(file, prog(0, edit.audio ? 0.8 : 1));
+      const m = edit.music;
+      const up = await uploadFile(file, prog(0, m?.file ? 0.8 : 1));
       let audio = null;
-      if (edit.audio) audio = (await uploadFile(edit.audio, prog(0.8, 0.2))).url;
+      if (m) audio = m.file ? (await uploadFile(m.file, prog(0.8, 0.2))).url : m.src;
       const p = await api('/posts', {
         body: {
           type: 'reel', items: [{ media: up.url, type: 'video', poster }], caption: view.querySelector('.cap').value,
-          edit: { start: edit.start, end: edit.end, speed: edit.speed, filter: edit.filter || null, audio, audioTitle: edit.audioTitle, muteOriginal: edit.muteOriginal },
+          edit: {
+            start: edit.start, end: edit.end, speed: edit.speed, filter: edit.filter || null, audio,
+            audioTitle: m?.title || '', audioArtist: m?.artist || '', audioCover: m?.cover || null, spotifyUrl: m?.spotifyUrl || null, muteOriginal: edit.muteOriginal,
+          },
         },
       });
       stopAudio();

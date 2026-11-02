@@ -1,7 +1,16 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, toast, el, sheet, needCoins, tick,
+  state, api, esc, on, toast, el, sheet, needCoins, tick, FILTERS, filterCss,
 } from '../core.js';
+
+// Yayıncı efekt seçici (izleyicilerde de aynı efekt görünür)
+function effectSheet(cur, onPick) {
+  sheet('Efektler', `<div class="fstrip big">${FILTERS.map(([id, name, css]) => `<button data-f="${id}" class="${(cur || '') === id ? 'on' : ''}"><span style="background:linear-gradient(135deg,#ff8a3d,#7c3aed 55%,#22c55e);filter:${css}"></span>${name}</button>`).join('')}</div>`, {
+    onMount(sh, close) {
+      sh.querySelector('.fstrip').onclick = (e) => { const b = e.target.closest('[data-f]'); if (!b) return; onPick(b.dataset.f); close(); };
+    },
+  });
+}
 
 // Hediye seçici
 async function giftSheet(hostId) {
@@ -114,14 +123,14 @@ async function host(view) {
   const root = chrome(view, state.me, { host: true });
   const video = root.querySelector('video');
   const slot = root.querySelector('.slot');
-  let stream; let facing = 'user'; let live = false; let offChat = null;
+  let stream; let facing = 'user'; let live = false; let offChat = null; let fx = '';
   const peers = new Map();
 
   if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
     slot.innerHTML = '<div class="center-msg">Bu tarayıcı kamera ile canlı yayını desteklemiyor.</div>';
   } else {
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 720 }, height: { ideal: 1280 } }, audio: { echoCancellation: true, noiseSuppression: true } });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 720 }, height: { ideal: 1280 }, aspectRatio: { ideal: 9 / 16 } }, audio: { echoCancellation: true, noiseSuppression: true } });
       video.srcObject = stream;
     } catch {
       slot.innerHTML = `<div class="center-msg"><div>${icon('camera')}<p>Canlı yayın için kamera ve mikrofon izni gerekiyor. Tarayıcı ayarlarından izin verip sayfayı yenile.</p></div></div>`;
@@ -139,11 +148,17 @@ async function host(view) {
         live = true;
         slot.innerHTML = `<div class="tools">
           <button class="flip" aria-label="Kamerayı çevir">${icon('flip')}</button>
-          <button class="mic" aria-label="Mikrofonu kapat">${icon('mic')}</button></div>`;
+          <button class="mic" aria-label="Mikrofonu kapat">${icon('mic')}</button>
+          <button class="fx" aria-label="Efektler">${icon('wand')}</button></div>`;
         root.querySelector('.badge-live').hidden = false;
         root.querySelector('.badge-v').hidden = false;
         offChat = wireChat(root, state.me.id);
         slot.querySelector('.flip').onclick = flip;
+        slot.querySelector('.fx').onclick = () => effectSheet(fx, (f) => {
+          fx = f; video.style.filter = filterCss(f);
+          state.socket.emit('live:filter', { filter: f });
+          const n = FILTERS.find((x) => x[0] === f)?.[1]; if (n) toast(`Efekt: ${n}`, { ms: 1200 });
+        });
         slot.querySelector('.mic').onclick = (e) => {
           const t = stream.getAudioTracks()[0]; if (!t) return;
           t.enabled = !t.enabled;
@@ -156,7 +171,7 @@ async function host(view) {
   async function flip() {
     facing = facing === 'user' ? 'environment' : 'user';
     try {
-      const ns = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
+      const ns = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 720 }, height: { ideal: 1280 }, aspectRatio: { ideal: 9 / 16 } } });
       const nt = ns.getVideoTracks()[0];
       const old = stream.getVideoTracks()[0];
       stream.removeTrack(old); old.stop(); stream.addTrack(nt);
@@ -230,6 +245,7 @@ async function watch(view, hostId) {
       await pc.handle(data);
     }),
     on('live:ended', ({ userId }) => { if (userId === hostId) ended(); }),
+    on('live:filter', ({ hostId: h, filter }) => { if (h === hostId) video.style.filter = filterCss(filter); }),
   ];
 
   const r = await new Promise((res) => state.socket.emit('live:join', { hostId }, res));
@@ -239,6 +255,7 @@ async function watch(view, hostId) {
     root.querySelector('.badge-live').hidden = false;
     root.querySelector('.badge-v').hidden = false;
     root.querySelector('.vc').textContent = r.live.viewers;
+    video.style.filter = filterCss(r.live.filter);
     offChat = wireChat(root, hostId);
     let last = 0;
     video.addEventListener('click', () => { const t = Date.now(); if (t - last < 300) state.socket.emit('live:heart', { hostId }); last = t; });

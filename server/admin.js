@@ -44,6 +44,8 @@ module.exports = function mountAdmin(app, ctx) {
     if (m) return { kind: 'message', id: m.id, text: m.deleted ? '(silindi)' : m.text, media: m.deleted ? null : m.media, mediaType: m.mediaType };
     const s = store.get('stories', ref);
     if (s) return { kind: 'story', id: s.id, media: s.media, mediaType: s.mediaType };
+    const g = store.get('pub_msgs', ref);
+    if (g) return { kind: 'genel', id: g.id, text: g.deleted ? '(silindi)' : g.text, media: g.deleted ? null : g.media, mediaType: g.mediaType };
     return { kind: 'gone', id: ref };
   };
   const deleteContent = (ref) => {
@@ -51,6 +53,12 @@ module.exports = function mountAdmin(app, ctx) {
     if (!c) return null;
     if (c.kind === 'post') store.del('posts', ref);
     if (c.kind === 'story') { store.del('stories', ref); io.emit('stories:update', {}); }
+    if (c.kind === 'genel') {
+      const g = store.get('pub_msgs', ref);
+      Object.assign(g, { deleted: true, text: '', media: null, reactions: {} });
+      store.update('pub_msgs', g.id, {});
+      io.to('genel').emit('genel:update', { ...g, user: brief(store.get('users', g.userId)) });
+    }
     if (c.kind === 'message') {
       const m = store.get('messages', ref);
       Object.assign(m, { deleted: true, text: '', media: null, reactions: {} });
@@ -565,14 +573,15 @@ module.exports = function mountAdmin(app, ctx) {
   app.get('/api/admin/flags', adminAuth, (req, res) => {
     const st = String(req.query.status || 'open');
     res.json(store.filter('flags', (f) => st === 'all' || f.status === st).sort((a, b) => (b.level === 'high') - (a.level === 'high') || b.at - a.at).slice(0, 300).map((f) => {
-      const m = store.get('messages', f.ref);
-      const ctxMsgs = m ? store.filter('messages', (x) => x.chatId === m.chatId && Math.abs(x.at - m.at) < 30 * 60000 && !x.system).sort((a, b) => a.at - b.at)
+      const m = store.get('messages', f.ref) || store.get('pub_msgs', f.ref);
+      const col = store.get('messages', f.ref) ? 'messages' : 'pub_msgs';
+      const ctxMsgs = m ? store.filter(col, (x) => (col === 'pub_msgs' || x.chatId === m.chatId) && Math.abs(x.at - m.at) < 30 * 60000 && !x.system).sort((a, b) => a.at - b.at)
         .filter((x, i, arr) => Math.abs(arr.findIndex((y) => y.id === m.id) - i) <= 3)
-        .map((x) => ({ id: x.id, text: x.deleted ? '(silindi)' : x.location ? `📍 Konum${x.location.label ? ': ' + x.location.label : ''}` : x.text || (x.mediaType === 'audio' ? '🎤 Sesli mesaj' : x.media ? '📷 Medya' : ''), from: store.get('users', x.from)?.username, at: x.at, flagged: x.id === m.id })) : [];
+        .map((x) => ({ id: x.id, text: x.deleted ? '(silindi)' : x.location ? `📍 Konum${x.location.label ? ': ' + x.location.label : ''}` : x.text || (x.mediaType === 'audio' ? '🎤 Sesli mesaj' : x.media ? '📷 Medya' : ''), from: store.get('users', x.from || x.userId)?.username, at: x.at, flagged: x.id === m.id })) : [];
       const chat = store.get('chats', f.chatId);
       return {
         ...f, user: store.get('users', f.userId) ? userRow(store.get('users', f.userId)) : null,
-        to: chat ? chat.members.filter((x) => x !== f.userId).map((x) => brief(store.get('users', x))).filter(Boolean).slice(0, 3) : [],
+        to: f.chatId === 'genel' ? [{ username: 'genel-sohbet' }] : chat ? chat.members.filter((x) => x !== f.userId).map((x) => brief(store.get('users', x))).filter(Boolean).slice(0, 3) : [],
         context: ctxMsgs, userFlags: store.filter('flags', (x) => x.userId === f.userId).length,
       };
     }));

@@ -12,6 +12,7 @@ export default async function chats(view) {
       <button class="ib soft new" aria-label="Yeni mesaj">${icon('edit')}</button>
     </header>
     <div class="search-bar" style="position:static;padding-top:2px"><label class="sw">${icon('search')}<input class="field q" placeholder="Sohbetlerde ara" aria-label="Sohbetlerde ara"></label></div>
+    <a class="genel-row" href="#/genel"><span class="genel-ic">${icon('users')}</span><span class="grow"><b>Genel sohbet</b><small>Tüm üyelerin konuştuğu oda</small></span><span class="go-chip">Katıl</span></a>
     <div class="mrow"></div>
     <div class="clist"><div class="spinner"></div></div>`;
 

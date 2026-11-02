@@ -11,6 +11,7 @@ const routes = [
   [/^\/swipe$/, 'swipe', { tab: 'swipe' }],
   [/^\/likes$/, 'likes', { tab: 'swipe' }],
   [/^\/chats$/, 'chats', { tab: 'chats' }],
+  [/^\/genel$/, 'genel', { tabs: false }],
   [/^\/chat\/([\w-]+)$/, 'chat', { tabs: false }],
   [/^\/chat\/([\w-]+)\/info$/, 'chatinfo', { tabs: false }],
   [/^\/group\/new$/, 'groupnew', { tabs: false }],

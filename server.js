@@ -15,6 +15,7 @@ const store = require('./server/store');
 const mail = require('./server/mail');
 const moderation = require('./server/moderation');
 const eco = require('./server/economy')(store);
+const music = require('./server/music');
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -610,8 +611,11 @@ app.post('/api/posts', auth, (req, res) => {
     const num = (v, lo, hi) => (Number.isFinite(+v) ? Math.max(lo, Math.min(hi, +v)) : null);
     edit = {
       start: num(e.start, 0, 3600) || 0, end: num(e.end, 0, 3600), speed: [0.5, 0.75, 1, 1.5, 2].includes(+e.speed) ? +e.speed : 1,
-      filter: FILTERS.includes(e.filter) ? e.filter : null, audio: isMedia(e.audio) ? e.audio : null,
-      audioTitle: String(e.audioTitle || '').slice(0, 60), muteOriginal: !!e.muteOriginal && isMedia(e.audio),
+      filter: FILTERS.includes(e.filter) ? e.filter : null, audio: isMedia(e.audio) || music.isPreview(e.audio) ? e.audio : null,
+      audioTitle: String(e.audioTitle || '').slice(0, 80), audioArtist: String(e.audioArtist || '').slice(0, 80),
+      audioCover: music.clean({ src: 'https://p.scdn.co/x', cover: e.audioCover })?.cover || null,
+      spotifyUrl: music.clean({ src: 'https://p.scdn.co/x', spotifyUrl: e.spotifyUrl })?.spotifyUrl || null,
+      muteOriginal: !!e.muteOriginal && (isMedia(e.audio) || music.isPreview(e.audio)),
     };
     if (edit.end != null && edit.end <= edit.start + 0.5) edit.end = null;
   }
@@ -680,7 +684,7 @@ app.post('/api/posts/:id/comments', auth, (req, res) => {
 
 // ---------- Hikayeler (24 saat) ----------
 const storyAlive = (s) => now() - s.at < DAY;
-const FILTERS = ['sicak', 'soguk', 'vintage', 'siyahbeyaz', 'canli', 'pastel', 'dram', 'gece'];
+const FILTERS = ['canli', 'siyahbeyaz', 'noir', 'sicak', 'soguk', 'altin', 'vintage', 'retro', 'soluk', 'pastel', 'pembe', 'dram', 'sinema', 'gece', 'neon'];
 function cleanSticker(st) {
   if (!st || typeof st !== 'object') return null;
   const y = Math.max(5, Math.min(90, +st.y || 60));
@@ -691,7 +695,11 @@ function cleanSticker(st) {
     return { ...base, q: moderation.mask(String(st.q || '').trim().slice(0, 80)), options };
   }
   if (st.type === 'question') return { ...base, q: moderation.mask(String(st.q || 'Bana bir soru sor').trim().slice(0, 80)) };
-  if (st.type === 'music' && isMedia(st.src)) return { ...base, src: st.src, title: String(st.title || 'Müzik').slice(0, 60), start: Math.max(0, +st.start || 0) };
+  if (st.type === 'music') {
+    if (isMedia(st.src)) return { ...base, src: st.src, title: String(st.title || 'Müzik').slice(0, 60), artist: String(st.artist || '').slice(0, 60), start: Math.max(0, +st.start || 0) };
+    const m = music.clean(st);
+    return m ? { ...base, ...m, start: 0 } : null;
+  }
   if (st.type === 'text') {
     const text = moderation.mask(String(st.text || '').trim().slice(0, 120));
     return text ? { ...base, text, color: /^#[0-9a-f]{6}$/i.test(st.color) ? st.color : '#ffffff' } : null;
@@ -719,7 +727,7 @@ app.get('/api/stories', auth, (req, res) => {
     .forEach((s) => {
       if (!byUser.has(s.userId)) byUser.set(s.userId, []);
       byUser.get(s.userId).push({
-        id: s.id, media: s.media, mediaType: s.mediaType, at: s.at, seen: s.viewers.includes(me), viewerCount: s.userId === me ? s.viewers.length : undefined,
+        id: s.id, media: s.media, mediaType: s.mediaType, filter: s.filter || null, at: s.at, seen: s.viewers.includes(me), viewerCount: s.userId === me ? s.viewers.length : undefined,
         stickers: stickersOut(s, me),
       });
     });
@@ -731,7 +739,8 @@ app.post('/api/stories', auth, (req, res) => {
   const { media, mediaType } = req.body || {};
   if (!media) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç.' });
   const stickers = (Array.isArray(req.body.stickers) ? req.body.stickers : []).slice(0, 4).map(cleanSticker).filter(Boolean);
-  const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: String(media), mediaType: mediaType === 'video' ? 'video' : 'image', at: now(), viewers: [], stickers, votes: {}, answers: [] });
+  const filter = FILTERS.includes(req.body.filter) ? req.body.filter : null;
+  const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: String(media), mediaType: mediaType === 'video' ? 'video' : 'image', filter, at: now(), viewers: [], stickers, votes: {}, answers: [] });
   io.emit('stories:update', { userId: req.user.id });
   res.json(s);
 });
@@ -1144,8 +1153,15 @@ app.get('/api/badges', auth, (req, res) => {
 });
 
 // ---------- Canlı ----------
-const liveOut = (l) => ({ userId: l.userId, title: l.title, startedAt: l.startedAt, viewers: l.viewers.size, user: brief(store.get('users', l.userId)) });
+const liveOut = (l) => ({ userId: l.userId, title: l.title, startedAt: l.startedAt, viewers: l.viewers.size, filter: l.filter || null, user: brief(store.get('users', l.userId)) });
 app.get('/api/lives', auth, (req, res) => res.json([...lives.values()].map(liveOut)));
+
+// ---------- Müzik (Spotify + önizleme) ----------
+app.get('/api/music/search', auth, wrap(async (req, res) => {
+  if (limited('ms:' + req.user.id, 40, 60000)) return res.status(429).json({ error: 'Biraz yavaş 🙂' });
+  res.json({ items: await music.search(req.query.q), spotify: music.enabled() });
+}));
+app.get('/api/music/featured', auth, wrap(async (req, res) => res.json({ items: await music.getFeatured(), spotify: music.enabled() })));
 
 // ---------- Ek özellikler (mağaza, doğrulama, gizlilik, çıkartmalar, etiketler…) ----------
 const featureCtx = {
@@ -1153,6 +1169,7 @@ const featureCtx = {
   isBlocked, limited, isMedia, cardOut, purgeUser, moderation,
 };
 require('./server/features')(app, featureCtx);
+require('./server/genel')(app, featureCtx);
 
 // ---------- Statik ----------
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -1236,6 +1253,7 @@ io.on('connection', (socket) => {
   }
 
   socket.on('visibility', (v) => { socket.data.visible = !!v; });
+  featureCtx.genelSocket(socket);
 
   socket.on('message:send', (data, ack) => {
     const c = store.get('chats', data?.chatId);
@@ -1369,6 +1387,12 @@ io.on('connection', (socket) => {
     if (!text || !lives.has(hostId) || limited('lc:' + uid, 20, 30000)) return;
     io.to(`live:${hostId}`).emit('live:comment', { hostId, user: brief(store.get('users', uid)), text: moderation.mask(text), at: now() });
   });
+  socket.on('live:filter', ({ filter } = {}) => {
+    const l = lives.get(uid);
+    if (!l) return;
+    l.filter = FILTERS.includes(filter) ? filter : null;
+    io.to(`live:${uid}`).emit('live:filter', { hostId: uid, filter: l.filter });
+  });
   socket.on('live:gift', ({ hostId, giftId }, ack) => {
     const l = lives.get(hostId);
     const gift = eco.get().gifts.find((g) => g.id === giftId);
@@ -1412,6 +1436,7 @@ function purgeUser(id) {
   store.filter('chats', (c) => !c.isGroup && c.members.includes(id)).forEach((c) => removeChat(c.id));
   store.filter('chats', (c) => c.isGroup && c.members.includes(id)).forEach((c) => store.update('chats', c.id, { members: c.members.filter((m) => m !== id), admins: (c.admins || []).filter((m) => m !== id) }));
   store.filter('messages', (m) => m.from === id).forEach((m) => store.del('messages', m.id));
+  store.filter('pub_msgs', (m) => m.userId === id).forEach((m) => store.del('pub_msgs', m.id));
   store.filter('notifications', (n) => n.userId === id || n.fromId === id).forEach((n) => store.del('notifications', n.id));
   store.filter('pushSubs', (s) => s.userId === id).forEach((s) => store.del('pushSubs', s.id));
   store.filter('verifications', (v) => v.userId === id).forEach((v) => store.del('verifications', v.id));
@@ -1478,6 +1503,7 @@ async function ensureFalci() {
   purgeDemo();
   await ensureFalci();
   await adminApi.ensureAdmin?.();
+  music.selfTest().catch(() => {});
   server.listen(PORT, () => console.log(`SwipeUp http://localhost:${PORT}`));
 
   // Render ücretsiz planda uykuya geçmemek için kendine ping at

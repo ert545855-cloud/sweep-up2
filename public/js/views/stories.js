@@ -1,7 +1,8 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, ago, toast, sheet, avatar, emit, nm,
+  state, api, esc, ago, toast, sheet, avatar, emit, nm, filterCss,
 } from '../core.js';
+import { musicChip } from '../music.js';
 
 function pollHtml(st, mine) {
   const showRes = mine || st.mine != null;
@@ -17,7 +18,7 @@ function stickersHtml(it, mine) {
     const pos = `top:${st.y}%`;
     if (st.type === 'poll') return pollHtml(st, mine);
     if (st.type === 'question') return `<button class="stk q act" data-sid="${esc(st.id)}" style="${pos}"><b>${esc(st.q)}</b><span>${mine ? 'Yanıtları görmek için görüntüleyenlere bak' : 'Yanıtla…'}</span></button>`;
-    if (st.type === 'music') return `<div class="stk mu" style="${pos}">${icon('music')}<span>${esc(st.title)}</span></div>`;
+    if (st.type === 'music') return st.spotifyUrl ? `<a class="stk mu act" href="${esc(st.spotifyUrl)}" target="_blank" rel="noopener" style="${pos}">${musicChip(st)}<em>Spotify</em></a>` : `<div class="stk mu" style="${pos}">${musicChip(st)}</div>`;
     if (st.type === 'text') return `<div class="stk txt" style="${pos};color:${esc(st.color)}">${esc(st.text)}</div>`;
     if (st.type === 'mention') return `<a class="stk men act" href="#/u/${esc(st.username)}" style="${pos}">@${esc(st.username)}</a>`;
     return '';
@@ -43,7 +44,7 @@ export default async function stories(view, userId) {
     const g = groups[gi]; const it = g.items[ii];
     const mine = g.user.id === state.me.id;
     view.innerHTML = `<div class="story-v">
-      <div class="media">${it.mediaType === 'video' ? `<video src="${esc(it.media)}" playsinline autoplay></video>` : `<img src="${esc(it.media)}" alt="">`}</div>
+      <div class="media">${it.mediaType === 'video' ? `<video src="${esc(it.media)}" playsinline autoplay style="filter:${filterCss(it.filter)}"></video>` : `<img class="blurbg" src="${esc(it.media)}" alt=""><img class="fit" src="${esc(it.media)}" alt="" style="filter:${filterCss(it.filter)}">`}</div>
       <div class="bars">${g.items.map((_, i) => `<i><b style="width:${i < ii ? 100 : 0}%"></b></i>`).join('')}</div>
       <div class="head">
         <a href="#/u/${esc(g.user.username)}" class="row" style="gap:10px;flex:1;min-width:0"><img class="av av-32" src="${esc(g.user.avatar)}" alt=""><b class="ellipsis">${nm(g.user, 'username')}</b><span style="opacity:.8">${ago(it.at)}</span></a>

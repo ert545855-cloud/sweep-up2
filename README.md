@@ -23,6 +23,9 @@ Kaydırarak tanış, reels izle, hikaye paylaş, canlı yayın aç, mesajlaş ve
 - **Mesajlar:** Kaybolan mesajlar (1 saat / 24 saat / 7 gün) ve haritalı konum paylaşma.
 - **Otomatik moderasyon:** Yorum, açıklama, biyografi ve canlı yorumlardaki küfürler yıldızlanır; mesajlardaki tehdit ve ağır hakaretler yönetim paneline düşer.
 - **Güven ve yasal:** Kayıtta doğum tarihi zorunlu (18 yaş altı kabul edilmez), selfie + poz ile mavi tik doğrulaması, gizlilik politikası, kullanım koşulları, KVKK aydınlatma metni, topluluk kuralları, uygulama içinden hesap silme ve "verilerimi indir".
+- **Genel sohbet:** Tüm üyelerin aynı odada konuştuğu herkese açık sohbet; çevrimiçi sayısı, yanıtlama, emoji tepkisi, fotoğraf, @bahsetme, şikayet. Küfürler yıldızlanır, tehditler yönetim paneline düşer.
+- **Müzik (Spotify):** Hikaye ve dalgalara Spotify kataloğundan şarkı eklenir (kapak, sanatçı, "Spotify'da aç"). 30 sn önizleme sesi Spotify vermiyorsa iTunes önizlemesinden eşlenir. `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` yoksa arama iTunes ile çalışır.
+- **Efektler:** Canlı, Siyah Beyaz, Noir, Sıcak, Soğuk, Altın saat, Vintage, Retro, Soluk, Pastel, Pembe, Dram, Sinema, Gece, Neon; gönderilerde, hikayelerde, dalgalarda ve canlı yayında (yayıncının seçtiği efekt izleyicilerde de görünür). Önizlemede sağa-sola kaydırarak değişir.
 - **Bildirimler:** Uygulama açıkken üstte banner, kapalıyken Web Push (Android / masaüstü; iPhone'da ana ekrana eklenmiş uygulama).
 
 ## Teknoloji

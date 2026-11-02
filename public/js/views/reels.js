@@ -53,7 +53,7 @@ export default async function reels(view, focusId) {
         <div class="row"><a href="#/u/${esc(r.user.username)}" class="row" style="gap:10px"><img class="av av-32" src="${esc(r.user.avatar)}" alt=""><span class="u">${nm(r.user, 'username')}</span></a>
           ${r.user.id !== state.me.id && !fol.has(r.user.id) ? `<button class="btn ghost follow" data-uid="${esc(r.user.id)}">Takip et</button>` : ''}</div>
         ${r.caption ? `<div class="cap">${richText(r.caption)}</div>` : ''}
-        <div class="snd-line">${icon('music')}<span>${esc(r.edit?.audioTitle || (r.edit?.audio ? 'Müzik' : `Orijinal ses · ${r.user.username}`))}</span>${r.edit?.speed && r.edit.speed !== 1 ? `<span class="chip-s">${r.edit.speed}x</span>` : ''}</div>
+        <${r.edit?.spotifyUrl ? `a href="${esc(r.edit.spotifyUrl)}" target="_blank" rel="noopener"` : 'div'} class="snd-line">${r.edit?.audioCover ? `<img src="${esc(r.edit.audioCover)}" alt="">` : icon('music')}<span>${esc(r.edit?.audioTitle ? `${r.edit.audioTitle}${r.edit.audioArtist ? ` · ${r.edit.audioArtist}` : ''}` : (r.edit?.audio ? 'Müzik' : `Orijinal ses · ${r.user.username}`))}</span>${r.edit?.speed && r.edit.speed !== 1 ? `<span class="chip-s">${r.edit.speed}x</span>` : ''}${r.edit?.spotifyUrl ? '<span class="chip-s">Spotify</span>' : ''}</${r.edit?.spotifyUrl ? 'a' : 'div'}>
       </div>
       <div class="progress"><i></i></div>
     </section>`).join('');
@@ -76,6 +76,7 @@ export default async function reels(view, focusId) {
       sec.querySelector('.cap')?.addEventListener('click', (e) => e.currentTarget.classList.toggle('open'));
       const bar = sec.querySelector('.progress i');
       edits.push(applyEdit(v, r.edit));
+      v.addEventListener('loadedmetadata', () => { if (v.videoWidth > v.videoHeight * 1.05) v.classList.add('land'); }, { once: true });
       const t0 = r.edit?.start || 0;
       v.addEventListener('timeupdate', () => { const t1 = r.edit?.end || v.duration; if (t1) bar.style.width = `${Math.min(100, ((v.currentTime - t0) / (t1 - t0)) * 100)}%`; });
       sec.querySelector('.cap')?.querySelectorAll('a').forEach((a) => a.addEventListener('click', (e) => e.stopPropagation()));

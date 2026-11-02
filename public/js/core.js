@@ -103,7 +103,7 @@ export function connectSocket() {
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',
     'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'people:new', 'likes:new',
     'call:incoming', 'call:accepted', 'call:ended', 'call:taken', 'call:signal',
-    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'wallet', 'people:gone']
+    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing']
     .forEach((ev) => s.on(ev, (d) => emit(ev, d)));
   s.on('presence', (d) => { state.presence.set(d.userId, d); emit('presence', d); });
   s.on('presence:all', (ids) => { ids.forEach((id) => state.presence.set(id, { userId: id, online: true })); emit('presence', {}); });
@@ -166,14 +166,21 @@ export const nm = (u, field = 'name') => `${esc(u?.[field] || u?.username || '')
 // Fotoğraf / video filtreleri (yalnız görüntüde uygulanır)
 export const FILTERS = [
   ['', 'Normal', 'none'],
-  ['sicak', 'Sıcak', 'sepia(.25) saturate(1.35) hue-rotate(-8deg) brightness(1.04)'],
-  ['soguk', 'Soğuk', 'saturate(1.1) hue-rotate(12deg) brightness(1.03) contrast(1.05)'],
-  ['vintage', 'Vintage', 'sepia(.45) contrast(.9) brightness(1.08) saturate(.85)'],
-  ['siyahbeyaz', 'S/B', 'grayscale(1) contrast(1.12)'],
-  ['canli', 'Canlı', 'saturate(1.7) contrast(1.08)'],
-  ['pastel', 'Pastel', 'saturate(.7) brightness(1.12) contrast(.92)'],
-  ['dram', 'Dram', 'contrast(1.35) saturate(1.15) brightness(.92)'],
-  ['gece', 'Gece', 'hue-rotate(200deg) saturate(.8) brightness(.85) contrast(1.2)'],
+  ['canli', 'Canlı', 'saturate(1.65) contrast(1.1) brightness(1.03)'],
+  ['siyahbeyaz', 'Siyah Beyaz', 'grayscale(1) contrast(1.08)'],
+  ['noir', 'Noir', 'grayscale(1) contrast(1.45) brightness(.92)'],
+  ['sicak', 'Sıcak', 'sepia(.28) saturate(1.35) hue-rotate(-10deg) brightness(1.05)'],
+  ['soguk', 'Soğuk', 'saturate(1.1) hue-rotate(14deg) brightness(1.04) contrast(1.06)'],
+  ['altin', 'Altın saat', 'sepia(.4) saturate(1.5) brightness(1.08) contrast(1.05) hue-rotate(-6deg)'],
+  ['vintage', 'Vintage', 'sepia(.5) contrast(.9) brightness(1.08) saturate(.85)'],
+  ['retro', 'Retro', 'sepia(.25) saturate(1.4) contrast(1.15) hue-rotate(-18deg)'],
+  ['soluk', 'Soluk', 'contrast(.82) brightness(1.12) saturate(.75)'],
+  ['pastel', 'Pastel', 'saturate(.7) brightness(1.15) contrast(.9)'],
+  ['pembe', 'Pembe', 'sepia(.15) saturate(1.4) hue-rotate(-28deg) brightness(1.06)'],
+  ['dram', 'Dram', 'contrast(1.4) saturate(1.2) brightness(.9)'],
+  ['sinema', 'Sinema', 'contrast(1.2) saturate(.85) sepia(.18) hue-rotate(160deg) brightness(.95)'],
+  ['gece', 'Gece', 'hue-rotate(200deg) saturate(.85) brightness(.85) contrast(1.2)'],
+  ['neon', 'Neon', 'saturate(2.2) contrast(1.2) hue-rotate(-12deg)'],
 ];
 export const filterCss = (id) => (FILTERS.find((f) => f[0] === id) || FILTERS[0])[2];
 
@@ -309,7 +316,7 @@ export function applySkin(id, { save = true } = {}) {
 export const currentSkin = () => document.documentElement.dataset.skin || 'gunbatimi';
 
 // ---- Logo ----
-export const logo = () => `<span class="mark">${icon('arrowUp')}</span>swipeup`;
+export const logo = () => '<img class="mark" src="/icons/mark.png" alt="">swipeup';
 
 // ---- Engelle / şikayet ----
 const REASONS = [['spam', 'Spam ya da sahte hesap'], ['taciz', 'Taciz veya zorbalık'], ['uygunsuz', 'Uygunsuz fotoğraf ya da içerik'], ['dolandirici', 'Dolandırıcılık'], ['yas', '18 yaşından küçük olabilir'], ['diger', 'Diğer']];
