@@ -7,7 +7,7 @@ import { postCard, wirePost, autoplay } from '../components.js';
 export default async function feed(view) {
   view.innerHTML = `
     <header class="topbar">
-      <div class="wordmark">Sweep Up</div>
+      <div class="wordmark">SwipeUp</div>
       <a class="ib" href="#/search" aria-label="Ara">${icon('search')}</a>
       <a class="ib" href="#/create" aria-label="Oluştur">${icon('plusSq')}</a>
       <a class="ib" href="#/notifications" aria-label="Bildirimler">${icon('heart')}<i class="dot-badge nb" style="top:6px;right:6px;${state.badges.notifications ? '' : 'display:none'}"></i></a>

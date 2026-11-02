@@ -1,5 +1,5 @@
-// Sweep Up service worker: anlık bildirimler + çevrimdışı kabuk
-const CACHE = 'sweepup-v1';
+// SwipeUp service worker: anlık bildirimler + çevrimdışı kabuk
+const CACHE = 'swipeup-v2';
 const SHELL = ['/', '/css/app.css', '/js/app.js', '/js/core.js', '/js/icons.js', '/js/components.js', '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
@@ -24,8 +24,8 @@ self.addEventListener('fetch', (e) => {
 
 self.addEventListener('push', (e) => {
   let d = {};
-  try { d = e.data.json(); } catch { d = { title: 'Sweep Up', body: e.data?.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Sweep Up', {
+  try { d = e.data.json(); } catch { d = { title: 'SwipeUp', body: e.data?.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'SwipeUp', {
     body: d.body || '',
     icon: d.icon || '/icons/icon-192.png',
     badge: '/icons/badge-96.png',

@@ -1,4 +1,4 @@
-// Sweep Up — Express + Socket.IO sunucusu
+// SwipeUp — Express + Socket.IO sunucusu
 const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
@@ -91,7 +91,7 @@ async function notify(userId, n) {
   const visible = [...(online.get(userId) || [])].some((s) => s.data.visible);
   if (visible || !VAPID) return;
   const payload = JSON.stringify({
-    title: n.title || (from ? from.name : 'Sweep Up'),
+    title: n.title || (from ? from.name : 'SwipeUp'),
     body: n.text,
     icon: from?.avatar && !from.avatar.endsWith('svg') ? from.avatar : '/icons/icon-192.png',
     url: n.url || '/#/notifications',
@@ -253,7 +253,7 @@ app.post('/api/push/test', auth, wrap(async (req, res) => {
   const subs = store.filter('pushSubs', (s) => s.userId === req.user.id);
   if (!subs.length) return res.status(400).json({ error: 'Bu cihazda bildirim aboneliği yok.' });
   await Promise.all(subs.map((s) => webpush.sendNotification(s.sub, JSON.stringify({
-    title: 'Sweep Up', body: 'Bildirimler çalışıyor 🎉', url: '/#/notifications', tag: 'test',
+    title: 'SwipeUp', body: 'Bildirimler çalışıyor 🎉', url: '/#/notifications', tag: 'test',
   })).catch(() => {})));
   res.json({ ok: true, count: subs.length });
 }));
@@ -697,9 +697,9 @@ io.on('connection', (socket) => {
   VAPID = process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
     ? { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY }
     : meta.vapid;
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@sweepup.app', VAPID.publicKey, VAPID.privateKey);
+  webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@swipeup.app', VAPID.publicKey, VAPID.privateKey);
   await seed(store);
-  server.listen(PORT, () => console.log(`Sweep Up http://localhost:${PORT}`));
+  server.listen(PORT, () => console.log(`SwipeUp http://localhost:${PORT}`));
 })();
 
 const shutdown = async () => { await store.close().catch(() => {}); process.exit(0); };

@@ -295,7 +295,7 @@ export function openComments(post) {
 export async function sharePost(post) {
   const url = `${location.origin}/#/${post.type === 'reel' ? 'reels' : 'p'}/${post.id}`;
   if (navigator.share) {
-    try { await navigator.share({ title: 'Sweep Up', text: post.caption || '', url }); return; } catch { return; }
+    try { await navigator.share({ title: 'SwipeUp', text: post.caption || '', url }); return; } catch { return; }
   }
   await navigator.clipboard?.writeText(url);
   toast('Bağlantı kopyalandı.');

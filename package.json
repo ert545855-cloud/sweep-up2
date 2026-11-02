@@ -1,7 +1,7 @@
 {
-  "name": "sweep-up",
+  "name": "swipeup",
   "version": "1.0.0",
-  "description": "Sweep Up — kaydır, izle, yayınla, sohbet et. Gerçek zamanlı sosyal uygulama.",
+  "description": "SwipeUp — kaydır, izle, yayınla, sohbet et. Gerçek zamanlı sosyal uygulama.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

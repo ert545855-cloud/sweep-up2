@@ -62,7 +62,7 @@ export default async function chat(view, chatId) {
   const paintAll = () => {
     box.innerHTML = msgs.length
       ? msgs.map((m, i) => bubble(m, msgs[i - 1])).join('')
-      : `<div class="empty">${avatar(other, 56, { dot: false })}<h2>${esc(other.name)}</h2>${esc(other.username)} · Sweep Up<p>Bir merhaba ile başla 👋</p></div>`;
+      : `<div class="empty">${avatar(other, 56, { dot: false })}<h2>${esc(other.name)}</h2>${esc(other.username)} · SwipeUp<p>Bir merhaba ile başla 👋</p></div>`;
     box.scrollTop = box.scrollHeight;
   };
   paintAll();

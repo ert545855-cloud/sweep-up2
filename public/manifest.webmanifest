@@ -1,6 +1,6 @@
 {
-  "name": "Sweep Up",
-  "short_name": "Sweep Up",
+  "name": "SwipeUp",
+  "short_name": "SwipeUp",
   "description": "Kaydır, eşleş, reels izle, canlı yayın aç ve sohbet et.",
   "start_url": "/#/",
   "scope": "/",

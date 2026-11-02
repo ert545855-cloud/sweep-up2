@@ -1,4 +1,4 @@
-# Sweep Up
+# SwipeUp
 
 Instagram görünümünde, Tinder gibi kaydırmalı, tamamen çevrimiçi bir sosyal uygulama.
 

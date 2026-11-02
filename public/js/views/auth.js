@@ -4,7 +4,7 @@ import { icon } from '../icons.js';
 export default function auth(view, mode) {
   const reg = mode === 'register';
   view.innerHTML = `<section class="auth">
-    <div class="wordmark">Sweep Up</div>
+    <div class="wordmark">SwipeUp</div>
     <p class="tagline">${reg ? 'Kaydır, eşleş, reels izle ve canlı yayında buluş.' : 'Tekrar hoş geldin.'}</p>
     <form novalidate>
       ${reg ? '<input class="field" name="name" placeholder="Ad Soyad" autocomplete="name" maxlength="40">' : ''}
