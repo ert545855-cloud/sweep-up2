@@ -110,7 +110,7 @@ export function showMatch(user, chatId) {
       <div class="title">Eşleştiniz!</div>
       <p>Sen ve ${esc(user.name)} birbirinizi beğendiniz.</p>
       <div class="pair"><img src="${esc(state.me.avatar)}" alt=""><img src="${esc(user.avatar)}" alt=""></div>
-      <a class="btn primary block" href="#/chat/${esc(chatId)}" style="background:#fff;color:#2a1a8a">Mesaj gönder</a>
+      <a class="btn primary block" href="#/chat/${esc(chatId)}" style="background:#fff;color:#f2435a">Mesaj gönder</a>
       <button class="btn block" style="background:transparent;color:#fff">Kaydırmaya devam et</button>
     </div></div>`);
   m.querySelector('button').onclick = () => m.remove();
@@ -120,6 +120,15 @@ export function showMatch(user, chatId) {
 }
 
 // ---- Başlangıç ----
+// Silinmiş medya: kırık görsel yerine yumuşak bir boşluk göster
+document.addEventListener('error', (e) => {
+  const t = e.target;
+  if (t.tagName === 'IMG' && !t.dataset.fallback) {
+    t.dataset.fallback = '1';
+    t.src = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#e6e6ea"/></svg>');
+  }
+}, true);
+
 async function boot() {
   try { const t = localStorage.getItem('su_theme'); if (t && t !== 'system') document.documentElement.dataset.theme = t; } catch {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

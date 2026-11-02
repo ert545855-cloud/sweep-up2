@@ -10,12 +10,18 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: swipeup-db
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: swipeup-kv
           property: connectionString
+      # Kalıcı medya ve tam yedek için bir PostgreSQL bağlamak istersen:
+      # - key: DATABASE_URL
+      #   fromDatabase: { name: swipeup-db, property: connectionString }
 
-databases:
-  - name: swipeup-db
+  - type: keyvalue
+    name: swipeup-kv
     plan: free
     region: frankfurt
+    maxmemoryPolicy: noeviction
+    ipAllowList: []

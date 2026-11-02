@@ -45,13 +45,20 @@ export default async function feed(view) {
   };
 
   const paintPeople = () => {
-    const real = people.filter((u) => !u.isBot);
-    const list = (real.length ? [...real, ...people.filter((u) => u.isBot && isOn(u))] : people).slice(0, 20);
-    if (!list.length) { peopleEl.innerHTML = ''; return; }
+    const list = people.slice(0, 20);
+    if (!list.length) {
+      peopleEl.innerHTML = `<div class="push-card" style="background:var(--surface)">${icon('userPlus')}<div class="grow"><b>Arkadaşlarını davet et</b><p>Henüz başka üye yok. Bağlantıyı paylaş, kaydolan herkes burada görünür.</p></div><button class="btn primary sm inv">Paylaş</button></div>`;
+      peopleEl.querySelector('.inv').onclick = async () => {
+        const url = location.origin;
+        if (navigator.share) navigator.share({ title: 'SwipeUp', text: 'SwipeUp’ta buluşalım!', url }).catch(() => {});
+        else { await navigator.clipboard?.writeText(url); toast('Bağlantı kopyalandı.'); }
+      };
+      return;
+    }
     const onlineCount = list.filter(isOn).length;
     peopleEl.innerHTML = `<div class="section-t"><span>${onlineCount ? `Şu an çevrimiçi · ${onlineCount}` : 'Yeni üyeler'}</span><a href="#/search">Tümü</a></div>
       <div class="people-row">${list.map((u) => `<div class="person-card">
-        ${!u.isBot && Date.now() - (u.createdAt || 0) < 3 * 86400000 ? '<span class="new">YENİ</span>' : ''}
+        ${Date.now() - (u.createdAt || 0) < 3 * 86400000 ? '<span class="new">YENİ</span>' : ''}
         <a href="#/u/${esc(u.username)}" class="av-wrap" data-presence="${esc(u.id)}"><img class="av av-56" src="${esc(u.avatar)}" alt="">${isOn(u) ? '<i class="online"></i>' : ''}</a>
         <a href="#/u/${esc(u.username)}" class="n ellipsis">${esc(u.name)}</a>
         <span class="s ellipsis">${isOn(u) ? 'çevrimiçi' : '@' + esc(u.username)}</span>

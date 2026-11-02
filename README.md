@@ -15,7 +15,7 @@ Kaydırarak tanış, reels izle, hikaye paylaş, canlı yayın aç, mesajlaş ve
 
 ## Teknoloji
 
-Node.js · Express · Socket.IO · WebRTC (Open Relay TURN) · Web Push (VAPID) · PostgreSQL (yoksa yerel JSON dosyası) · derleme adımı olmayan PWA arayüzü.
+Node.js · Express · Socket.IO · WebRTC (Open Relay TURN) · Web Push (VAPID) · Render Key Value / PostgreSQL (ikisi de yoksa yerel JSON dosyası) · derleme adımı olmayan PWA arayüzü.
 
 ## Yerelde çalıştırma
 
@@ -30,7 +30,9 @@ npm start          # http://localhost:3000
 
 | Değişken | Açıklama |
 | --- | --- |
-| `DATABASE_URL` | PostgreSQL bağlantısı. Medya dahil her şey burada saklanır. |
+| `DATABASE_URL` | PostgreSQL bağlantısı. Varsa her şey (medya dahil) burada saklanır. |
+| `REDIS_URL` | Render Key Value bağlantısı. Hesaplar, mesajlar ve küçük medya burada saklanır; güncellemelerde silinmez. |
+| `REDIS_MEDIA_BUDGET_MB` | Key Value'da medyaya ayrılan alan (varsayılan 14 MB). Dolunca medya sunucu diskine yazılır. |
 | `JWT_SECRET` | İsteğe bağlı. Verilmezse otomatik üretilip veritabanında saklanır. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | İsteğe bağlı. Verilmezse otomatik üretilip saklanır. |
 | `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` | İsteğe bağlı kendi TURN sunucun. Verilmezse metered.ca Open Relay (ücretsiz) kullanılır. |
@@ -41,6 +43,6 @@ npm start          # http://localhost:3000
 
 ## Render'da yayınlama
 
-Repodaki `render.yaml` bir web servisi ve bir PostgreSQL veritabanı tanımlar. Render panelinde **New → Blueprint** ile bu repoyu seçmek yeterli.
+Repodaki `render.yaml` bir web servisi ve ücretsiz bir Key Value deposu tanımlar. Render panelinde **New → Blueprint** ile bu repoyu seçmek yeterli.
 
-İlk açılışta örnek hesaplar ve içerik eklenir; örnek hesaplar sağa kaydırıldığında çoğunlukla geri beğenip mesaj atar, böylece eşleşme ve sohbet hemen denenebilir.
+Uygulamada örnek hesap yoktur; listelerde sadece gerçek üyeler görünür.
