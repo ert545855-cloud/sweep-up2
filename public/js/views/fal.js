@@ -45,6 +45,7 @@ async function hub(view) {
     kahve: 'Fincanının fotoğraflarını gönder.', tarot: 'Üç kart çek, Falcı Teyze yorumlasın.', burc: 'Burcunu ve sorunu yaz.', uyum: 'Biriyle aranızdaki uyuma baksın.',
   }[k]}</span><em class="price" data-k="${k}"></em></a>`).join('')}
     </div>
+    <div class="fal-sub-box"></div>
     <a class="fal-bal" href="#/store">${icon('coin')}<span>Bakiye: <b class="cb">…</b> jeton</span><span class="link">Jeton al</span></a>
     <div class="mine"></div>${note}`;
   const [f, mine] = await Promise.all([api('/fal/falci').catch(() => null), api('/fal/mine').catch(() => []), loadShop()]);
@@ -52,6 +53,23 @@ async function hub(view) {
     view.querySelector('.cb').textContent = shop.coins;
     view.querySelectorAll('.price').forEach((p) => { const v = shop.falPrices[p.dataset.k]; p.textContent = v ? `${v} jeton` : 'Ücretsiz'; });
   } else view.querySelector('.fal-bal').hidden = true;
+  const subBox = view.querySelector('.fal-sub-box');
+  const drawSub = async () => {
+    const s = await api('/fal/sub').catch(() => null);
+    if (!s) { subBox.innerHTML = ''; return; }
+    const until = s.sub?.until ? new Date(s.sub.until).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }) : '';
+    subBox.innerHTML = `<section class="fal-sub ${s.active ? 'on' : ''}"><div class="fs-top"><span class="fs-em">🔮</span><div class="grow"><b>Falcı Teyze aboneliği</b><small>${s.active ? `${esc(until)} tarihine kadar aktif` : `${s.days} gün · ${s.coins} jeton`}</small></div>
+        ${s.active ? '<span class="pill ok">Aktif</span>' : `<button class="btn primary sm fs-buy">${icon('coin')} ${s.coins}</button>`}</div>
+      <ul><li><b>Her pazartesi</b> burç yorumun kendiliğinden gelir${s.active ? (s.burcUsed ? ' <em>· bu hafta alındı</em>' : ' <em>· bu hafta hazır</em>') : ''}</li>
+        <li><b>Ayda bir kahve falı</b> ücretsiz${s.active ? ` <em>· ${s.sub.kahveLeft || 0} hakkın var</em>` : ''}</li>
+        ${!s.zodiac ? '<li class="warn">Burç yorumu için <a class="link" href="#/fal/burc">burcunu seç</a></li>' : ''}</ul>
+      ${s.active ? `<button class="link fs-buy" style="font-size:13px">30 gün uzat (${s.coins} jeton)</button>` : ''}</section>`;
+    subBox.querySelectorAll('.fs-buy').forEach((b) => { b.onclick = async () => {
+      if (!confirm(`Falcı Teyze aboneliği ${s.coins} jeton. Onaylıyor musun?`)) return;
+      try { const r = await api('/fal/sub', { body: {} }); if (shop) { shop.coins = r.coins; view.querySelector('.cb').textContent = r.coins; } toast('Aboneliğin başladı 🔮'); drawSub(); } catch (er) { if (er.status === 402) needCoins(er.message); else toast(er.message); }
+    }; });
+  };
+  drawSub();
   const hero = view.querySelector('.fal-hero');
   if (f) {
     hero.querySelector('.fz').outerHTML = `<a href="#/u/${esc(f.username)}"><img class="av av-56" src="${esc(f.avatar)}" alt="Falcı Teyze profili"></a>`;

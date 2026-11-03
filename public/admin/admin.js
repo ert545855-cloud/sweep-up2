@@ -914,6 +914,42 @@ function wireEventPanel(main, s) {
   };
 }
 
+// ---- Etkinlik odaları ----
+const DAYS = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+async function roomsPanel(box, owner) {
+  const r = await api('/rooms').catch(() => null);
+  if (!r) return;
+  const row = (x) => `<div class="room-row">
+      <input class="field" data-k="em" value="${esc(x.em || '💬')}" style="width:56px" aria-label="Emoji">
+      <input class="field" data-k="name" value="${esc(x.name || '')}" placeholder="Oda adı" style="width:150px">
+      <input class="field" data-k="desc" value="${esc(x.desc || '')}" placeholder="Kısa açıklama" style="flex:1;min-width:160px">
+      <input type="hidden" data-k="id" value="${esc(x.id || '')}">
+      <label class="chk"><input type="checkbox" data-k="always" ${x.always ? 'checked' : ''}> Her zaman açık</label>
+      <span class="days">${DAYS.map((d, i) => `<label class="dchip"><input type="checkbox" data-d="${i}" ${(x.days || []).includes(i) ? 'checked' : ''}><span>${d}</span></label>`).join('')}</span>
+      <input class="field" data-k="from" value="${esc(x.from || '20:00')}" style="width:74px" placeholder="20:00" aria-label="Açılış">
+      <input class="field" data-k="to" value="${esc(x.to || '24:00')}" style="width:74px" placeholder="24:00" aria-label="Kapanış">
+      ${x.open != null ? `<span class="chip ${x.open ? "ok" : ""}">${x.open ? 'Açık' : 'Kapalı'}</span>` : ''}
+      <button type="button" class="btn sm danger rmroom">${icon('trash')}</button></div>`;
+  box.innerHTML = `<div class="panel" style="margin-top:16px"><div class="ph"><h3>Etkinlik odaları</h3>${owner ? `<button type="button" class="btn sm addroom">${icon('plus')} Oda</button>` : ''}</div>
+    <div class="pb"><p class="muted" style="margin:0 0 10px;font-size:12.5px">Odalar seçilen günlerde ve saatlerde (Türkiye saati) açılır. Gece yarısını geçen saatler (21:00–01:00) desteklenir. “Genel Sohbet” her zaman açıktır.</p>
+    <div class="room-list">${r.list.map(row).join('')}</div>
+    ${owner ? `<div style="margin-top:12px;display:flex;gap:8px"><button class="btn primary saveroom">${icon('check')} Odaları kaydet</button></div>` : ''}</div></div>`;
+  const list = box.querySelector('.room-list');
+  box.onclick = async (e) => {
+    if (e.target.closest('.addroom')) list.insertAdjacentHTML('beforeend', row({ days: [0, 1, 2, 3, 4, 5, 6] }));
+    else if (e.target.closest('.rmroom')) e.target.closest('.room-row').remove();
+    else if (e.target.closest('.saveroom')) {
+      const out = [...list.querySelectorAll('.room-row')].map((rw) => {
+        const o = { days: [...rw.querySelectorAll('[data-d]:checked')].map((c) => +c.dataset.d) };
+        rw.querySelectorAll('[data-k]').forEach((x) => { o[x.dataset.k] = x.type === 'checkbox' ? x.checked : x.value.trim(); });
+        if (!o.id) o.id = o.name.toLocaleLowerCase('tr').replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c').replace(/[^a-z0-9]/g, '').slice(0, 20);
+        return o;
+      });
+      try { await api('/rooms', { method: 'PUT', body: { list: out } }); toast('Odalar kaydedildi.'); roomsPanel(box, owner); } catch (er) { toast(er.message); }
+    }
+  };
+}
+
 // ---- Ayarlar: ödeme, fiyatlar, yasal ----
 VIEWS.settings = async (main) => {
   const [e, legal, evs] = await Promise.all([api('/economy'), api('/legal'), api('/event').catch(() => null)]);
@@ -944,6 +980,11 @@ VIEWS.settings = async (main) => {
         <label>SwipeUp+ günlük süper beğeni<input class="field" type="number" name="plusSupers" value="${e.plusSupers}"></label>
         <label>Boost fiyatı (jeton)<input class="field" type="number" name="boostCoins" value="${e.boostCoins}"></label>
         <label>Boost süresi (dakika)<input class="field" type="number" name="boostMinutes" value="${e.boostMinutes}"></label></div></div>
+      <div class="panel"><div class="ph"><h3>Tanışma özellikleri</h3></div><div class="pb fgrid">
+        <label>Süper mesaj (jeton)<input class="field" type="number" name="superMsgCoins" value="${e.superMsgCoins ?? 30}"></label>
+        <label>Davet ödülü (iki tarafa, jeton)<input class="field" type="number" name="inviteCoins" value="${e.inviteCoins ?? 50}"></label>
+        <label>Falcı Teyze aylık abonelik (jeton)<input class="field" type="number" name="falSubCoins" value="${e.falSubCoins ?? 250}"></label>
+        <p class="muted" style="margin:0;font-size:12.5px">Abonelik: her pazartesi burç yorumu ve ayda bir kahve falı. Falcı Teyze payı abonelikte de geçerli.</p></div></div>
       <div class="panel"><div class="ph"><h3>Yasal iletişim bilgileri</h3></div><div class="pb fgrid">
         <label>Veri sorumlusu (şirket / ad soyad)<input class="field" name="lcompany" value="${esc(legal.company || '')}"></label>
         <label>İletişim e-postası<input class="field" name="lemail" type="email" value="${esc(legal.email || '')}"></label>
@@ -951,8 +992,10 @@ VIEWS.settings = async (main) => {
         <p class="muted" style="margin:0;font-size:12.5px">Gizlilik politikası ve KVKK metninde gösterilir.</p></div></div>
       ${owner ? `<div class="savebar"><button class="btn primary">${icon('check')} Kaydet</button></div>` : ''}
     </form>
-    ${evs ? eventPanel(evs, owner) : ''}`;
+    ${evs ? eventPanel(evs, owner) : ''}
+    <div class="rooms-panel"></div>`;
   if (evs) wireEventPanel(main, evs);
+  roomsPanel(main.querySelector('.rooms-panel'), owner);
   const f = main.querySelector('form');
   const COLS = { plans: PLAN, packs: PACK, gifts: GIFT };
   f.onclick = (ev) => {
@@ -976,6 +1019,7 @@ VIEWS.settings = async (main) => {
           falPrices: Object.fromEntries(Object.keys(FAL).map((k) => [k, +v(`fal_${k}`)])),
           falciShare: +v('falciShare'), creatorShare: +v('creatorShare'), coinTL: +v('coinTL'),
           freeLikes: +v('freeLikes'), freeSupers: +v('freeSupers'), plusSupers: +v('plusSupers'), boostCoins: +v('boostCoins'), boostMinutes: +v('boostMinutes'),
+          superMsgCoins: +v('superMsgCoins'), inviteCoins: +v('inviteCoins'), falSubCoins: +v('falSubCoins'),
           plusPlans: read('plans', 'p').map((p) => { const old = e.plusPlans.find((x) => +x.days === +p.days); return { ...p, id: old?.id || `p${p.days}` }; }),
           coinPacks: read('packs', 'c').map((p) => { const old = e.coinPacks.find((x) => +x.coins === +p.coins); return { ...p, id: old?.id || `c${p.coins}` }; }),
           gifts: read('gifts', 'g').map((g, i) => ({ ...g, id: e.gifts[i]?.id || `g${i}${Date.now() % 1000}` })),

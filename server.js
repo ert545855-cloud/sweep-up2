@@ -7,6 +7,7 @@ const compression = require('compression');
 const helmet = require('helmet');
 const multer = require('multer');
 const imagefix = require('./server/imagefix');
+const socialMod = require('./server/social');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const webpush = require('web-push');
@@ -79,7 +80,7 @@ function notifyMentions(text, from, url, what) {
 
 function pub(u, viewerId) {
   if (!u) return null;
-  const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, ...rest } = u;
+  const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, ...rest } = u;
   const self = viewerId === u.id;
   const hidden = !self && priv(u).hideLastSeen;
   const fdoc = viewerId && !self ? store.get('follows', `${viewerId}_${u.id}`) : null;
@@ -90,14 +91,15 @@ function pub(u, viewerId) {
     lastSeen: hidden ? null : u.lastSeen,
     live: lives.has(u.id),
     plus: isPlus(u), verified: !!u.verified,
-    ...(self ? { email: email || '', hasLocation: lat != null, birthdate: birthdate || null, coins: coins || 0, earnings: earnings || 0, needsBirthdate: !birthdate } : {}),
+    prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
+    ...(self ? { email: email || '', hasLocation: lat != null, birthdate: birthdate || null, coins: coins || 0, earnings: earnings || 0, needsBirthdate: !birthdate, refCode: refCode || null, falSub: falSub || null, frames: frames || [] } : {}),
     ...(viewerId && !self ? { isFollowing: !!fdoc && fdoc.status !== 'pending', requested: fdoc?.status === 'pending', distanceKm: distance(store.get('users', viewerId), u) } : {}),
   };
 }
 const brief = (u) => u && ({
   id: u.id, username: u.username, name: u.name, avatar: u.avatar,
   online: priv(u).hideLastSeen ? false : isOnline(u.id), live: lives.has(u.id), lastSeen: priv(u).hideLastSeen ? null : u.lastSeen,
-  createdAt: u.createdAt, role: u.role || null, verified: !!u.verified, plus: isPlus(u),
+  createdAt: u.createdAt, role: u.role || null, verified: !!u.verified, plus: isPlus(u), frame: u.frame || null,
 });
 
 function distance(a, b) {
@@ -217,19 +219,24 @@ function chatOut(c, me) {
   return { id: c.id, other: brief(store.get('users', otherId)), last, unread, lastAt: c.lastAt, blocked: isBlocked(me, otherId), ttl: c.ttl || 0 };
 }
 
+let gameOut = (g) => g; // social modülü yüklenince gizli oyun bilgisini saklayan sürümle değişir
 function msgOut(m) {
   if (!m) return m;
-  if (m.deleted) return { ...m, text: '', media: null };
-  return m;
+  if (m.deleted) return { ...m, text: '', media: null, game: null, plan: null, quote: null };
+  let o = m;
+  // Tek seferlik fotoğraf: dosya adresi listede görünmez, sadece açma isteğiyle bir kez verilir
+  if (m.viewOnce) o = { ...o, media: null, viewOnceState: m.mediaGone || (m.openedBy || []).length ? 'opened' : 'new' };
+  if (m.game) o = { ...o, game: gameOut(m.game) };
+  return o;
 }
 
-function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal, location }) {
+function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal, location, quote, game, plan, superMsg, viewOnce }) {
   text = String(text || '').slice(0, 4000).trim();
   let loc = null;
   if (location && Number.isFinite(+location.lat) && Number.isFinite(+location.lng)) {
     loc = { lat: Math.round(+location.lat * 1e5) / 1e5, lng: Math.round(+location.lng * 1e5) / 1e5, label: String(location.label || '').slice(0, 80) };
   }
-  if (!text && !media && !fal && !loc) return null;
+  if (!text && !media && !fal && !loc && !game && !plan) return null;
   if (!chat.isGroup) {
     const other = chat.members.find((m) => m !== fromId);
     if (isBlocked(fromId, other)) return null;
@@ -246,13 +253,15 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
     media: media || null, mediaType: ['image', 'video', 'audio'].includes(mediaType) ? mediaType : (media ? 'image' : null),
     duration: duration ? Math.min(600, Math.round(duration)) : null,
     reply, story: story || null, fal: fal || null, location: loc, system: !!system, reactions: {},
+    quote: quote || null, game: game || null, plan: plan || null, superMsg: !!superMsg,
+    viewOnce: !!(viewOnce && media && (mediaType === 'image' || !mediaType)), openedBy: [],
     at: now(), readBy: [fromId], deliveredTo: [fromId],
     expiresAt: chat.ttl && !system ? now() + chat.ttl : null,
   });
   store.update('chats', chat.id, { lastAt: msg.at });
   for (const m of chat.members) if (m !== fromId && isOnline(m)) msg.deliveredTo.push(m);
   store.update('messages', msg.id, {});
-  chat.members.forEach((m) => emitTo(m, 'message', msg));
+  chat.members.forEach((m) => emitTo(m, 'message', msgOut(msg)));
   if (system) return msg;
   const sender = store.get('users', fromId);
   // Otomatik moderasyon: hakaret / tehdit içeren mesajlar yönetime düşer
@@ -266,7 +275,7 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
       chat.members.forEach((x) => emitTo(x, 'message:update', msgOut(m)));
     });
   }
-  const preview = fal ? `🔮 Yeni ${FAL_TYPES[fal.type]} isteği` : loc ? '📍 Konum' : text || { video: '🎥 Video', audio: '🎤 Sesli mesaj' }[msg.mediaType] || '📷 Fotoğraf';
+  const preview = fal ? `🔮 Yeni ${FAL_TYPES[fal.type]} isteği` : loc ? '📍 Konum' : msg.viewOnce ? '📷 Tek seferlik fotoğraf' : text || { video: '🎥 Video', audio: '🎤 Sesli mesaj' }[msg.mediaType] || '📷 Fotoğraf';
   chat.members.filter((m) => m !== fromId).forEach((m) => {
     notify(m, {
       type: 'message', fromId, tag: 'chat-' + chat.id,
@@ -351,7 +360,7 @@ app.get('/api/config', (req, res) => {
   let uid = null;
   try { uid = jwt.verify((req.headers.authorization || '').slice(7), JWT_SECRET).id; } catch {}
   const { id, ...legal } = store.get('settings', 'legal') || {};
-  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now(), maintenance: maintenance(), features: { market: !!store.get('settings', 'market')?.enabled } });
+  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now(), maintenance: maintenance(), features: { market: !!store.get('settings', 'market')?.enabled }, superMsgCoins: eco.get().superMsgCoins });
 });
 
 // ---------- Kimlik ----------
@@ -381,7 +390,8 @@ app.post('/api/auth/register', wrap(async (req, res) => {
   });
   // Diğer gerçek üyelere yeni üyeyi duyur (uygulama açıksa listeleri yenilenir)
   io.emit('people:new', brief(u));
-  res.json({ token: sign(u), user: pub(u, u.id), recoveryCode: code.match(/.{4}/g).join('-') });
+  featureCtx.attachInvite?.(u, req.body?.ref, ipOf(req));
+  res.json({ token: sign(u), user: pub(store.get('users', u.id), u.id), recoveryCode: code.match(/.{4}/g).join('-') });
 }));
 
 app.post('/api/auth/login', wrap(async (req, res) => {
@@ -488,7 +498,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (b.privacy && typeof b.privacy === 'object') {
     const cur = priv(req.user);
     const np = { ...cur };
-    ['private', 'hideLastSeen', 'hideRead', 'hideFromDeck'].forEach((k) => { if (b.privacy[k] !== undefined) np[k] = !!b.privacy[k]; });
+    ['private', 'hideLastSeen', 'hideRead', 'hideFromDeck', 'hideVisits'].forEach((k) => { if (b.privacy[k] !== undefined) np[k] = !!b.privacy[k]; });
     patch.privacy = np;
     // Gizli hesap kapatılınca bekleyen istekleri kabul et
     if (cur.private && !np.private) store.filter('follows', (f) => f.to === req.user.id && f.status === 'pending').forEach((f) => store.update('follows', f.id, { status: null }));
@@ -503,8 +513,9 @@ app.patch('/api/me', auth, (req, res) => {
     const ageMin = Math.max(18, Math.min(99, parseInt(b.prefs.ageMin, 10) || 18));
     const ageMax = Math.max(ageMin, Math.min(99, parseInt(b.prefs.ageMax, 10) || 99));
     const maxKm = b.prefs.maxKm ? Math.max(1, Math.min(500, parseInt(b.prefs.maxKm, 10))) : null;
-    patch.prefs = { ageMin, ageMax, maxKm };
+    patch.prefs = { ageMin, ageMax, maxKm, verifiedOnly: !!b.prefs.verifiedOnly };
   }
+  featureCtx.readProfileExtras?.(b, patch);
   if (b.location === null) { patch.lat = null; patch.lng = null; }
   if (b.location && Number.isFinite(+b.location.lat) && Number.isFinite(+b.location.lng)) {
     // ~1 km hassasiyete yuvarla (gizlilik)
@@ -523,7 +534,9 @@ app.patch('/api/me', auth, (req, res) => {
     if (store.find('users', (u) => u.username === un && u.id !== req.user.id)) return res.status(409).json({ error: 'Bu kullanıcı adı alınmış.' });
     patch.username = un;
   }
-  const out = pub(store.update('users', req.user.id, patch), req.user.id);
+  const saved = store.update('users', req.user.id, patch);
+  if (patch.photos) featureCtx.checkInviteReward?.(saved);
+  const out = pub(store.get('users', req.user.id), req.user.id);
   if (patch.privacy) broadcastPresence(req.user.id);
   res.json(out);
 });
@@ -1002,6 +1015,7 @@ app.get('/api/swipe/deck', auth, (req, res) => {
   if (me.lookingFor && me.lookingFor !== 'all') deck = deck.filter((u) => u.gender === me.lookingFor || !u.gender);
   deck = deck.filter((u) => !u.age || (u.age >= prefs.ageMin && u.age <= prefs.ageMax));
   if (prefs.maxKm && me.lat != null) deck = deck.filter((u) => { const d = distance(me, u); return d == null || d <= prefs.maxKm; });
+  if (prefs.verifiedOnly) deck = deck.filter((u) => u.verified);
   const likedMe = new Set(store.filter('swipes', (s) => s.to === me.id && s.dir !== 'left').map((s) => s.from));
   rankPeople(deck);
   const t = now();
@@ -1016,6 +1030,7 @@ function cardOut(me, u, likedYou) {
     distanceKm: distance(me, u), likedYou: eco.isPlus(me) ? likedYou : false,
     boosted: (u.boostUntil || 0) > now(),
     photos: photos.length ? photos : [u.avatar],
+    voice: u.voice || null, badges: u.badges || [], prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
   };
 }
 
@@ -1112,9 +1127,9 @@ app.get('/api/chats/:id', auth, (req, res) => {
 app.post('/api/chats/:id/messages', auth, (req, res) => {
   const c = store.get('chats', req.params.id);
   if (!c || !c.members.includes(req.user.id)) return res.status(404).json({ error: 'Sohbet bulunamadı.' });
-  const msg = sendMessage(c, req.user.id, { ...(req.body || {}), system: false, fal: null, story: null });
+  const msg = sendMessage(c, req.user.id, { ...(req.body || {}), system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false });
   if (!msg) return res.status(400).json({ error: 'Mesaj gönderilemedi.' });
-  res.json(msg);
+  res.json(msgOut(msg));
 });
 
 app.delete('/api/chats/:id', auth, (req, res) => {
@@ -1197,7 +1212,8 @@ app.post('/api/fal', auth, (req, res) => {
   if (isBlocked(req.user.id, f.id)) return res.status(403).json({ error: 'Fal isteği gönderilemedi.' });
   const b = req.body || {};
   if (!FAL_TYPES[b.type]) return res.status(400).json({ error: 'Fal türünü seç.' });
-  const price = Math.max(0, parseInt(eco.get().falPrices[b.type], 10) || 0);
+  const fp = featureCtx.falPriceFor ? featureCtx.falPriceFor(req.user, b.type, Math.max(0, parseInt(eco.get().falPrices[b.type], 10) || 0)) : { price: Math.max(0, parseInt(eco.get().falPrices[b.type], 10) || 0) };
+  const price = fp.price;
   if (price && (req.user.coins || 0) < price) return res.status(402).json({ error: `Bu fal ${price} jeton. Jetonun yetmiyor.`, need: price, coins: req.user.coins || 0 });
   if (limited('fal:' + req.user.id, 5, DAY)) return res.status(429).json({ error: 'Bugün en fazla 5 fal isteği gönderebilirsin. Yarın tekrar dene.' });
   const images = (Array.isArray(b.images) ? b.images : []).filter(isMedia).slice(0, 3);
@@ -1219,6 +1235,7 @@ app.post('/api/fal', auth, (req, res) => {
   const chat = chatBetween(req.user.id, f.id);
   const msg = sendMessage(chat, req.user.id, { text: payload.note, fal: payload });
   if (!msg) return res.status(400).json({ error: 'Fal isteği gönderilemedi.' });
+  featureCtx.useFalSub?.(req.user, fp.use);
   if (price) {
     eco.spend(req.user.id, price, 'fal', { ref: msg.id });
     eco.earn(f.id, Math.round(price * eco.get().falciShare), 'fal', { ref: msg.id, fromId: req.user.id });
@@ -1279,10 +1296,13 @@ app.get('/api/music/featured', auth, wrap(async (req, res) => res.json({ items: 
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
   isBlocked, limited, isMedia, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
+  online, appEvent, falci, msgOut, dropMediaCache: (id) => dropMediaCache(id),
 };
 require('./server/features')(app, featureCtx);
 require('./server/genel')(app, featureCtx);
 require('./server/market')(app, featureCtx);
+require('./server/social')(app, featureCtx);
+gameOut = featureCtx.gameOut;
 
 // ---------- Statik ----------
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -1369,13 +1389,14 @@ io.on('connection', (socket) => {
 
   socket.on('visibility', (v) => { socket.data.visible = !!v; });
   featureCtx.genelSocket(socket);
+  featureCtx.speedSocket(socket);
 
   socket.on('message:send', (data, ack) => {
     const c = store.get('chats', data?.chatId);
     if (!c || !c.members.includes(uid)) return ack?.({ error: 'Sohbet bulunamadı.' });
     if (limited('msg:' + uid, 60, 60000)) return ack?.({ error: 'Çok hızlı mesaj gönderiyorsun.' });
-    const msg = sendMessage(c, uid, { ...data, system: false, fal: null, story: null });
-    ack?.(msg ? { ok: true, msg } : { error: 'Mesaj gönderilemedi.' });
+    const msg = sendMessage(c, uid, { ...data, system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false });
+    ack?.(msg ? { ok: true, msg: msgOut(msg) } : { error: 'Mesaj gönderilemedi.' });
   });
 
   socket.on('message:react', ({ id, emoji }) => {

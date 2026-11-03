@@ -2,11 +2,14 @@ import { icon } from '../icons.js';
 import {
   state, api, esc, toast, pickFile, compressImage, uploadFile,
 } from '../core.js';
+import { voiceEditor, promptsEditor } from '../extras.js';
 
 export default function edit(view) {
   const me = state.me;
   let avatarUrl = me.avatar;
   let photos = [...(me.photos || [])];
+  let voice = me.voice || null;
+  let prompts = [...(me.prompts || [])];
   const first = !me.bio && !me.age && !photos.length;
 
   view.innerHTML = `<header class="topbar bordered">
@@ -32,6 +35,8 @@ export default function edit(view) {
       </div>
       <label>İlgi alanları<input class="field" name="interests" value="${esc((me.interests || []).join(', '))}" placeholder="Müzik, Kahve, Seyahat"></label>
       <div><div class="b" style="font-size:13px;margin-bottom:6px">Kaydırma fotoğrafları</div><div class="photos-edit"></div></div>
+      <div><div class="b" style="font-size:13px;margin-bottom:6px">Sesli tanıtım</div><div class="voice-edit"></div></div>
+      <div><div class="b" style="font-size:13px;margin-bottom:6px">Profil soruları <span class="muted" style="font-weight:500">· sohbete konu açar</span></div><div class="pq-edit"></div></div>
       <button class="btn primary block">Kaydet</button>
     </form>`;
 
@@ -42,6 +47,8 @@ export default function edit(view) {
       + (photos.length < 6 ? `<button type="button" class="add-ph" aria-label="Fotoğraf ekle">${icon('plus')}</button>` : '');
   };
   paintPhotos();
+  voiceEditor(view.querySelector('.voice-edit'), voice, (v) => { voice = v; });
+  promptsEditor(view.querySelector('.pq-edit'), prompts, (l) => { prompts = l; });
   pe.onclick = async (e) => {
     const rm = e.target.closest('.rm');
     if (rm) { photos.splice(+rm.dataset.i, 1); paintPhotos(); return; }
@@ -67,7 +74,7 @@ export default function edit(view) {
           name: f.name.value, username: f.username.value, bio: f.bio.value, ...(me.birthdate ? {} : { age: f.age.value || null }),
           city: f.city.value, gender: f.gender.value || null, lookingFor: f.lookingFor.value,
           interests: f.interests.value.split(',').map((s) => s.trim()).filter(Boolean),
-          photos, avatar: avatarUrl,
+          photos, avatar: avatarUrl, voice, prompts,
         },
       });
       Object.assign(state.me, u);

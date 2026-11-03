@@ -6,6 +6,7 @@ import { initCalls } from './calls.js';
 import { checkVersion, recover, afterBoot } from './update.js';
 import { maybeShowInstall } from './install.js';
 import { initEvent } from './event.js';
+import { checkSafety } from './extras.js';
 
 const routes = [
   [/^\/?$/, 'feed', { tab: 'home' }],
@@ -14,7 +15,12 @@ const routes = [
   [/^\/swipe$/, 'swipe', { tab: 'swipe' }],
   [/^\/likes$/, 'likes', { tab: 'swipe' }],
   [/^\/chats$/, 'chats', { tab: 'chats' }],
-  [/^\/genel$/, 'genel', { tabs: false }],
+  [/^\/genel(?:\/(\w+))?$/, 'genel', { tabs: false }],
+  [/^\/odalar$/, 'rooms', { tab: 'home' }],
+  [/^\/hizli$/, 'speed', { tabs: false, dark: true }],
+  [/^\/gorunum$/, 'look', { tabs: false }],
+  [/^\/ziyaretciler$/, 'viewers', { tabs: false }],
+  [/^\/davet$/, 'invite', { tabs: false }],
   [/^\/chat\/([\w-]+)$/, 'chat', { tabs: false }],
   [/^\/chat\/([\w-]+)\/info$/, 'chatinfo', { tabs: false }],
   [/^\/group\/new$/, 'groupnew', { tabs: false }],
@@ -160,6 +166,8 @@ async function router() {
 function wireRealtime() {
   connectSocket();
   initCalls();
+  setTimeout(checkSafety, 2500);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkSafety(); });
   on('notification', (n) => {
     state.badges.notifications++; emit('badges', state.badges);
     if (location.hash === '#/notifications') return;

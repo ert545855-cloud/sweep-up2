@@ -8,6 +8,7 @@ const PRIV = [
   ['hideLastSeen', 'eye', 'Son görülmeyi gizle', 'Çevrimiçi durumun ve son görülmen kimseye görünmez'],
   ['hideRead', 'dcheck', 'Okundu bilgisini kapat', 'Mavi tik gönderilmez; sen de başkalarınınkini göremezsin'],
   ['hideFromDeck', 'flame', 'Kaydırmada beni gösterme', 'Keşfet destesinde yeni kişilere çıkmazsın'],
+  ['hideVisits', 'eye', 'Profil ziyaretlerimi gösterme', 'Baktığın profillerin ziyaretçi listesinde görünmezsin'],
 ];
 import { notifSettings, themeMenu } from './profile.js';
 import { openFilters } from './swipe.js';
@@ -20,7 +21,11 @@ export default function settings(view) {
     <div class="group">
       ${state.config?.features?.market ? `<a class="it" href="#/market">${icon('bag')}<span class="grow">SwipeUp Store<div class="sub">İkinci el al-sat, siparişlerin ve satış bakiyen</div></span></a>` : ''}
       <a class="it" href="#/fal">${icon('star')}<span class="grow">${me.role === 'falci' ? 'Fal kuyruğu' : 'Fal'}<div class="sub">${me.role === 'falci' ? 'Gelen fal isteklerini cevapla' : 'Falcı Teyze’ye kahve falı, tarot, burç, aşk uyumu'}</div></span></a>
-      <a class="it" href="#/edit">${icon('edit')}<span class="grow">Profili düzenle<div class="sub">Fotoğraflar, biyografi, ilgi alanları</div></span></a>
+      <a class="it" href="#/edit">${icon('edit')}<span class="grow">Profili düzenle<div class="sub">Fotoğraflar, sesli tanıtım, profil soruları</div></span></a>
+      <a class="it" href="#/gorunum">${icon('crown')}<span class="grow">Çerçeve ve rozetler<div class="sub">Profil fotoğrafına çerçeve, sınırlı etkinlik rozetleri</div></span></a>
+      <a class="it" href="#/ziyaretciler">${icon('eye')}<span class="grow">Profilini kimler gördü<div class="sub">Son 7 günün ziyaretçileri</div></span></a>
+      <a class="it" href="#/odalar">${icon('users')}<span class="grow">Etkinlik odaları ve hızlı tanışma<div class="sub">Konu odaları, 3 dakikalık görüntülü turlar</div></span></a>
+      <a class="it" href="#/davet">${icon('gift')}<span class="grow">Davet et, kazan<div class="sub">Arkadaşın katılınca ikiniz de jeton kazanın</div></span></a>
       <button class="it pref">${icon('sliders')}<span class="grow">Kaydırma tercihleri<div class="sub">Yaş aralığı, uzaklık, kimleri görmek istediğin</div></span></button>
     </div>
     <div class="group-t">Üyelik</div>

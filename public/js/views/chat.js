@@ -7,6 +7,8 @@ import { startCall } from '../calls.js';
 import { FAL_TYPES, zodiacOf } from '../fal-data.js';
 
 const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
+const planDate = (t) => new Date(t).toLocaleString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+const localInput = (t) => { const d = new Date(t - new Date().getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
 
 // OpenStreetMap karolarıyla küçük harita önizlemesi
 function mapHtml(lat, lng) {
@@ -115,6 +117,15 @@ export default async function chat(view, chatId) {
         ${f.partner ? `<div class="fq-line">💞 ${esc(f.name)} & ${esc(f.partner.name)}${zodiacOf(f.partner.zodiac) ? ` (${zodiacOf(f.partner.zodiac)[2]} ${zodiacOf(f.partner.zodiac)[1]})` : ''}</div>` : ''}
         ${f.note ? `<p class="fq-note">${esc(f.note)}</p>` : ''}${meta}</div>`;
     }
+    if (m.game) return `<div class="msg game-msg">${gameHtml(m)}${meta}</div>`;
+    if (m.plan) return `<div class="msg plan-msg">${planHtml(m)}${meta}</div>`;
+    if (m.viewOnce) {
+      const mine = m.from === state.me.id;
+      const opened = m.viewOnceState === 'opened' || (m.openedBy || []).includes(state.me.id);
+      return `<div class="msg vo-msg ${opened ? 'used' : ''}">${mine || opened
+        ? `<span class="vo-ic">${icon('eye')}</span><span><b>Tek seferlik fotoğraf</b><small>${opened ? 'Açıldı' : 'Henüz açılmadı'}</small></span>`
+        : `<button class="vo-open"><span class="vo-ic">1</span><span><b>Fotoğrafı aç</b><small>Sadece bir kez görebilirsin</small></span></button>`}${meta}</div>`;
+    }
     if (m.location) {
       const l = m.location;
       return `<div class="msg loc"><a href="https://maps.google.com/?q=${l.lat},${l.lng}" target="_blank" rel="noopener">${mapHtml(l.lat, l.lng)}
@@ -127,8 +138,49 @@ export default async function chat(view, chatId) {
         : `<a href="${esc(m.media)}" target="_blank" rel="noopener"><img src="${esc(m.media)}" alt="Fotoğraf" loading="lazy"></a>`}${m.text ? '' : meta}</div>
         ${m.text ? `<div class="msg">${reply}${esc(m.text)}${meta}</div>` : ''}`;
     }
-    return `<div class="msg">${story}${reply}${esc(m.text)}${meta}</div>`;
+    const quote = m.quote?.kind === 'prompt' ? `<span class="pq-quote"><small>${esc(m.quote.q)}</small>${esc(m.quote.a)}</span>` : '';
+    if (m.superMsg) return `<div class="msg super-msg"><span class="sm-tag">💌 Süper mesaj</span>${esc(m.text)}${meta}</div>`;
+    return `<div class="msg">${story}${quote}${reply}${esc(m.text)}${meta}</div>`;
   };
+  const otherName = () => (other?.name || '').split(' ')[0];
+  function gameHtml(m) {
+    const g = m.game; const me = state.me.id; const mine = m.from === me;
+    if (g.kind === 'ikidogru') {
+      const guessed = Object.entries(g.guesses || {})[0];
+      const head = `<div class="gm-h">🎲 <b>İki doğru bir yalan</b></div>`;
+      if (!guessed) {
+        if (mine) return `${head}<ol class="gm-items">${g.items.map((t) => `<li>${esc(t)}</li>`).join('')}</ol><p class="gm-s">${esc(otherName())} yalanı bulmaya çalışıyor…</p>`;
+        return `${head}<p class="gm-s">Sence hangisi yalan?</p><div class="gm-opts">${g.items.map((t, i) => `<button class="gm-guess" data-i="${i}">${esc(t)}</button>`).join('')}</div>`;
+      }
+      const [, gi] = guessed; const right = gi === g.lie;
+      return `${head}<ol class="gm-items">${g.items.map((t, i) => `<li class="${i === g.lie ? 'lie' : ''} ${i === gi ? 'picked' : ''}">${esc(t)}${i === g.lie ? '<em>yalan</em>' : ''}</li>`).join('')}</ol>
+        <p class="gm-r ${right ? 'ok' : 'no'}">${right ? (mine ? `${esc(otherName())} yalanı buldu 🎯` : 'Bildin! 🎯') : (mine ? `${esc(otherName())} kandırıldı 😏` : 'Kandırıldın 😄')}</p>`;
+    }
+    if (g.kind === 'bumu') {
+      const head = `<div class="gm-h">🤔 <b>Bu mu şu mu?</b></div>`;
+      const ans = g.answers || {}; const mineA = ans[me]; const ids = Object.keys(ans);
+      if (ids.length >= 2) {
+        const oid = ids.find((x) => x !== me);
+        const a = ans[me]; const b = ans[oid];
+        const same = g.qs.filter((_, i) => a[i] === b[i]).length;
+        return `${head}<div class="bm-res">${g.qs.map((q, i) => `<div class="bm-row ${a[i] === b[i] ? 'same' : ''}"><span>${esc(q[a[i]])}</span><i>${a[i] === b[i] ? '💞' : '↔'}</i><span>${esc(q[b[i]])}</span></div>`).join('')}</div>
+          <p class="gm-r ok">${g.qs.length} soruda ${same} uyum${same >= 4 ? ' 🔥' : same >= 3 ? ' ✨' : ''}</p><small class="bm-leg"><span>Sen</span><span>${esc(otherName())}</span></small>`;
+      }
+      if (mineA) return `${head}<p class="gm-s">Cevapların gönderildi. ${esc(otherName())} cevaplayınca uyumunuz görünecek.</p>`;
+      return `${head}<p class="gm-s">${g.qs.length} hızlı soru: ${g.qs.slice(0, 2).map((q) => `${esc(q[0])} mu ${esc(q[1])} mu`).join(', ')}…</p><button class="btn primary sm bm-play">Cevapla</button>`;
+    }
+    return '';
+  }
+  function planHtml(m) {
+    const p = m.plan; const me = state.me.id;
+    const past = p.when < Date.now(); const ok = p.ok?.[me];
+    return `<div class="pl-h">📅 <b>Buluşma planı</b></div>
+      <div class="pl-row"><span>Ne zaman</span><b>${esc(planDate(p.when))}</b></div>
+      <div class="pl-row"><span>Nerede</span><b>${esc(p.place)}</b></div>
+      ${p.note ? `<p class="pl-note">${esc(p.note)}</p>` : ''}
+      <div class="pl-btns"><button class="btn sm pl-share">${icon('shield')} Arkadaşınla paylaş</button>
+      ${ok ? '<span class="pill ok">💛 İyi olduğunu bildirdin</span>' : past ? '<button class="btn sm primary pl-ok">İyiyim</button>' : ''}</div>`;
+  }
   const bubble = (m, prev) => {
     const day = !prev || new Date(prev.at).toDateString() !== new Date(m.at).toDateString();
     const dayHtml = day ? `<div class="day">${dayLabel(m.at)}</div>` : '';
@@ -176,6 +228,64 @@ export default async function chat(view, chatId) {
   });
 
 
+  // ---- Oyun, plan ve tek seferlik fotoğraf ----
+  const upd = (m) => { const i = msgs.findIndex((x) => x.id === m.id); if (i >= 0) { msgs[i] = m; repaintOne(m); } };
+  box.addEventListener('click', async (e) => {
+    const m = findMsg(e.target); if (!m) return;
+    try {
+      const gb = e.target.closest('.gm-guess');
+      if (gb) { upd(await api(`/messages/${m.id}/game`, { body: { guess: +gb.dataset.i } })); return; }
+      if (e.target.closest('.bm-play')) { bumuSheet(m); return; }
+      if (e.target.closest('.vo-open')) { openViewOnce(m); return; }
+      if (e.target.closest('.pl-share')) {
+        const r = await api(`/messages/${m.id}/safety`, { body: {} });
+        const url = `${location.origin}${r.url}`;
+        const text = `Buluşma bilgilerim: ${planDate(m.plan.when)}, ${m.plan.place}. ${other.name} (@${other.username}) ile görüşüyorum. Durumumu buradan takip edebilirsin: ${url}`;
+        if (navigator.share) await navigator.share({ title: 'SwipeUp buluşma güvenliği', text }).catch(() => {});
+        else { await navigator.clipboard?.writeText(text); toast('Bağlantı kopyalandı. Bir arkadaşına gönder.'); }
+        return;
+      }
+      if (e.target.closest('.pl-ok')) {
+        const r = await api(`/messages/${m.id}/safety`, { body: {} });
+        await api(`/safety/${r.token}/ok`, { body: {} });
+        toast('Paylaştığın kişi iyi olduğunu görecek 💛');
+      }
+    } catch (er) { toast(er.message); }
+  });
+  function bumuSheet(m) {
+    const g = m.game; const pick = g.qs.map(() => null);
+    sheet('Bu mu şu mu?', `<div class="bm-form">${g.qs.map((q, i) => `<div class="bm-q" data-i="${i}"><button data-v="0">${esc(q[0])}</button><span>ya da</span><button data-v="1">${esc(q[1])}</button></div>`).join('')}
+      <button class="btn primary block bm-send" disabled>Gönder</button></div>`, {
+      onMount(sh, close) {
+        const f = sh.querySelector('.bm-form');
+        f.onclick = async (e) => {
+          const b = e.target.closest('.bm-q button');
+          if (b) {
+            const row = b.closest('.bm-q'); pick[+row.dataset.i] = +b.dataset.v;
+            row.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+            f.querySelector('.bm-send').disabled = pick.includes(null);
+            return;
+          }
+          if (e.target.closest('.bm-send')) {
+            try { upd(await api(`/messages/${m.id}/game`, { body: { answers: pick } })); close(); } catch (er) { toast(er.message); }
+          }
+        };
+      },
+    });
+  }
+  async function openViewOnce(m) {
+    let r;
+    try { r = await api(`/messages/${m.id}/open`, { body: {} }); } catch (er) { toast(er.message); return; }
+    const ov = el(`<div class="vo-view" role="dialog" aria-label="Tek seferlik fotoğraf"><img src="${esc(r.media)}" alt="" draggable="false"><div class="vo-bar"><span>${icon('eye')} Kapatınca bir daha açılamaz</span><button class="ib vo-x" aria-label="Kapat">${icon('close')}</button></div></div>`);
+    ov.addEventListener('contextmenu', (e) => e.preventDefault());
+    const close = () => { ov.remove(); document.removeEventListener('visibilitychange', hide); };
+    const hide = () => { if (document.visibilityState !== 'visible') close(); };
+    document.addEventListener('visibilitychange', hide);
+    ov.querySelector('.vo-x').onclick = close;
+    document.body.append(ov);
+    m.openedBy = [...(m.openedBy || []), state.me.id]; upd({ ...m, viewOnceState: 'opened' });
+  }
+
   try {
     if (!localStorage.getItem('su_hint_msgmenu')) {
       localStorage.setItem('su_hint_msgmenu', '1');
@@ -221,7 +331,7 @@ export default async function chat(view, chatId) {
   }
   let lp = null; let sx = 0; let sy = 0; let swipeEl = null; let dx = 0;
   box.addEventListener('pointerdown', (e) => {
-    const m = findMsg(e.target); if (!m || e.target.closest('a, video, .pp')) return;
+    const m = findMsg(e.target); if (!m || e.target.closest('a, video, .pp, button')) return;
     sx = e.clientX; sy = e.clientY; dx = 0; swipeEl = e.target.closest('.mwrap');
     lp = setTimeout(() => { lp = null; navigator.vibrate?.(15); openMenu(m, swipeEl); swipeEl = null; }, 450);
   });
@@ -388,6 +498,9 @@ export default async function chat(view, chatId) {
     comp.querySelector('.pic').onclick = () => sendMedia('image/*,video/*');
     comp.querySelector('.more-b').onclick = () => sheet(null, `<div class="menu">
       <button data-a="cam">${icon('camera')}Fotoğraf çek</button>
+      <button data-a="once">${icon('eye')}<span class="grow">Tek seferlik fotoğraf<div class="sub muted" style="font-size:12.5px">Bir kez açılır, sonra silinir</div></span></button>
+      ${isGroup ? '' : `<button data-a="game">🎲<span class="grow">Oyun başlat<div class="sub muted" style="font-size:12.5px">İki doğru bir yalan, Bu mu şu mu</div></span></button>
+      <button data-a="plan">📅<span class="grow">Buluşma planla<div class="sub muted" style="font-size:12.5px">Tarih, yer ve arkadaşınla güvenlik paylaşımı</div></span></button>`}
       <button data-a="loc">${icon('mapPin')}Konum gönder</button>
       <button data-a="ttl">${icon('timer')}<span class="grow">Kaybolan mesajlar</span><span class="muted">${ttlLabel(ttl)}</span></button></div>`, {
       onMount(sh, close) {
@@ -397,6 +510,9 @@ export default async function chat(view, chatId) {
           if (a === 'cam') sendMedia('image/*', 'environment');
           if (a === 'loc') shareLocation();
           if (a === 'ttl') ttlSheet();
+          if (a === 'once') sendOnce();
+          if (a === 'game') gameSheet();
+          if (a === 'plan') planSheet();
         };
       },
     });
@@ -443,6 +559,56 @@ export default async function chat(view, chatId) {
     go.addEventListener('click', (e) => { if (!hasText()) e.preventDefault(); });
   }
   paintComposer();
+
+  async function sendOnce() {
+    const f = await pickFile('image/*'); if (!f) return;
+    toast('Gönderiliyor...', { ms: 1500 });
+    try { const up = await uploadFile(await compressImage(f)); await send({ media: up.url, mediaType: 'image', viewOnce: true }); } catch (er) { toast(er.message); }
+  }
+  const addMsg = (m) => { if (m?.id && !msgs.some((x) => x.id === m.id)) { msgs.push(m); if (msgs.length === 1) paintAll(); else { box.insertAdjacentHTML('beforeend', bubble(m, msgs[msgs.length - 2])); box.scrollTop = box.scrollHeight; } } };
+  function gameSheet() {
+    sheet('Buz kırıcı oyunlar', `<div class="menu"><button data-g="ikidogru">🎲<span class="grow">İki doğru bir yalan<div class="sub muted" style="font-size:12.5px">Kendin hakkında 3 şey yaz, biri yalan olsun</div></span></button>
+      <button data-g="bumu">🤔<span class="grow">Bu mu şu mu?<div class="sub muted" style="font-size:12.5px">5 hızlı soru, ne kadar uyumlusunuz</div></span></button></div>`, {
+      onMount(sh, close) {
+        sh.querySelector('.menu').onclick = async (e) => {
+          const g = e.target.closest('[data-g]')?.dataset.g; if (!g) return;
+          close();
+          if (g === 'bumu') { try { addMsg(await api(`/chats/${chatId}/game`, { body: { kind: 'bumu' } })); } catch (er) { toast(er.message); } return; }
+          sheet('İki doğru bir yalan', `<form class="form id-f">${[0, 1, 2].map((i) => `<label class="id-row"><input type="radio" name="lie" value="${i}" aria-label="${i + 1}. cümle yalan"><input class="field" name="t${i}" maxlength="120" placeholder="${['Hiç uçağa binmedim', 'Üç dil konuşuyorum', 'Bir kez ünlü biriyle tanıştım'][i]}"></label>`).join('')}
+            <p class="muted" style="margin:0;font-size:12.5px">Yalan olanın yanındaki daireyi işaretle. Karşındaki tahmin edene kadar gizli kalır.</p>
+            <button class="btn primary block">Gönder</button></form>`, {
+            onMount(sh2, close2) {
+              const f = sh2.querySelector('form');
+              f.onsubmit = async (ev) => {
+                ev.preventDefault();
+                const lie = f.querySelector('[name=lie]:checked');
+                if (!lie) return toast('Hangisinin yalan olduğunu işaretle.');
+                try { addMsg(await api(`/chats/${chatId}/game`, { body: { kind: 'ikidogru', items: [f.t0.value, f.t1.value, f.t2.value], lie: +lie.value } })); close2(); } catch (er) { toast(er.message); }
+              };
+            },
+          });
+        };
+      },
+    });
+  }
+  function planSheet() {
+    const def = new Date(); def.setDate(def.getDate() + 1); def.setHours(19, 0, 0, 0);
+    sheet('Buluşma planla', `<form class="form pl-f">
+      <label>Ne zaman<input class="field" type="datetime-local" name="w" value="${localInput(def.getTime())}" min="${localInput(Date.now())}"></label>
+      <label>Nerede<input class="field" name="p" maxlength="120" placeholder="Ör. Moda sahili, Kadıköy"></label>
+      <label>Not (isteğe bağlı)<input class="field" name="n" maxlength="200" placeholder="Kahve içeriz ☕"></label>
+      <p class="muted" style="margin:0;font-size:12.5px">💛 İlk buluşmayı kalabalık bir yerde yap. Planı bir arkadaşınla paylaşabilir, sonra “İyiyim” diyerek haber verebilirsin.</p>
+      <button class="btn primary block">Planı gönder</button></form>`, {
+      onMount(sh, close) {
+        const f = sh.querySelector('form');
+        f.onsubmit = async (e) => {
+          e.preventDefault();
+          const when = new Date(f.w.value).getTime();
+          try { addMsg(await api(`/chats/${chatId}/plan`, { body: { when, place: f.p.value, note: f.n.value } })); close(); } catch (er) { toast(er.message); }
+        };
+      },
+    });
+  }
 
   function shareLocation() {
     if (!navigator.geolocation) return toast('Bu cihaz konum paylaşmayı desteklemiyor.');

@@ -31,6 +31,9 @@ const DEFAULTS = {
   creatorShare: 0.6, // canlı yayın hediyelerinden yayıncıya kalan pay
   falciShare: 0.7, // ücretli faldan Falcı Teyze'ye kalan pay
   coinTL: 0.2, // kazanılan 1 jetonun ödeme karşılığı (₺)
+  superMsgCoins: 30, // eşleşmeden süper mesaj
+  inviteCoins: 50, // davet eden ve edilene
+  falSubCoins: 250, // Falcı Teyze aylık aboneliği
 };
 
 module.exports = function economy(store) {

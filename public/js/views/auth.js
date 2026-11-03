@@ -1,6 +1,7 @@
 import { api, setSession, esc, logo, state, toast } from '../core.js';
 import { icon } from '../icons.js';
 import { legalSheet } from './legal.js';
+import { pendingRef } from '../extras.js';
 
 // En geç bugünden 18 yıl önce doğmuş olmalı
 export const maxBirth = () => { const d = new Date(); d.setFullYear(d.getFullYear() - 18); return d.toISOString().slice(0, 10); };
@@ -82,10 +83,11 @@ export default function auth(view, mode) {
     try {
       if (reg && !f.birthdate.value) throw new Error('Doğum tarihini gir.');
       if (reg && !f.accept.checked) throw new Error('Devam etmek için koşulları kabul etmelisin.');
-      const body = { username: f.username.value, password: f.password.value, ...(reg ? { name: f.name.value, email: f.email.value, birthdate: f.birthdate.value, accept: f.accept.checked } : {}) };
+      const body = { username: f.username.value, password: f.password.value, ...(reg ? { name: f.name.value, email: f.email.value, birthdate: f.birthdate.value, accept: f.accept.checked, ref: pendingRef() } : {}) };
       const r = await api(reg ? '/auth/register' : '/auth/login', { body });
       setSession(r.token, r.user);
-      const go = () => { location.hash = reg ? '#/edit' : '#/'; location.reload(); };
+      if (reg) { try { localStorage.removeItem('su_ref'); } catch {} }
+      const go = () => { if (location.search) history.replaceState(null, '', '/' + (reg ? '#/edit' : '#/')); location.hash = reg ? '#/edit' : '#/'; location.reload(); };
       if (r.recoveryCode) codeScreen(view, r.recoveryCode, go); else go();
     } catch (er) {
       err.textContent = er.message;

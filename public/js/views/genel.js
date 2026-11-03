@@ -7,11 +7,15 @@ import { restoreDraft } from '../update.js';
 const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
 export const GENEL_SEEN = 'su_genel_seen';
 
-export default async function genel(view) {
+export default async function genel(view, roomId) {
+  const RID = roomId || 'genel';
+  const isMain = RID === 'genel';
+  const q = isMain ? '' : `room=${encodeURIComponent(RID)}`;
   view.innerHTML = `<div class="chat genel">
     <header class="topbar bordered">
-      <a class="ib" href="#/chats" aria-label="Geri">${icon('back')}</a>
-      <div class="who"><span class="genel-ic">${icon('users')}</span><div class="grow"><div class="n">Genel sohbet</div><div class="s on"><span class="oc">…</span> çevrimiçi</div></div></div>
+      <a class="ib" href="${isMain ? '#/chats' : '#/odalar'}" aria-label="Geri">${icon('back')}</a>
+      <div class="who"><span class="genel-ic">${isMain ? icon('users') : '<span class="rm-em"></span>'}</span><div class="grow"><div class="n">${isMain ? 'Genel sohbet' : ''}</div><div class="s on"><span class="oc">…</span> çevrimiçi<span class="rm-h"></span></div></div></div>
+      ${isMain ? `<a class="ib" href="#/odalar" aria-label="Etkinlik odaları">${icon('grid')}</a>` : ''}
       <button class="ib rules" aria-label="Kurallar">${icon('shield')}</button>
     </header>
     <div class="msgs" role="log" aria-live="polite"><div class="spinner" style="margin-top:30vh"></div></div>
@@ -26,6 +30,7 @@ export default async function genel(view) {
   let msgs = [];
   let replyTo = null;
   let more = false; let loadingOld = false;
+  let roomInfo = {};
 
   const bubble = (m, prev) => {
     const day = !prev || new Date(prev.at).toDateString() !== new Date(m.at).toDateString();
@@ -47,22 +52,49 @@ export default async function genel(view) {
   const paint = (keep) => {
     const h = box.scrollHeight; const top = box.scrollTop;
     box.innerHTML = (more ? '<button class="older link">Önceki mesajlar</button>' : '')
-      + (msgs.length ? msgs.map((m, i) => bubble(m, msgs[i - 1])).join('') : `<div class="empty"><div class="big">${icon('users')}</div><h2>Genel sohbete hoş geldin</h2>Buradaki mesajları tüm üyeler görür. İlk merhabayı sen yaz 👋</div>`);
+      + (msgs.length ? msgs.map((m, i) => bubble(m, msgs[i - 1])).join('') : isMain ? `<div class="empty"><div class="big">${icon('users')}</div><h2>Genel sohbete hoş geldin</h2>Buradaki mesajları tüm üyeler görür. İlk merhabayı sen yaz 👋</div>`
+        : `<div class="empty"><div class="big">${esc(roomInfo.em || '💬')}</div><h2>${esc(roomInfo.name || 'Oda')}</h2>${esc(roomInfo.desc || '')}<br>Odayı sen başlat 👋</div>`);
     if (keep) box.scrollTop = box.scrollHeight - h + top; else box.scrollTop = box.scrollHeight;
   };
   const near = () => box.scrollHeight - box.scrollTop - box.clientHeight < 160;
   const markSeen = () => { try { localStorage.setItem(GENEL_SEEN, String(Date.now())); } catch {} };
 
-  const d = await api('/genel');
+  let d;
+  try { d = await api(`/genel${q ? `?${q}` : ''}`); } catch (er) {
+    view.innerHTML = `<div class="empty"><div class="big">${icon('users')}</div><h2>Oda bulunamadı</h2>${esc(er.message)}<p><a class="btn primary" href="#/odalar">Odalara dön</a></p></div>`;
+    return null;
+  }
   msgs = d.items; more = d.more;
   view.querySelector('.oc').textContent = d.online || 1;
-  paint(); markSeen();
-  s?.emit('genel:join');
+  const room = d.room || {};
+  roomInfo = room;
+  if (!isMain) {
+    view.querySelector('.who .n').textContent = room.name || '';
+    view.querySelector('.rm-em').textContent = room.em || '💬';
+    view.querySelector('textarea').placeholder = `${room.name} odasına yaz...`;
+  }
+  const paintClosed = () => {
+    const open = isMain || room.open;
+    const comp = view.querySelector('.composer');
+    comp.querySelector('.row1').hidden = !open;
+    comp.querySelector('.closed-bar')?.remove();
+    if (!open) comp.insertAdjacentHTML('beforeend', `<div class="closed-bar">🔒 Oda şu an kapalı${room.opensAt ? ` · açılış: ${esc(new Date(room.opensAt).toLocaleString('tr-TR', { weekday: 'long', hour: '2-digit', minute: '2-digit' }))}` : ''}</div>`);
+    const h = view.querySelector('.rm-h');
+    if (h) h.textContent = !isMain && room.open && room.closesAt ? ` · kapanış ${new Date(room.closesAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}` : '';
+  };
+  paintClosed();
+  // açılış/kapanış saatini izle
+  const roomTimer = isMain ? null : setInterval(() => {
+    const t = Date.now();
+    if ((room.open && room.closesAt && t >= room.closesAt) || (!room.open && room.opensAt && t >= room.opensAt)) api(`/genel?${q}`).then((r) => { Object.assign(room, { open: r.room.open, closesAt: r.room.closesAt, opensAt: r.room.opensAt }); paintClosed(); }).catch(() => {});
+  }, 20000);
+  paint(); if (isMain) markSeen();
+  s?.emit('genel:join', { room: RID });
 
   box.addEventListener('click', async (e) => {
     if (!e.target.closest('.older') || loadingOld) return;
     loadingOld = true;
-    const r = await api(`/genel?before=${msgs[0]?.at || Date.now()}`).catch(() => null);
+    const r = await api(`/genel?before=${msgs[0]?.at || Date.now()}${q ? `&${q}` : ''}`).catch(() => null);
     loadingOld = false;
     if (!r) return;
     msgs = [...r.items, ...msgs]; more = r.more; paint(true);
@@ -85,7 +117,7 @@ export default async function genel(view) {
     document.body.append(pop);
     pop.style.top = `${Math.max(70, r.top - 56)}px`;
     pop.style.left = `${Math.min(window.innerWidth - pop.offsetWidth - 8, Math.max(8, r.left))}px`;
-    pop.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; s?.emit('genel:react', { id: m.id, emoji: b.textContent }); closeAll(); };
+    pop.onclick = (e) => { const b = e.target.closest('button'); if (!b) return; s?.emit('genel:react', { id: m.id, emoji: b.textContent, room: RID }); closeAll(); };
     const mine = m.userId === state.me.id;
     const closeSheet = sheet(null, `<div class="menu">
       <button data-a="reply">${icon('reply')}Yanıtla</button>
@@ -98,7 +130,7 @@ export default async function genel(view) {
           closeAll();
           if (a === 'reply') setReply(m);
           if (a === 'copy') { await navigator.clipboard?.writeText(m.text); toast('Kopyalandı.'); }
-          if (a === 'del') s?.emit('genel:delete', { id: m.id });
+          if (a === 'del') s?.emit('genel:delete', { id: m.id, room: RID });
           if (a === 'profile') location.hash = `#/u/${m.user.username}`;
           if (a === 'dm') import('../core.js').then((c) => c.openChatWith(m.userId)).catch((er) => toast(er.message));
           if (a === 'report') reportMessage({ kind: 'genel', id: m.id, user: m.user, text: m.text, media: m.media });
@@ -116,7 +148,7 @@ export default async function genel(view) {
   });
   ['pointerup', 'pointercancel', 'pointermove'].forEach((ev) => box.addEventListener(ev, (e) => { if (ev !== 'pointermove' || Math.abs(e.movementY) > 3) { clearTimeout(lp); lp = null; } }));
   box.addEventListener('contextmenu', (e) => { const m = find(e.target); if (m) { e.preventDefault(); openMenu(m, e.target.closest('.gm')); } });
-  box.addEventListener('dblclick', (e) => { const m = find(e.target); if (m && !m.deleted) s?.emit('genel:react', { id: m.id, emoji: '❤️' }); });
+  box.addEventListener('dblclick', (e) => { const m = find(e.target); if (m && !m.deleted) s?.emit('genel:react', { id: m.id, emoji: '❤️', room: RID }); });
 
   // ---- Yazma ----
   const comp = view.querySelector('.composer');
@@ -133,13 +165,13 @@ export default async function genel(view) {
   }
   comp.querySelector('.replying .x').onclick = () => setReply(null);
   const send = (payload) => new Promise((resolve) => {
-    s.emit('genel:send', { ...payload, replyTo: replyTo?.id }, (r) => { if (r?.error) toast(r.error); resolve(r); });
+    s.emit('genel:send', { ...payload, replyTo: replyTo?.id, room: RID }, (r) => { if (r?.error) toast(r.error); resolve(r); });
     setReply(null);
   });
   let lastType = 0;
   ta.addEventListener('input', () => {
     ta.style.height = 'auto'; ta.style.height = Math.min(120, ta.scrollHeight) + 'px';
-    if (Date.now() - lastType > 3000 && ta.value.trim()) { lastType = Date.now(); s?.emit('genel:typing'); }
+    if (Date.now() - lastType > 3000 && ta.value.trim()) { lastType = Date.now(); s?.emit('genel:typing', { room: RID }); }
   });
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); comp.querySelector('form').requestSubmit(); } });
   comp.querySelector('form').onsubmit = async (e) => {
@@ -163,6 +195,7 @@ export default async function genel(view) {
   let typT = null;
   const offs = [
     on('genel:msg', (m) => {
+      if ((m.room || 'genel') !== RID) return;
       if (msgs.some((x) => x.id === m.id)) return;
       if (store().blocked.has(m.userId)) return;
       const stick = near() || m.userId === state.me.id;
@@ -171,16 +204,18 @@ export default async function genel(view) {
       box.querySelector('.gtyping')?.remove();
       box.insertAdjacentHTML('beforeend', bubble(m, msgs[msgs.length - 2]));
       if (stick) box.scrollTop = box.scrollHeight;
-      markSeen();
+      if (isMain) markSeen();
     }),
     on('genel:update', (m) => {
+      if ((m.room || 'genel') !== RID) return;
       const i = msgs.findIndex((x) => x.id === m.id); if (i < 0) return;
       msgs[i] = m;
       const w = box.querySelector(`[data-id="${CSS.escape(m.id)}"]`);
       if (w) { const t = el(`<div>${bubble(m, msgs[i - 1])}</div>`); w.replaceWith(t.querySelector('.gm')); }
     }),
-    on('genel:online', ({ count }) => { view.querySelector('.oc').textContent = count; }),
-    on('genel:typing', ({ user }) => {
+    on('genel:online', ({ room: r, count }) => { if ((r || 'genel') === RID) view.querySelector('.oc').textContent = count; }),
+    on('genel:typing', ({ room: r, user }) => {
+      if ((r || 'genel') !== RID) return;
       if (!user || user.id === state.me.id) return;
       let t = box.querySelector('.gtyping');
       if (!t) { box.insertAdjacentHTML('beforeend', '<div class="gtyping muted"></div>'); t = box.querySelector('.gtyping'); }
@@ -188,11 +223,11 @@ export default async function genel(view) {
       if (near()) box.scrollTop = box.scrollHeight;
       clearTimeout(typT); typT = setTimeout(() => box.querySelector('.gtyping')?.remove(), 3500);
     }),
-    on('reconnected', () => { s?.emit('genel:join'); api('/genel').then((r) => { msgs = r.items; more = r.more; paint(); }).catch(() => {}); }),
+    on('reconnected', () => { s?.emit('genel:join', { room: RID }); api(`/genel${q ? `?${q}` : ''}`).then((r) => { msgs = r.items; more = r.more; paint(); }).catch(() => {}); }),
   ];
   const blockedSet = { blocked: new Set() };
   const store = () => blockedSet;
   api('/blocks').then((us) => { us.forEach((u) => blockedSet.blocked.add(u.id)); }).catch(() => {});
 
-  return () => { s?.emit('genel:leave'); offs.forEach((f) => f()); clearTimeout(typT); document.querySelector('.emoji-pop')?.remove(); markSeen(); };
+  return () => { s?.emit('genel:leave', { room: RID }); offs.forEach((f) => f()); clearTimeout(typT); clearInterval(roomTimer); document.querySelector('.emoji-pop')?.remove(); if (isMain) markSeen(); };
 }

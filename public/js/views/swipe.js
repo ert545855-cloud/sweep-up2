@@ -1,6 +1,7 @@
 import { icon } from '../icons.js';
 import { api, esc, toast, isOn, state, sheet, on, tick, plusSheet, needCoins } from '../core.js';
 import { showMatch } from '../app.js';
+import { voiceChip } from '../extras.js';
 
 export default async function swipe(view) {
   view.innerHTML = `<header class="topbar">
@@ -33,7 +34,10 @@ export default async function swipe(view) {
       <div class="info">
         <h2>${esc(u.name.split(' ')[0])} ${u.age ? `<small>${u.age}</small>` : ''}${tick(u)}</h2>
         <div class="where">${u.city || u.distanceKm ? `${icon('pin', '', 'style="width:16px;height:16px"')}${[u.city, u.distanceKm ? `${u.distanceKm} km uzakta` : ''].filter(Boolean).map(esc).join(' · ')}` : ''}</div>
+        ${(u.badges || []).length ? `<div class="badges sm">${u.badges.slice(0, 3).map((b) => `<span class="badge">${b.em} ${esc(b.name)}</span>`).join('')}</div>` : ''}
         ${u.bio ? `<p>${esc(u.bio)}</p>` : ''}
+        ${u.prompts?.[0] ? `<div class="card-pq"><small>${esc(u.prompts[0].q)}</small>${esc(u.prompts[0].a)}</div>` : ''}
+        ${u.voice ? `<div class="card-voice">${voiceChip(u.voice)}</div>` : ''}
         ${u.interests?.length ? `<div class="chips">${u.interests.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : ''}
       </div>
     </div>`;
@@ -180,6 +184,7 @@ export function openFilters(onSave) {
     <div class="range-row"><div class="vals"><span>En fazla uzaklık</span><span class="dv">${p.maxKm ? p.maxKm + ' km' : 'Sınırsız'}</span></div>
       <input type="range" name="km" min="5" max="505" step="5" value="${p.maxKm || 505}" aria-label="Uzaklık">
       <div class="loc muted" style="font-size:13px">${me.hasLocation ? 'Konumun kayıtlı (yaklaşık 1 km hassasiyetle).' : 'Uzaklığa göre görmek için konumunu paylaş.'} <button type="button" class="link gl">${me.hasLocation ? 'Konumu güncelle' : 'Konumumu kullan'}</button></div></div>
+    <label class="it vo-it"><span class="grow"><b>Yalnızca doğrulanmışlar</b><div class="sub muted" style="font-size:12.5px">Selfie ile doğrulanmış profilleri göster</div></span><input type="checkbox" class="sw" name="vo" ${p.verifiedOnly ? 'checked' : ''}></label>
     <button class="btn primary block">Kaydet</button></form>`, {
     onMount(sh, close) {
       const f = sh.querySelector('form');
@@ -201,7 +206,7 @@ export function openFilters(onSave) {
         e.preventDefault();
         let a = +f.a1.value; let b = +f.a2.value; if (a > b) [a, b] = [b, a];
         try {
-          const u = await api('/me', { method: 'PATCH', body: { lookingFor: f.lf.value, prefs: { ageMin: a, ageMax: b, maxKm: +f.km.value > 500 ? null : +f.km.value }, ...(location ? { location } : {}) } });
+          const u = await api('/me', { method: 'PATCH', body: { lookingFor: f.lf.value, prefs: { ageMin: a, ageMax: b, maxKm: +f.km.value > 500 ? null : +f.km.value, verifiedOnly: f.vo.checked }, ...(location ? { location } : {}) } });
           Object.assign(state.me, u); close(); onSave?.();
         } catch (er) { toast(er.message); }
       };
