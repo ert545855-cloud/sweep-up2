@@ -1254,3 +1254,9 @@ svg.pumpkin .face { animation: flicker 2.4s steps(1) infinite; filter: drop-shad
 .ev-it .ev-ic { width: 24px; display: grid; place-items: center; }
 .ev-note { margin: 0 16px 12px; padding: 10px 12px; border-radius: 14px; background: var(--uv-soft); font-size: 13px; line-height: 1.4; }
 @media (prefers-reduced-motion: reduce) { svg.pumpkin, svg.pumpkin .face { animation: none; } }
+
+/* Fotoğraf hazırlanırken önizleme */
+.picker.busy { pointer-events: none; }
+.picker.busy::after { content: ""; position: absolute; inset: 0; z-index: 5; border-radius: inherit; background: rgba(0,0,0,.35) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50'%3E%3Ccircle cx='25' cy='25' r='20' fill='none' stroke='white' stroke-width='4' stroke-dasharray='90 40' stroke-linecap='round'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0 25 25' to='360 25 25' dur='.8s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/svg%3E") center / 44px no-repeat; }
+.story-v .snd { position: absolute; z-index: 4; right: 14px; top: calc(66px + var(--safe-t)); padding: 7px 12px; border-radius: 999px; background: rgba(0,0,0,.55); color: #fff; font-size: 13px; font-weight: 700; border: 0; }
+.story-v.loading .media::after { content: ""; position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 3px solid rgba(255,255,255,.3); border-top-color: #fff; animation: spin .8s linear infinite; }

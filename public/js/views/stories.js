@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, ago, toast, sheet, avatar, emit, nm, filterCss,
+  state, api, esc, ago, toast, sheet, avatar, emit, nm, filterCss, scaleStickerLayer,
 } from '../core.js';
 import { musicChip } from '../music.js';
 
@@ -34,6 +34,7 @@ export default async function stories(view, userId) {
   let ii = Math.max(0, groups[gi].items.findIndex((x) => !x.seen));
   let raf = 0; let t0 = 0; let dur = 5000; let paused = false; let pausedAt = 0; let closed = false;
   let music = null;
+  let unscale = null;
   const stopMusic = () => { if (music) { music.pause(); music.src = ''; music = null; } };
 
   const close = () => { closed = true; cancelAnimationFrame(raf); stopMusic(); history.length > 1 ? history.back() : (location.hash = '#/'); };
@@ -66,12 +67,32 @@ export default async function stories(view, userId) {
       music.play().catch(() => {});
       if (v) v.muted = true;
     }
-    if (v) v.onloadedmetadata = () => { dur = Math.min(30000, (v.duration || 5) * 1000); };
+    unscale?.(); unscale = scaleStickerLayer(view.querySelector('.stk-layer'));
+    // Video yüklenip oynamaya başlayana kadar süre işlemesin; iPhone sesli otomatik oynatmayı
+    // engellerse sessiz oynat ve "Sesi aç" düğmesi göster
+    let waiting = !!v;
+    if (v) {
+      view.querySelector('.story-v').classList.add('loading');
+      v.onloadedmetadata = () => { dur = Math.min(30000, (v.duration || 5) * 1000); };
+      const go = () => { if (!waiting) return; waiting = false; t0 = performance.now(); view.querySelector('.story-v')?.classList.remove('loading'); };
+      v.addEventListener('playing', go, { once: true });
+      v.addEventListener('error', () => { go(); toast('Bu video bu cihazda oynatılamıyor.'); }, { once: true });
+      setTimeout(go, 12000);
+      v.play().catch(() => {
+        v.muted = true;
+        v.play().catch(() => {});
+        if (!mu) {
+          const b = document.createElement('button'); b.className = 'snd'; b.textContent = '🔇 Sesi aç';
+          b.onclick = (e) => { e.stopPropagation(); v.muted = false; v.play().catch(() => {}); b.remove(); };
+          view.querySelector('.story-v').append(b);
+        }
+      });
+    }
     t0 = performance.now(); paused = false;
     const bar = view.querySelectorAll('.bars b')[ii];
     const tick = (t) => {
       if (closed) return;
-      if (!paused) {
+      if (!paused && !waiting) {
         const p = Math.min(1, (t - t0) / dur);
         bar.style.width = `${p * 100}%`;
         if (p >= 1) return next();
@@ -177,5 +198,5 @@ export default async function stories(view, userId) {
   const key = (e) => { if (e.target.matches('input')) return; if (e.key === 'ArrowRight') next(); if (e.key === 'ArrowLeft') prev(); if (e.key === 'Escape') close(); };
   window.addEventListener('keydown', key);
   show();
-  return () => { closed = true; cancelAnimationFrame(raf); stopMusic(); window.removeEventListener('keydown', key); emit('stories:update', {}); };
+  return () => { closed = true; cancelAnimationFrame(raf); stopMusic(); unscale?.(); window.removeEventListener('keydown', key); emit('stories:update', {}); };
 }

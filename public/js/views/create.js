@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  api, toast, compressImage, uploadFile, esc, state, sheet, FILTERS, filterCss, fmtDur,
+  api, toast, compressImage, uploadFile, esc, state, sheet, FILTERS, filterCss, fmtDur, prepareMedia, uploadPrepared, isVideoFile, isHeicFile, fileType, scaleStickerLayer,
 } from '../core.js';
 import { pickMusic, musicChip } from '../music.js';
 
@@ -45,7 +45,11 @@ function pickFiles(accept, multiple) {
   return new Promise((resolve) => {
     const inp = document.createElement('input');
     inp.type = 'file'; inp.accept = accept; inp.multiple = !!multiple;
-    inp.onchange = () => resolve([...inp.files]);
+    // iPhone'da sayfaya eklenmemiş dosya seçici bazen seçimi bildirmiyor
+    inp.style.cssText = 'position:fixed;left:-9999px;opacity:0;width:1px;height:1px';
+    document.body.append(inp);
+    inp.onchange = () => { resolve([...inp.files]); inp.remove(); };
+    inp.addEventListener('cancel', () => { resolve([]); inp.remove(); });
     inp.click();
   });
 }
@@ -55,6 +59,7 @@ const SPEEDS = [0.5, 0.75, 1, 1.5, 2];
 
 export default function create(view, kind) {
   let mode = ['reel', 'story'].includes(kind) ? kind : 'image';
+  let unscale = null;
   const TITLES = { image: 'Yeni gönderi', reel: 'Yeni dalga', story: 'Yeni hikaye' };
   let items = []; // gönderi: [{file,url,filter}]
   let cur = 0;
@@ -214,12 +219,13 @@ export default function create(view, kind) {
     return '';
   }
   function paintStory() {
-    const vid = file.type.startsWith('video');
+    const vid = isVideoFile(file);
     const fst = `style="filter:${filterCss(storyFilter)}"`;
     picker.innerHTML = `${vid ? `<video src="${fileUrl}" autoplay muted loop playsinline class="fit" ${fst}></video>` : `<img src="${fileUrl}" class="blurbg" alt=""><img src="${fileUrl}" alt="Önizleme" class="fit" ${fst}>`}
       <div class="stk-layer">${stickers.map(stickerHtml).join('')}</div>
       <button class="swap" aria-label="Başka dosya seç">${icon('image')}</button>`;
     picker.querySelector('.swap').onclick = choose;
+    unscale?.(); unscale = scaleStickerLayer(picker.querySelector('.stk-layer'));
     tools.innerHTML = `<div class="stk-tools">
       <button data-k="text">${icon('text')}Metin</button><button data-k="poll">${icon('poll')}Anket</button>
       <button data-k="question">${icon('question')}Soru</button><button data-k="music">${icon('music')}Müzik</button><button data-k="mention">${icon('at')}Bahset</button></div>
@@ -302,14 +308,29 @@ export default function create(view, kind) {
     const accept = { reel: 'video/*', story: 'image/*,video/*', image: 'image/*' }[mode];
     const fs = await pickFiles(accept, mode === 'image');
     if (!fs.length) return;
-    if (fs.some((f) => f.size > 40 * 1024 * 1024)) return toast('Dosya en fazla 40 MB olabilir.');
+    if (fs.some((f) => f.size > 40 * 1024 * 1024)) return toast('Dosya en fazla 40 MB olabilir. Daha kısa bir video seç.', { ms: 4500 });
+    // Fotoğrafları hemen JPEG'e çevir: HEIC gibi her tarayıcının açamadığı biçimler önizlemede de görünsün
+    const prep = async (f) => {
+      try {
+        const r = await prepareMedia(f);
+        if (mode === 'image' && isVideoFile(r)) { toast('Gönderiye fotoğraf ekleyebilirsin; video için Dalga’yı seç.'); return null; }
+        return r;
+      } catch (e) { toast(e.message || 'Dosya açılamadı.'); return null; }
+    };
+    const slow = fs.some((f) => isHeicFile(f) || !fileType(f));
+    if (slow) toast('Fotoğraf hazırlanıyor…', { ms: 1800 });
+    picker.classList.add('busy');
+    const ready2 = [];
+    try { for (const f of (mode === 'image' ? fs : fs.slice(0, 1))) { const r = await prep(f); if (r) ready2.push(r); } } finally { picker.classList.remove('busy'); }
+    if (!ready2.length) return;
     if (mode === 'image') {
       const room = 10 - items.length;
-      if (fs.length > room) toast('En fazla 10 fotoğraf ekleyebilirsin.');
-      items.push(...fs.slice(0, room).map((f) => ({ file: f, url: URL.createObjectURL(f), filter: '' })));
+      if (ready2.length > room) toast('En fazla 10 fotoğraf ekleyebilirsin.');
+      items.push(...ready2.slice(0, room).map((f) => ({ file: f, url: URL.createObjectURL(f), filter: '' })));
       cur = items.length - 1;
     } else {
-      file = fs[0]; fileUrl = URL.createObjectURL(file);
+      if (mode === 'reel' && !isVideoFile(ready2[0])) return toast('Dalga için bir video seç.');
+      file = ready2[0]; fileUrl = URL.createObjectURL(file);
       edit = { start: 0, end: null, speed: 1, filter: '', music: edit.music, muteOriginal: edit.muteOriginal };
       storyFilter = '';
     }
@@ -342,7 +363,7 @@ export default function create(view, kind) {
       if (mode === 'image') {
         const out = [];
         for (let i = 0; i < items.length; i++) {
-          const up = await uploadFile(await compressImage(items[i].file), prog(i / items.length, 1 / items.length));
+          const up = await uploadPrepared(await compressImage(items[i].file), prog(i / items.length, 1 / items.length));
           out.push({ media: up.url, type: 'image', filter: items[i].filter || null });
         }
         const p = await api('/posts', { body: { type: 'image', items: out, caption: view.querySelector('.cap').value } });
@@ -350,9 +371,9 @@ export default function create(view, kind) {
         location.hash = `#/p/${p.id}`;
         return;
       }
-      const isImg = file.type.startsWith('image/');
+      const isImg = !isVideoFile(file);
       if (mode === 'story') {
-        const up = await uploadFile(isImg ? await compressImage(file) : file, prog(0, 0.8));
+        const up = await uploadPrepared(isImg ? await compressImage(file) : file, prog(0, 0.8));
         const st = [];
         for (const s of stickers) {
           if (s.type === 'music') {
@@ -369,7 +390,7 @@ export default function create(view, kind) {
       const pf = await posterFrom(file, edit.start + 0.3);
       const poster = pf ? (await uploadFile(pf)).url : null;
       const m = edit.music;
-      const up = await uploadFile(file, prog(0, m?.file ? 0.8 : 1));
+      const up = await uploadPrepared(file, prog(0, m?.file ? 0.8 : 1));
       let audio = null;
       if (m) audio = m.file ? (await uploadFile(m.file, prog(0.8, 0.2))).url : m.src;
       const p = await api('/posts', {
@@ -389,5 +410,5 @@ export default function create(view, kind) {
     }
   };
   goBtns.forEach((b) => { b.onclick = share; });
-  return () => stopAudio();
+  return () => { stopAudio(); unscale?.(); };
 }

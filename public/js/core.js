@@ -51,25 +51,110 @@ export function uploadFile(file, onProgress) {
   });
 }
 
-// Fotoğrafı yüklemeden önce küçült (en uzun kenar 1440px)
-export async function compressImage(file, max = 1440, quality = 0.85) {
-  if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+// Dosya türü: bazı telefonlar türü boş gönderir, uzantıdan tahmin et
+const EXT_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif', mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', '3gp': 'video/3gpp', m4a: 'audio/mp4', mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav' };
+export const fileType = (f) => f?.type || EXT_TYPES[String(f?.name || '').split('.').pop().toLowerCase()] || '';
+export const isVideoFile = (f) => fileType(f).startsWith('video/');
+export const isImageFile = (f) => fileType(f).startsWith('image/');
+export const isHeicFile = (f) => /hei[cf]/i.test(fileType(f)) || /\.hei[cf]$/i.test(f?.name || '');
+
+// Fotoğrafı tarayıcıda aç: önce createImageBitmap, olmazsa <img> (Safari HEIC'i böyle açabilir)
+async function decodeImage(file) {
   const bmp = await createImageBitmap(file).catch(() => null);
-  if (!bmp) return file;
-  const s = Math.min(1, max / Math.max(bmp.width, bmp.height));
-  const c = document.createElement('canvas');
-  c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
-  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-  const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', quality));
-  return blob ? new File([blob], 'photo.jpg', { type: 'image/jpeg' }) : file;
+  if (bmp && bmp.width) return { src: bmp, w: bmp.width, h: bmp.height, done: () => bmp.close?.() };
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    if (!img.naturalWidth) throw new Error('boş');
+    return { src: img, w: img.naturalWidth, h: img.naturalHeight, done: () => URL.revokeObjectURL(url) };
+  } catch { URL.revokeObjectURL(url); return null; }
 }
+
+// Fotoğrafı yüklemeden önce küçült ve JPEG'e çevir (en uzun kenar 1440px).
+// Tarayıcı açamazsa (ör. Android'de HEIC) dosyayı olduğu gibi döndürür; sunucu çevirir.
+export async function compressImage(file, max = 1440, quality = 0.85) {
+  if (file?.prepped) return file;
+  const t = fileType(file);
+  if (t && (!t.startsWith('image/') || t === 'image/gif')) return file; // tür bilinmiyorsa yine de açmayı dene
+  const d = await decodeImage(file);
+  if (!d) return file;
+  try {
+    const s = Math.min(1, max / Math.max(d.w, d.h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(d.w * s); c.height = Math.round(d.h * s);
+    c.getContext('2d').drawImage(d.src, 0, 0, c.width, c.height);
+    const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', quality));
+    if (!blob) return file;
+    const out = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+    out.prepped = true;
+    return out;
+  } finally { d.done(); }
+}
+
+// Seçilen fotoğrafı önizleme ve paylaşım için hazırla. Tarayıcının açamadığı HEIC'i
+// sunucuya gönderip JPEG hâlini geri alır (yüklenen adres preUrl'de saklanır, tekrar yüklenmez).
+export async function prepareImage(file) {
+  if (!isImageFile(file) && !isHeicFile(file)) return file;
+  const c = await compressImage(file);
+  if (c !== file || !isHeicFile(file)) return c;
+  const up = await uploadFile(file);
+  const blob = await fetch(up.url).then((r) => (r.ok ? r.blob() : Promise.reject(new Error('Fotoğraf hazırlanamadı.'))));
+  const out = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+  out.prepped = true; out.preUrl = up.url;
+  return out;
+}
+// Hikaye çıkartmaları 390 px genişliğe göre tasarlanır; önizlemede ve her ekran boyunda
+// aynı oranda görünmesi için katman bulunduğu kutuya ölçeklenir.
+export const STORY_W = 390;
+export function scaleStickerLayer(layer) {
+  const box = layer?.parentElement; if (!box) return () => {};
+  const fit = () => {
+    const w = box.clientWidth; const h = box.clientHeight; if (!w || !h) return;
+    const k = w / STORY_W;
+    Object.assign(layer.style, { inset: 'auto', left: '0', top: '0', width: `${STORY_W}px`, height: `${h / k}px`, transform: `scale(${k})`, transformOrigin: '0 0' });
+  };
+  fit();
+  const ro = new ResizeObserver(fit); ro.observe(box);
+  return () => ro.disconnect();
+}
+
+// Seçilen herhangi bir dosyayı hazırla. Türü bilinmiyorsa önce fotoğraf olarak açmayı dener,
+// olmazsa sunucu dosyanın baytlarından ne olduğunu anlar.
+export async function prepareMedia(file) {
+  if (isVideoFile(file)) return file;
+  if (isImageFile(file) || isHeicFile(file)) return prepareImage(file);
+  const c = await compressImage(file);
+  if (c !== file) return c;
+  const up = await uploadFile(file);
+  if (String(up.mime || '').startsWith('image/')) {
+    const blob = await fetch(up.url).then((r) => r.blob());
+    const out = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+    out.prepped = true; out.preUrl = up.url;
+    return out;
+  }
+  if (String(up.mime || '').startsWith('video/')) {
+    const out = new File([file], file.name || 'video.mp4', { type: up.mime });
+    out.preUrl = up.url;
+    return out;
+  }
+  throw new Error('Bu dosya türü desteklenmiyor. Fotoğraf ya da video seç.');
+}
+
+// Hazırlanmışsa tekrar yükleme
+export const uploadPrepared = (file, onProgress) => (file?.preUrl ? Promise.resolve({ url: file.preUrl }) : uploadFile(file, onProgress));
 
 export function pickFile(accept, capture) {
   return new Promise((resolve) => {
     const inp = document.createElement('input');
     inp.type = 'file'; inp.accept = accept;
     if (capture) inp.setAttribute('capture', capture);
-    inp.onchange = () => resolve(inp.files[0] || null);
+    // iPhone'da sayfaya eklenmemiş dosya seçici bazen seçimi bildirmiyor
+    inp.style.cssText = 'position:fixed;left:-9999px;opacity:0;width:1px;height:1px';
+    document.body.append(inp);
+    inp.onchange = () => { resolve(inp.files[0] || null); inp.remove(); };
+    inp.addEventListener('cancel', () => { resolve(null); inp.remove(); });
     inp.click();
   });
 }

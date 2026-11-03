@@ -6,6 +6,7 @@ const express = require('express');
 const compression = require('compression');
 const helmet = require('helmet');
 const multer = require('multer');
+const imagefix = require('./server/imagefix');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const webpush = require('web-push');
@@ -542,12 +543,20 @@ app.post('/api/push/test', auth, wrap(async (req, res) => {
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
 app.post('/api/upload', auth, upload.single('file'), wrap(async (req, res) => {
   const f = req.file;
-  if (!f || !/^(image|video|audio)\//.test(f.mimetype)) return res.status(400).json({ error: 'Sadece fotoğraf, video veya ses yüklenebilir.' });
+  if (!f) return res.status(400).json({ error: 'Dosya gelmedi. Tekrar dene.' });
   if (limited('up:' + req.user.id, 60, 3600000)) return res.status(429).json({ error: 'Çok fazla yükleme. Biraz sonra tekrar dene.' });
+  // Türü boş gelen dosyaları baytlarından tanı; HEIC fotoğrafları JPEG'e çevir
+  let fixed;
+  try { fixed = await imagefix.normalize(f.mimetype, f.buffer); } catch (e) {
+    console.error('[upload] dönüştürülemedi:', f.mimetype, e.message);
+    return res.status(415).json({ error: 'Bu fotoğraf biçimi açılamadı. Fotoğrafı JPEG olarak kaydedip tekrar dene (iPhone: Ayarlar → Kamera → Biçimler → En Uyumlu).' });
+  }
+  const { mime, buffer } = fixed;
+  if (!/^(image|video|audio)\//.test(mime)) return res.status(400).json({ error: 'Sadece fotoğraf, video veya ses yüklenebilir.' });
   const id = nanoid(16);
-  const where = await store.saveMedia(id, f.mimetype.split(';')[0], f.buffer);
-  store.put('media_meta', { id, userId: req.user.id, mime: f.mimetype.split(';')[0], size: f.buffer.length, where, at: now() });
-  res.json({ url: `/media/${id}`, type: f.mimetype.split('/')[0] });
+  const where = await store.saveMedia(id, mime, buffer);
+  store.put('media_meta', { id, userId: req.user.id, mime, size: buffer.length, where, at: now() });
+  res.json({ url: `/media/${id}`, type: mime.split('/')[0], mime });
 }));
 
 const mediaCache = new Map(); let cacheBytes = 0;
@@ -779,7 +788,10 @@ app.post('/api/stories', auth, (req, res) => {
   if (!media) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç.' });
   const stickers = (Array.isArray(req.body.stickers) ? req.body.stickers : []).slice(0, 4).map(cleanSticker).filter(Boolean);
   const filter = FILTERS.includes(req.body.filter) ? req.body.filter : null;
-  const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: String(media), mediaType: mediaType === 'video' ? 'video' : 'image', filter, at: now(), viewers: [], stickers, votes: {}, answers: [] });
+  // Türü yüklenen dosyanın kaydından al (telefon yanlış/boş tür gönderse bile doğru gösterilsin)
+  const meta = store.get('media_meta', String(media).replace(/^\/media\//, ''));
+  const kind = meta?.mime ? (meta.mime.startsWith('video/') ? 'video' : 'image') : (mediaType === 'video' ? 'video' : 'image');
+  const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: String(media), mediaType: kind, filter, at: now(), viewers: [], stickers, votes: {}, answers: [] });
   io.emit('stories:update', { userId: req.user.id });
   res.json(s);
 });
