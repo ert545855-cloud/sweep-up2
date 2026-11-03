@@ -3,6 +3,7 @@ import { icon } from '../icons.js';
 import {
   state, api, esc, on, toast, sheet, ago, nm, pickFile, prepareImage, uploadPrepared, openChatWith, el,
 } from '../core.js';
+import { catIcon } from '../mkicons.js';
 
 let META = null;
 const getMeta = async (force) => { if (!META || force) META = await api('/market/meta'); return META; };
@@ -56,7 +57,7 @@ function home(view, sub, id) {
     ${f.seller ? '<div class="mk-seller-h"></div>' : ''}
     ${hideInfo || f.seller ? '' : `<div class="mk-trust"><span class="sh">${icon('shield')}</span><div class="grow"><b>Güvenli al, komisyonsuz sat</b>
       <span>Kargolu alışverişte ödemen ürün eline ulaşıp onaylayana kadar SwipeUp’ta bekler. Satıştan komisyon alınmaz.</span></div><button class="x" aria-label="Kapat">✕</button></div>`}
-    <div class="mk-cats"><button data-c="" class="${f.cat ? '' : 'on'}"><span>✨</span>Tümü</button>${META.categories.map((c) => `<button data-c="${c.id}" class="${f.cat === c.id ? 'on' : ''}"><span>${c.em}</span>${esc(c.name)}</button>`).join('')}</div>
+    <div class="mk-cats"><button data-c="" class="${f.cat ? '' : 'on'}">${catIcon('tumu')}Tümü</button>${META.categories.map((c) => `<button data-c="${c.id}" class="${f.cat === c.id ? 'on' : ''}">${catIcon(c.id)}${esc(c.name)}</button>`).join('')}</div>
     <div class="mk-bar"><span class="cnt muted"></span><div class="mk-sort">${[['new', 'En yeni'], ['cheap', 'En ucuz'], ['pricey', 'En pahalı'], ['popular', 'Popüler']].map(([k, l]) => `<button data-s="${k}" class="${k === 'new' ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div class="mk-grid"></div><div class="mk-more"></div>
     <div class="mk-quick">
@@ -142,7 +143,7 @@ async function item(view, sub, id) {
     <div class="mk-ibody">
       <div class="mk-price">${price(it.price)}${it.status !== 'active' ? `<span class="chip ${it.status === 'sold' ? '' : 'uv'}">${it.status === 'sold' ? 'Satıldı' : 'Rezerve'}</span>` : ''}</div>
       <h1 class="mk-title">${esc(it.title)}</h1>
-      <div class="mk-chips"><span class="chip">${esc(condOf(it.condition))}</span>${c ? `<a class="chip" href="#/market/c/${c.id}">${c.em} ${esc(c.name)}</a>` : ''}${it.city ? `<span class="chip">${icon('mapPin')} ${esc(it.city)}</span>` : ''}</div>
+      <div class="mk-chips"><span class="chip">${esc(condOf(it.condition))}</span>${c ? `<a class="chip" href="#/market/c/${c.id}">${catIcon(c.id)} ${esc(c.name)}</a>` : ''}${it.city ? `<span class="chip">${icon('mapPin')} ${esc(it.city)}</span>` : ''}</div>
       <div class="mk-meta muted">${ago(it.at, true)} · ${it.views} görüntülenme · ${it.favCount} favori</div>
       <div class="mk-dlv">
         ${it.ship ? `<div>${icon('truck')}<span><b>Kargo ile gönderim</b>${esc(shipLine)}</span></div>` : ''}
@@ -266,7 +267,7 @@ async function editor(view, sub, id) {
     <form class="form mk-ed">
       <div><div class="mk-lbl">Fotoğraflar <small class="muted">en fazla 8 · ilki kapak olur</small></div><div class="mk-ph"></div></div>
       <label>Başlık<input class="field" name="title" maxlength="80" placeholder="ör. iPhone 13 128 GB, kutulu" value="${esc(it.title)}" required></label>
-      <div><div class="mk-lbl">Kategori</div><div class="mk-catpick">${META.categories.map((c) => `<button type="button" data-c="${c.id}" class="${it.category === c.id ? 'on' : ''}"><span>${c.em}</span>${esc(c.name)}</button>`).join('')}</div></div>
+      <div><div class="mk-lbl">Kategori</div><div class="mk-catpick">${META.categories.map((c) => `<button type="button" data-c="${c.id}" class="${it.category === c.id ? 'on' : ''}">${catIcon(c.id)}${esc(c.name)}</button>`).join('')}</div></div>
       <div><div class="mk-lbl">Durumu</div><div class="seg mk-cond">${META.conditions.map((c) => `<button type="button" data-k="${c.id}" class="${it.condition === c.id ? 'on' : ''}">${esc(c.name.split(',')[0])}</button>`).join('')}</div></div>
       <div class="two"><label>Fiyat (₺)<input class="field" name="price" type="number" inputmode="decimal" min="1" step="any" placeholder="0" value="${esc(it.price)}" required></label>
         <label>Şehir<input class="field" name="city" maxlength="40" placeholder="ör. İzmir" value="${esc(it.city || '')}"></label></div>

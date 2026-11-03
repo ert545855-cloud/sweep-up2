@@ -1642,3 +1642,36 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .mk-seller-h img.av { width: 44px; height: 44px; }
 .mk-other .btn, .mk-sel .btn, .mk-seller-h .btn { display: inline-flex; align-items: center; gap: 6px; flex: none; }
 .mk-other .btn svg, .mk-sel .btn svg { width: 16px; height: 16px; }
+
+/* Store kategori ikonları */
+.mk-ci { --a: #94a3b8; --b: #475569; --d: #334155; position: relative; display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 30%; flex: none; color: var(--d);
+  background: linear-gradient(145deg, var(--a), var(--b)); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 6px 14px -8px var(--b); overflow: hidden; }
+.mk-ci::after { content: ""; position: absolute; inset: 0 0 50% 0; background: linear-gradient(rgba(255,255,255,.22), transparent); border-radius: inherit; pointer-events: none; }
+.mk-ci svg { width: 70%; height: 70%; filter: drop-shadow(0 1.5px 1.5px rgba(0,0,0,.18)); position: relative; z-index: 1; }
+.mk-ci.sm { width: 30px; height: 30px; }
+.mk-ci.lg { width: 56px; height: 56px; }
+.mk-ci[data-c="tumu"] { --a: #ff9a3d; --b: #e7358b; --d: #a3175a; }
+.mk-ci[data-c="elektronik"] { --a: #60a5fa; --b: #4f46e5; --d: #3730a3; }
+.mk-ci[data-c="giyim"] { --a: #fb7185; --b: #db2777; --d: #9d174d; }
+.mk-ci[data-c="ayakkabi"] { --a: #fbbf24; --b: #ea580c; --d: #9a3412; }
+.mk-ci[data-c="aksesuar"] { --a: #2dd4bf; --b: #0e7490; --d: #155e75; }
+.mk-ci[data-c="kozmetik"] { --a: #f0abfc; --b: #a21caf; --d: #86198f; }
+.mk-ci[data-c="ev"] { --a: #4ade80; --b: #059669; --d: #065f46; }
+.mk-ci[data-c="kitap"] { --a: #fdba74; --b: #c2410c; --d: #7c2d12; }
+.mk-ci[data-c="oyun"] { --a: #a78bfa; --b: #6d28d9; --d: #4c1d95; }
+.mk-ci[data-c="spor"] { --a: #a3e635; --b: #16a34a; --d: #14532d; }
+.mk-ci[data-c="muzik"] { --a: #f87171; --b: #be123c; --d: #881337; }
+.mk-ci[data-c="bebek"] { --a: #7dd3fc; --b: #0284c7; --d: #075985; }
+.mk-ci[data-c="evcil"] { --a: #fde047; --b: #f59e0b; --d: #92400e; }
+.mk-ci[data-c="koleksiyon"] { --a: #d6b37a; --b: #8b5e34; --d: #5b3a1e; }
+.mk-ci[data-c="diger"] { --a: #94a3b8; --b: #475569; --d: #334155; }
+.mk-cats button .mk-ci { width: 46px; height: 46px; margin-bottom: 2px; }
+.mk-cats button.on .mk-ci { box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 0 0 3px var(--bg), 0 0 0 5px var(--b); }
+.mk-catpick button .mk-ci { width: 30px; height: 30px; border-radius: 10px; }
+.mk-chips .chip .mk-ci { width: 20px; height: 20px; border-radius: 6px; margin-left: -6px; }
+.mk-chips .chip .mk-ci::after { display: none; }
+.mk-cats { gap: 4px; padding-bottom: 6px; }
+.mk-cats button { width: 76px; padding: 4px 2px 6px; background: none; border: 0; border-radius: 14px; font-size: 11.5px; color: var(--muted); align-self: start; }
+.mk-cats button .mk-ci { width: 54px; height: 54px; margin-bottom: 4px; transition: transform .15s; }
+.mk-cats button:active .mk-ci { transform: scale(.94); }
+.mk-cats button.on { background: none; color: var(--text); font-weight: 800; }
