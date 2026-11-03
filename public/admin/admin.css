@@ -275,3 +275,5 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .supmsgs .sm.admin .b { background: color-mix(in srgb, var(--accent, #ff5a5f) 14%, transparent); }
 .supmsgs .sm img { display: block; max-width: 240px; border-radius: 10px; margin-bottom: 6px; } .supmsgs small { color: var(--muted); font-size: 11px; }
 .suprep { display: grid; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--line); } .suprep .quick { display: flex; gap: 6px; flex-wrap: wrap; }
+.tr { font-size: 12px; font-weight: 700; } .tr.up { color: var(--ok); } .tr.down { color: var(--bad); }
+.tbl.feat .fx td { background: var(--soft); }

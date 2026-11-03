@@ -81,7 +81,7 @@ function notifyMentions(text, from, url, what) {
 const shownAge = (u) => (priv(u).hideAge ? null : u.age ?? null);
 function pub(u, viewerId) {
   if (!u) return null;
-  const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, ...rest } = u;
+  const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, regIp, regDevice, ...rest } = u;
   const self = viewerId === u.id;
   const hidden = !self && priv(u).hideLastSeen;
   const fdoc = viewerId && !self ? store.get('follows', `${viewerId}_${u.id}`) : null;
@@ -149,6 +149,7 @@ function auth(req, res, next) {
     return res.status(401).json({ error: 'Oturum süresi doldu, tekrar giriş yap.' });
   }
   req.user = u;
+  featureCtx?.onActive?.(u.id);
   const ban = banInfo(u);
   if (ban && !BAN_OK.has(req.originalUrl.split('?')[0])) {
     return res.status(423).json({ error: ban.kind === 'banned' ? 'Hesabın kalıcı olarak kapatıldı.' : 'Hesabın geçici olarak askıya alındı.', ...ban });
@@ -281,6 +282,7 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
   if (fl) {
     store.put('flags', { id: nanoid(12), kind: 'message', userId: fromId, chatId: chat.id, ref: msg.id, text: text.slice(0, 500), level: fl.level, reason: fl.reason, status: 'open', at: now() });
   }
+  if (!fal) { featureCtx.quest?.(fromId, 'mesaj'); featureCtx.onMessage?.(msg, chat, sender); }
   if (sender?.role === 'falci' && !fal) {
     store.filter('messages', (m) => m.chatId === chat.id && m.fal && m.fal.status === 'pending').forEach((m) => {
       m.fal.status = 'answered'; m.fal.answeredAt = now(); store.update('messages', m.id, {});
@@ -403,6 +405,7 @@ app.post('/api/auth/register', wrap(async (req, res) => {
   // Diğer gerçek üyelere yeni üyeyi duyur (uygulama açıksa listeleri yenilenir)
   io.emit('people:new', brief(u));
   featureCtx.attachInvite?.(u, req.body?.ref, ipOf(req));
+  featureCtx.onRegister?.(u, req);
   res.json({ token: sign(u), user: pub(store.get('users', u.id), u.id), recoveryCode: code.match(/.{4}/g).join('-') });
 }));
 
@@ -651,13 +654,22 @@ app.get('/api/feed', auth, (req, res) => {
   // Herkesin gönderileri; takip ettiklerin biraz öne çıkar
   const posts = store.filter('posts', (p) => p.type === 'image' && !isBlocked(me, p.userId) && canSee(me, store.get('users', p.userId)));
   posts.sort((a, b) => (b.createdAt + (following.has(b.userId) ? 6 * 3600000 : 0)) - (a.createdAt + (following.has(a.userId) ? 6 * 3600000 : 0)));
-  res.json(posts.slice(0, 80).map((p) => postOut(p, me)));
+  res.json(withPromos(posts.slice(0, 80).map((p) => postOut(p, me)), req.user, 'image', [1, 7, 13]));
 });
+// Öne çıkan (sponsorlu) içerikleri listeye yerleştir
+function withPromos(list, viewer, type, slots) {
+  const ads = featureCtx.promoFor?.(viewer, type, slots.length) || [];
+  if (!ads.length) return list;
+  const ids = new Set(ads.map((a) => a.id));
+  const out = list.filter((p) => !ids.has(p.id));
+  ads.forEach((a, i) => out.splice(Math.min(slots[i], out.length), 0, a));
+  return out;
+}
 
 app.get('/api/reels', auth, (req, res) => {
   const posts = store.filter('posts', (p) => p.type === 'reel' && !isBlocked(req.user.id, p.userId) && canSee(req.user.id, store.get('users', p.userId)));
   posts.sort((a, b) => b.createdAt - a.createdAt);
-  res.json(posts.slice(0, 60).map((p) => postOut(p, req.user.id)));
+  res.json(withPromos(posts.slice(0, 60).map((p) => postOut(p, req.user.id)), req.user, 'reel', [2, 8, 14]));
 });
 
 app.get('/api/explore', auth, (req, res) => {
@@ -693,6 +705,7 @@ app.post('/api/posts', auth, (req, res) => {
     id: nanoid(10), userId: req.user.id, type, media: items[0].media, poster: items[0].poster || null, items, edit,
     caption, tags: extractTags(caption), likes: [], comments: [], createdAt: now(),
   });
+  featureCtx.quest?.(req.user.id, 'paylas'); featureCtx.track?.(type === 'reel' ? 'reel' : 'post');
   notifyMentions(caption, req.user, type === 'reel' ? `/#/vitrin/${p.id}` : `/#/p/${p.id}`, type === 'reel' ? 'bir vitrin videosunda' : 'bir gönderide');
   store.filter('follows', (f) => f.to === req.user.id).forEach((f) => notify(f.from, {
     type: 'post', fromId: req.user.id, ref: p.id,
@@ -763,6 +776,7 @@ app.post('/api/posts/:id/comments', auth, (req, res) => {
   store.update('posts', p.id, {});
   notify(p.userId, { type: 'comment', fromId: req.user.id, ref: p.id, text: `${req.user.username} yorum yaptı: ${text.slice(0, 80)}`, url: `/#/p/${p.id}` });
   notifyMentions(text, req.user, `/#/p/${p.id}`, 'bir yorumda');
+  featureCtx.quest?.(req.user.id, 'yorum'); featureCtx.track?.('comment');
   res.json({ ...c, user: brief(req.user) });
 });
 
@@ -829,6 +843,7 @@ app.post('/api/stories', auth, (req, res) => {
   const kind = meta?.mime ? (meta.mime.startsWith('video/') ? 'video' : 'image') : (mediaType === 'video' ? 'video' : 'image');
   const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: String(media), mediaType: kind, filter, at: now(), viewers: [], stickers, votes: {}, answers: [] });
   io.emit('stories:update', { userId: req.user.id });
+  featureCtx.quest?.(req.user.id, 'paylas'); featureCtx.track?.('story');
   res.json(s);
 });
 app.post('/api/stories/:id/view', auth, (req, res) => {
@@ -1086,6 +1101,8 @@ app.post('/api/swipe', auth, (req, res) => {
     store.update('users', me.id, { daily: d });
   }
   store.put('swipes', { id: `${me.id}_${t.id}`, from: me.id, to: t.id, dir, at: now() });
+  if (dir !== 'left') featureCtx.quest?.(me.id, 'begeni', 1, t.id);
+  featureCtx.onSwipe?.(me.id, dir);
   store.update('users', me.id, { lastSwipe: t.id });
   if (dir === 'left') return res.json({ match: false });
 
@@ -1419,6 +1436,9 @@ require('./server/market')(app, featureCtx);
 require('./server/social')(app, featureCtx);
 require('./server/falai')(app, featureCtx);
 require('./server/support')(app, featureCtx);
+require('./server/promo')(app, featureCtx);
+require('./server/quests')(app, featureCtx);
+require('./server/growth')(app, featureCtx);
 gameOut = featureCtx.gameOut;
 
 // ---------- Statik ----------
@@ -1601,6 +1621,7 @@ io.on('connection', (socket) => {
   socket.on('live:start', ({ title } = {}, ack) => {
     endLive(uid);
     lives.set(uid, { userId: uid, socketId: socket.id, title: String(title || '').slice(0, 80), startedAt: now(), viewers: new Set() });
+    featureCtx.track?.('live');
     socket.join(`live:${uid}`);
     io.emit('lives', [...lives.values()].map(liveOut));
     const me = store.get('users', uid);

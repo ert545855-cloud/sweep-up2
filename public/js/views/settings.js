@@ -26,6 +26,8 @@ export default function settings(view) {
       <a class="it" href="#/gorunum">${icon('crown')}<span class="grow">Çerçeve ve rozetler<div class="sub">Profil fotoğrafına çerçeve, sınırlı etkinlik rozetleri</div></span></a>
       <a class="it" href="#/ziyaretciler">${icon('eye')}<span class="grow">Profilini kimler gördü<div class="sub">Son 7 günün ziyaretçileri</div></span></a>
       <a class="it" href="#/odalar">${icon('users')}<span class="grow">Etkinlik odaları ve hızlı tanışma<div class="sub">Konu odaları, 3 dakikalık görüntülü turlar</div></span></a>
+      <a class="it" href="#/reklam">🚀<span class="grow">Öne çıkarmalarım<div class="sub">Gönderilerini jetonla daha çok kişiye göster</div></span></a>
+      <a class="it" href="#/gorevler">${icon('check')}<span class="grow">Günlük görevler<div class="sub">Görevleri tamamla, jeton kazan</div></span></a>
       <a class="it" href="#/davet">${icon('gift')}<span class="grow">Davet et, kazan<div class="sub">Arkadaşın katılınca ikiniz de jeton kazanın</div></span></a>
       <button class="it pref">${icon('sliders')}<span class="grow">Kaydırma tercihleri<div class="sub">Yaş aralığı, uzaklık, kimleri görmek istediğin</div></span></button>
     </div>

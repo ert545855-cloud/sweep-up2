@@ -2,7 +2,7 @@ import { icon } from '../icons.js';
 import {
   state, api, esc, num, toggleLike, heartBurst, onDoubleTap, openComments, sharePost, saved, toast, on, paintLike, richText, nm,
 } from '../core.js';
-import { applyEdit } from '../components.js';
+import { applyEdit, promoHit } from '../components.js';
 
 export default async function reels(view, focusId) {
   view.innerHTML = `<div class="reels-top">
@@ -51,7 +51,9 @@ export default async function reels(view, focusId) {
       </div>
       <div class="meta">
         <div class="row"><a href="#/u/${esc(r.user.username)}" class="row" style="gap:10px"><img class="av av-32" src="${esc(r.user.avatar)}" alt=""><span class="u">${nm(r.user, 'username')}</span></a>
-          ${r.user.id !== state.me.id && !fol.has(r.user.id) ? `<button class="btn ghost follow" data-uid="${esc(r.user.id)}">Takip et</button>` : ''}</div>
+          ${r.sponsored ? '<span class="spons dark">Sponsorlu</span>' : ''}
+          ${r.user.id !== state.me.id && !fol.has(r.user.id) ? `<button class="btn ghost follow" data-uid="${esc(r.user.id)}">Takip et</button>` : ''}
+          ${r.user.id === state.me.id ? `<a class="btn ghost" href="#/reklam/${esc(r.id)}">🚀 Öne çıkar</a>` : ''}</div>
         ${r.caption ? `<div class="cap">${richText(r.caption)}</div>` : ''}
         <${r.edit?.spotifyUrl ? `a href="${esc(r.edit.spotifyUrl)}" target="_blank" rel="noopener"` : 'div'} class="snd-line">${r.edit?.audioCover ? `<img src="${esc(r.edit.audioCover)}" alt="">` : icon('music')}<span>${esc(r.edit?.audioTitle ? `${r.edit.audioTitle}${r.edit.audioArtist ? ` · ${r.edit.audioArtist}` : ''}` : (r.edit?.audio ? 'Müzik' : `Orijinal ses · ${r.user.username}`))}</span>${r.edit?.speed && r.edit.speed !== 1 ? `<span class="chip-s">${r.edit.speed}x</span>` : ''}${r.edit?.spotifyUrl ? '<span class="chip-s">Spotify</span>' : ''}</${r.edit?.spotifyUrl ? 'a' : 'div'}>
       </div>
@@ -63,20 +65,23 @@ export default async function reels(view, focusId) {
       const v = sec.querySelector('video');
       const likeBtn = sec.querySelector('.like');
       const ind = sec.querySelector('.mute-ind');
-      likeBtn.onclick = () => toggleLike(r, likeBtn);
+      likeBtn.onclick = () => { promoHit(r); toggleLike(r, likeBtn); };
       onDoubleTap(v, () => { heartBurst(sec); toggleLike(r, likeBtn, true); }, () => {
         setMuted(!state.muted);
         ind.innerHTML = icon(state.muted ? 'mute' : 'volume');
         ind.classList.add('show'); setTimeout(() => ind.classList.remove('show'), 700);
       });
-      sec.querySelector('.cm').onclick = () => openComments(r);
-      sec.querySelector('.sh').onclick = () => sharePost(r);
+      sec.querySelector('.cm').onclick = () => { promoHit(r); openComments(r); };
+      sec.querySelector('.sh').onclick = () => { promoHit(r); sharePost(r); };
+      if (r.sponsored) sec.querySelectorAll('.meta a, .rail a').forEach((a) => a.addEventListener('click', () => promoHit(r)));
       const sv = sec.querySelector('.sv');
       sv.onclick = () => { const s = saved.toggle(r.id); sv.innerHTML = icon('bookmark', '', s ? 'fill="currentColor"' : ''); };
       sec.querySelector('.cap')?.addEventListener('click', (e) => e.currentTarget.classList.toggle('open'));
       const bar = sec.querySelector('.progress i');
       edits.push(applyEdit(v, r.edit));
       v.addEventListener('loadedmetadata', () => { if (v.videoWidth > v.videoHeight * 1.05) v.classList.add('land'); }, { once: true });
+      let pinged = false;
+      v.addEventListener('timeupdate', () => { if (!pinged && v.currentTime - (r.edit?.start || 0) > 3) { pinged = true; api('/quests/ping', { body: { key: 'vitrin', id: r.id } }).catch(() => {}); } });
       const t0 = r.edit?.start || 0;
       v.addEventListener('timeupdate', () => { const t1 = r.edit?.end || v.duration; if (t1) bar.style.width = `${Math.min(100, ((v.currentTime - t0) / (t1 - t0)) * 100)}%`; });
       sec.querySelector('.cap')?.querySelectorAll('a').forEach((a) => a.addEventListener('click', (e) => e.stopPropagation()));

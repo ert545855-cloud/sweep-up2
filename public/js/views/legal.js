@@ -27,7 +27,7 @@ export const DOCS = {
 <li><b>Konum:</b> yalnızca izin verirsen, yaklaşık 1 km hassasiyetle yuvarlanmış olarak; sohbette paylaştığın konum o mesajda saklanır.</li>
 <li><b>Doğrulama selfiesi:</b> mavi tik için gönderdiğin fotoğraf; yalnızca yönetim ekibi inceler.</li>
 <li><b>Ödeme kayıtları:</b> sipariş kodu, tutar, havale/EFT gönderen adı. Kart bilgisi toplamayız.</li>
-<li><b>Teknik veriler:</b> IP adresi (kötüye kullanımı önlemek için kısa süreli), bildirim aboneliği, son görülme zamanı.</li>
+<li><b>Teknik veriler:</b> IP adresi ve tarayıcıda oluşturulan rastgele bir cihaz kimliği (spam ve sahte hesapları önlemek için), bildirim aboneliği, son görülme zamanı, uygulamayı hangi gün kullandığın (istatistik için).</li>
 </ul>
 <h3>Neden işliyoruz</h3>
 <ul>

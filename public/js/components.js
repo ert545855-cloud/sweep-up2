@@ -80,7 +80,7 @@ export function postCard(p) {
   return `<article class="post" data-post="${esc(p.id)}">
     <header class="post-h">
       <a href="#/u/${esc(p.user.username)}" class="row grow" style="gap:10px">${avatar(p.user, 40, { ring: true })}
-        <span class="grow" style="line-height:1.25"><span class="u ellipsis" style="display:block">${nm(p.user)}</span><span class="muted" style="font-size:13px">@${esc(p.user.username)} · ${ago(p.createdAt)}</span></span></a>
+        <span class="grow" style="line-height:1.25"><span class="u ellipsis" style="display:block">${nm(p.user)}</span><span class="muted" style="font-size:13px">${p.sponsored ? '<span class="spons">Sponsorlu</span>' : `@${esc(p.user.username)} · ${ago(p.createdAt)}`}</span></span></a>
       <button class="more" aria-label="Diğer seçenekler">${icon('more')}</button>
     </header>
     <div class="post-media">${mediaHtml(p)}</div>
@@ -98,9 +98,11 @@ export function postCard(p) {
   </article>`;
 }
 
+export const promoHit = (p) => { if (p?.sponsored) api(`/promos/${p.sponsored.id}/hit`, { body: {} }).catch(() => {}); };
 export function wirePost(root, p, onRemove) {
   const likeBtn = root.querySelector('.like');
-  likeBtn.onclick = () => toggleLike(p, likeBtn);
+  likeBtn.onclick = () => { promoHit(p); toggleLike(p, likeBtn); };
+  if (p.sponsored) root.querySelector('.post-h a')?.addEventListener('click', () => promoHit(p));
   const mediaBox = root.querySelector('.post-media');
   wireCarousel(mediaBox);
   fitMedia(mediaBox);
@@ -109,8 +111,8 @@ export function wirePost(root, p, onRemove) {
     const v = mediaBox.querySelector('video');
     if (v) { v.muted = !v.muted; }
   });
-  root.querySelectorAll('.cm, .cm2').forEach((b) => { b.onclick = () => openComments(p); });
-  root.querySelector('.sh').onclick = () => sharePost(p);
+  root.querySelectorAll('.cm, .cm2').forEach((b) => { b.onclick = () => { promoHit(p); openComments(p); }; });
+  root.querySelector('.sh').onclick = () => { promoHit(p); sharePost(p); };
   const sv = root.querySelector('.sv');
   sv.onclick = () => {
     const on = saved.toggle(p.id);
@@ -123,6 +125,7 @@ export function wirePost(root, p, onRemove) {
       <button data-a="share">${icon('share')}Paylaş</button>
       <button data-a="link">${icon('link')}Bağlantıyı kopyala</button>
       <button data-a="profile">${icon('person')}Profile git</button>
+      ${mine ? `<button data-a="promo">🚀<span class="grow">Öne çıkar<div class="sub muted" style="font-size:12.5px">Jetonla daha çok kişiye göster</div></span></button>` : ''}
       ${mine && (p.items || []).length > 1 ? `<button data-a="rmitem" class="danger">${icon('image')}Bu fotoğrafı kaldır</button>` : ''}
       ${mine ? `<button data-a="del" class="danger">${icon('trash')}Sil</button>` : `<button data-a="report" class="danger">${icon('flag')}Şikayet et</button>`}
     </div>`, {
@@ -133,6 +136,7 @@ export function wirePost(root, p, onRemove) {
           if (a === 'share') sharePost(p);
           if (a === 'link') { await navigator.clipboard?.writeText(`${location.origin}/#/p/${p.id}`); toast('Bağlantı kopyalandı.'); }
           if (a === 'profile') location.hash = `#/u/${p.user.username}`;
+          if (a === 'promo') location.hash = `#/reklam/${p.id}`;
           if (a === 'report') reportUser(p.user, { ref: p.id });
           if (a === 'rmitem') {
             const tr = mediaBox.querySelector('.car-track');

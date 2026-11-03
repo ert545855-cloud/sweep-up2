@@ -18,12 +18,20 @@ export const on = (ev, fn) => { const h = (e) => fn(e.detail); bus.addEventListe
 export const emit = (ev, detail) => bus.dispatchEvent(new CustomEvent(ev, { detail }));
 
 // ---- API ----
+// Cihaz kimliği (sahte hesap tespiti için; kişisel bilgi içermez)
+let devId = null;
+function deviceId() {
+  if (devId) return devId;
+  try { devId = localStorage.getItem('su_dev'); if (!devId) { devId = Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem('su_dev', devId); } } catch { devId = 'nostore'; }
+  return devId;
+}
 export async function api(path, opts = {}) {
   const res = await fetch('/api' + path, {
     method: opts.method || (opts.body ? 'POST' : 'GET'),
     headers: {
       ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
       ...(state.token ? { Authorization: 'Bearer ' + state.token } : {}),
+      'X-Device': deviceId(),
     },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
@@ -190,7 +198,7 @@ export function connectSocket() {
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',
     'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'people:new', 'likes:new',
     'call:incoming', 'call:accepted', 'call:ended', 'call:taken', 'call:signal',
-    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event', 'maintenance', 'maintenance:plan', 'falai', 'support', 'market', 'features', 'speed:count', 'speed:paired', 'speed:vote', 'speed:result', 'speed:signal', 'speed:left']
+    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event', 'maintenance', 'maintenance:plan', 'falai', 'support', 'quests', 'market', 'features', 'speed:count', 'speed:paired', 'speed:vote', 'speed:result', 'speed:signal', 'speed:left']
     .forEach((ev) => s.on(ev, (d) => emit(ev, d)));
   s.on('presence', (d) => { state.presence.set(d.userId, d); emit('presence', d); });
   s.on('presence:all', (ids) => { ids.forEach((id) => state.presence.set(id, { userId: id, online: true })); emit('presence', {}); });

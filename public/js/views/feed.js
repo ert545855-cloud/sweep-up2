@@ -16,6 +16,7 @@ export default async function feed(view) {
     </header>
     <div class="stories" aria-label="Hikayeler ve canlı yayınlar"></div>
     <div class="maint-slot"></div>
+    <a class="qs-card" href="#/gorevler" hidden></a>
     <div class="event-slot"></div>
     <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
     <div class="social-row"><a class="genel-row feedg" href="#/genel"><span class="genel-ic">${icon('users')}</span><span class="grow"><b>Genel sohbet</b><small>Herkes burada</small></span></a>
@@ -87,6 +88,17 @@ export default async function feed(view) {
   offs.push(on('reconnected', () => { loadStories(); loadPeople(); }));
   offs.push(on('badges', (b) => { view.querySelector('.nb').style.display = b.notifications ? '' : 'none'; }));
   offs.push(paintEventBanner(view.querySelector('.event-slot')));
+  // Günlük görevler kartı
+  const qsCard = view.querySelector('.qs-card');
+  const paintQs = async () => {
+    const q = await api('/quests').catch(() => null);
+    if (!q?.enabled || state.me.role === 'falci' || (q.bonusClaimed && !q.claimable)) { qsCard.hidden = true; return; }
+    qsCard.hidden = false;
+    qsCard.innerHTML = `<span class="qc-ic">🎯</span><span class="grow"><b>Günlük görevler · ${q.doneCount}/${q.total}</b><small>${q.claimable ? `${q.claimable} ödül seni bekliyor!` : `Görevleri tamamla, ${q.items.reduce((a, x) => a + x.coins, 0) + q.bonus} jetona kadar kazan`}</small></span>
+      <span class="qc-bar"><i style="width:${Math.round((q.doneCount / q.total) * 100)}%"></i></span>${q.claimable ? '<span class="go-chip">Al</span>' : ''}`;
+  };
+  paintQs();
+  offs.push(on('quests', paintQs));
   // Planlı bakım duyurusu
   const maintSlot = view.querySelector('.maint-slot');
   const paintMaint = () => {

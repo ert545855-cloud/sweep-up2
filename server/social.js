@@ -427,7 +427,7 @@ module.exports = function social(app, ctx) {
         const qa = list[i]; const qb = list[j];
         queue.delete(qa.uid); queue.delete(qb.uid);
         const r = { id: nanoid(10), a: qa.uid, b: qb.uid, sa: qa.socketId, sb: qb.socketId, start: now(), end: now() + ROUND, votes: {} };
-        rounds.set(r.id, r); inRound.set(r.a, r.id); inRound.set(r.b, r.id);
+        rounds.set(r.id, r); inRound.set(r.a, r.id); inRound.set(r.b, r.id); ctx.track?.('speed');
         met.set([r.a, r.b].sort().join('_'), now());
         io.to(r.sa).emit('speed:paired', { roundId: r.id, peer: peerCard(B), peerSocket: r.sb, offerer: true, end: r.end, now: now() });
         io.to(r.sb).emit('speed:paired', { roundId: r.id, peer: peerCard(A), peerSocket: r.sa, offerer: false, end: r.end, now: now() });

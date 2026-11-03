@@ -37,6 +37,7 @@ const FAL = { kahve: '☕️ Kahve falı', tarot: '🔮 Tarot', burc: '✨ Burç
 
 const SECTIONS = [
   ['overview', 'Genel bakış', 'home'],
+  ['growth', 'Büyüme', 'gauge'],
   ['users', 'Kullanıcılar', 'users'],
   ['support', 'Destek', 'question', 'supportOpen'],
   ['reports', 'Şikayetler', 'flag', 'reportsOpen'],
@@ -47,6 +48,8 @@ const SECTIONS = [
   ['payouts', 'Kazançlar', 'gift', 'payoutsOpen'],
   ['market', 'Store', 'bag', 'marketOpen'],
   ['ledger', 'Gelir ve gider', 'sliders'],
+  ['promos', 'Reklamlar', 'bolt'],
+  ['quests', 'Görevler', 'check'],
   ['fal', 'Fal', 'star', 'falPending'],
   ['content', 'İçerik', 'grid'],
   ['media', 'Medya', 'image'],
@@ -610,7 +613,7 @@ VIEWS.admins = async (main) => {
 // ---- Otomatik moderasyon ----
 VIEWS.flags = async (main) => {
   let status = 'open';
-  main.innerHTML = `${head('Moderasyon', 'Mesajlarda otomatik tespit edilen tehdit ve ağır hakaretler. Herkese açık metinlerdeki küfürler zaten otomatik yıldızlanır.')}
+  main.innerHTML = `${head('Moderasyon', 'Mesajlarda otomatik tespit edilen tehdit ve ağır hakaretler, spam (aynı mesajı çok kişiye atma, yeni hesabın link/telefon yayması, bot gibi kaydırma) ve sahte hesap şüphesi (aynı cihazdan/ağdan çok hesap). Herkese açık metinlerdeki küfürler zaten otomatik yıldızlanır.')}
     <div class="tabs">${[['open', 'Açık'], ['resolved', 'İşlem yapıldı'], ['dismissed', 'Yoksayıldı'], ['all', 'Tümü']].map(([k, l], i) => `<button data-s="${k}" class="${i ? '' : 'on'}">${l}</button>`).join('')}</div>
     <div class="panel lst"><div class="spin"></div></div>`;
   const lst = main.querySelector('.lst');
@@ -1041,6 +1044,91 @@ async function roomsPanel(box, owner) {
     }
   };
 }
+
+// ---- Büyüme panosu ----
+VIEWS.growth = async (main) => {
+  const days = +(sessionStorage.getItem('su_gdays') || 30);
+  const g = await api(`/growth?days=${days}`);
+  const T = g.totals; const pct = (v) => (v == null ? '—' : `%${v}`);
+  const trend = (a, b) => (!b ? (a ? '<span class="tr up">yeni</span>' : '') : `<span class="tr ${a >= b ? 'up' : 'down'}">${a >= b ? '▲' : '▼'} %${Math.abs(Math.round(((a - b) / b) * 100))}</span>`);
+  const short = (x) => x.day.slice(8);
+  main.innerHTML = `${head('Büyüme', `Aktif kullanıcılar, elde tutma ve özelliklerin ne kadar kullanıldığı. Aktiflik ölçümü ${esc(g.tracking)} tarihinde başladı; elde tutma oranları bu tarihten sonra kayıt olanlarla hesaplanır.`, `<div class="tabs gd" style="margin:0">${[7, 30, 90].map((d) => `<button data-d="${d}" class="${d === days ? 'on' : ''}">${d} gün</button>`).join('')}</div>`)}
+    <div class="stats">
+      <div class="stat"><b>${T.dau}</b><span>Bugün aktif (DAU)</span></div>
+      <div class="stat"><b>${T.wau}</b><span>Son 7 gün aktif (WAU)</span></div>
+      <div class="stat"><b>${T.mau}</b><span>Son 30 gün aktif (MAU)</span></div>
+      <div class="stat"><b>${pct(T.stickiness)}</b><span>Bağlılık (DAU/MAU)</span></div>
+      <div class="stat"><b>${T.users}</b><span>Toplam kullanıcı · son 7 gün +${T.new7}</span></div>
+      <div class="stat"><b>${pct(T.d1)}</b><span>1. gün geri gelen</span></div>
+      <div class="stat"><b>${pct(T.d7)}</b><span>7. gün geri gelen</span></div>
+      <div class="stat"><b>${pct(T.d30)}</b><span>30. gün geri gelen</span></div>
+      ${g.flags.spamOpen || g.flags.multiOpen ? `<div class="stat alert"><b>${g.flags.spamOpen + g.flags.multiOpen}</b><span>Açık spam / sahte hesap kaydı</span><a href="#/flags">Görüntüle</a></div>` : ''}
+    </div>
+    <div class="grid g2">
+      <div class="panel"><div class="ph"><h3>Günlük aktif kullanıcı</h3></div><div class="pb">${bars(g.dau, short)}</div></div>
+      <div class="panel"><div class="ph"><h3>Yeni kayıt</h3></div><div class="pb">${bars(g.newUsers, short)}</div></div>
+    </div>
+    <div class="panel" style="margin-top:14px"><div class="ph"><h3>Özellik kullanımı</h3><span class="muted" style="font-size:12px">Satıra tıkla: günlük grafik</span></div><div class="tw"><table class="tbl feat"><thead><tr><th>Özellik</th><th class="num">Bugün</th><th class="num">Son 7 gün</th><th class="num">Önceki 7 güne göre</th><th class="num">Son ${days} gün</th></tr></thead><tbody>
+      ${g.features.sort((a, b) => b.d7 - a.d7).map((f, i) => `<tr data-i="${i}" style="cursor:pointer"><td><b>${esc(f.name)}</b></td><td class="num">${f.today}</td><td class="num">${f.d7}</td><td class="num">${trend(f.d7, f.prev7)}</td><td class="num">${f.d30}</td></tr><tr class="fx" data-x="${i}" hidden><td colspan="5">${bars(f.series, short)}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+  main.querySelector('.gd').onclick = (e) => { const b = e.target.closest('[data-d]'); if (!b) return; sessionStorage.setItem('su_gdays', b.dataset.d); VIEWS.growth(main); };
+  main.querySelector('.feat').onclick = (e) => { const r = e.target.closest('[data-i]'); if (!r) return; const x = main.querySelector(`[data-x="${r.dataset.i}"]`); x.hidden = !x.hidden; };
+};
+
+// ---- Reklamlar (öne çıkarma) ----
+const PST2 = { active: ['ok', 'Yayında'], done: ['', 'Bitti'], stopped: ['', 'Kullanıcı durdurdu'], stopped_admin: ['bad', 'Durduruldu'] };
+let promoSt = 'active';
+VIEWS.promos = async (main) => {
+  const r = await api(`/promos?status=${promoSt}`);
+  const c = r.cfg; const owner = S.me.role === 'owner';
+  main.innerHTML = `${head('Reklamlar', 'Kullanıcıların jetonla öne çıkardığı gönderi ve vitrin videoları. Akışta ve Vitrin’de “Sponsorlu” etiketiyle gösterilir; bütçesi yüksek olan daha sık çıkar. Kullanılmayan jeton süre bitince iade edilir.')}
+    <div class="stats"><div class="stat"><b>${r.totals.active}</b><span>Yayında</span></div><div class="stat"><b>${r.totals.count}</b><span>Toplam</span></div>
+      <div class="stat"><b>${r.totals.spent.toLocaleString('tr-TR')}</b><span>Harcanan jeton (iade düşülmüş)</span></div><div class="stat"><b>${r.totals.shown.toLocaleString('tr-TR')}</b><span>Toplam gösterim</span></div></div>
+    <form class="panel promo-set" style="margin-bottom:14px"><div class="ph"><h3>Ayarlar</h3><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="en" ${c.enabled ? 'checked' : ''} ${owner ? '' : 'disabled'}> Öne çıkarma açık</label></div><div class="pb fgrid">
+      <label>1 jeton = kaç gösterim<input class="field" type="number" name="ipc" value="${c.impPerCoin}" ${owner ? '' : 'disabled'}></label>
+      <label>En az bütçe (jeton)<input class="field" type="number" name="min" value="${c.minCoins}" ${owner ? '' : 'disabled'}></label>
+      <label>En fazla bütçe (jeton)<input class="field" type="number" name="max" value="${c.maxCoins}" ${owner ? '' : 'disabled'}></label>
+      <label>Bir kişiye günde en fazla gösterim<input class="field" type="number" name="pvd" value="${c.perViewerDay}" ${owner ? '' : 'disabled'}></label>
+      ${owner ? `<div><button class="btn primary sm">${icon('check')} Kaydet</button></div>` : ''}</div></form>
+    <div class="tabs pst">${[['active', 'Yayında'], ['ended', 'Bitenler'], ['all', 'Tümü']].map(([k, l]) => `<button data-s="${k}" class="${promoSt === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="panel"><div class="tw">${r.items.length ? `<table class="tbl"><thead><tr><th>İçerik</th><th>Kullanıcı</th><th class="num">Bütçe</th><th class="num">Gösterim</th><th class="num">Kişi</th><th class="num">Etkileşim</th><th>Hedef</th><th>Durum</th><th></th></tr></thead><tbody>
+      ${r.items.map((p) => `<tr data-id="${esc(p.id)}"><td><a href="/#/${p.type === 'reel' ? 'vitrin' : 'p'}/${esc(p.postId)}" target="_blank" rel="noopener" class="row" style="gap:8px">${p.post?.image ? `<img src="${esc(p.post.image)}" alt="" style="width:40px;height:50px;object-fit:cover;border-radius:8px">` : '🎬'}<span class="muted ell" style="max-width:160px">${esc(p.post?.caption || (p.type === 'reel' ? 'Vitrin videosu' : 'Gönderi'))}</span></a></td>
+        <td>${userCell(p.user)}</td><td class="num">${p.coins}<div class="muted" style="font-size:11px">${p.days} gün${p.refunded ? ` · ${p.refunded} iade` : ''}</div></td><td class="num">${p.shown.toLocaleString('tr-TR')} / ${p.impressions.toLocaleString('tr-TR')}</td><td class="num">${p.reach || 0}</td><td class="num">${p.hits || 0}<div class="muted" style="font-size:11px">+${p.likesGained} beğeni</div></td>
+        <td class="muted" style="font-size:12px">${p.target.gender === 'k' ? 'Kadın' : p.target.gender === 'e' ? 'Erkek' : 'Herkes'} · ${p.target.ageMin}–${p.target.ageMax}${p.target.city ? ` · ${esc(p.target.city)}` : ''}</td>
+        <td><span class="chip ${PST2[p.status]?.[0] || ''}">${PST2[p.status]?.[1] || p.status}</span><div class="muted" style="font-size:11px">${dt(p.at)}</div></td>
+        <td>${p.status === 'active' ? '<button class="btn sm danger stopp">Durdur</button>' : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Kayıt yok.</div>'}</div></div>`;
+  main.querySelector('.pst').onclick = (e) => { const b = e.target.closest('[data-s]'); if (!b) return; promoSt = b.dataset.s; VIEWS.promos(main); };
+  main.querySelector('.promo-set').onsubmit = async (e) => {
+    e.preventDefault(); const f = e.target;
+    try { await api('/promos/settings', { method: 'PUT', body: { enabled: f.en.checked, impPerCoin: +f.ipc.value, minCoins: +f.min.value, maxCoins: +f.max.value, perViewerDay: +f.pvd.value } }); toast('Kaydedildi.'); } catch (er) { toast(er.message); }
+  };
+  main.querySelector('.panel .tw')?.addEventListener('click', async (e) => {
+    const b = e.target.closest('.stopp'); if (!b) return;
+    const reason = prompt('Durdurma nedeni (kullanıcıya bildirilir, kalan jeton iade edilir):', 'Topluluk kurallarına aykırı içerik');
+    if (reason === null) return;
+    try { await api(`/promos/${b.closest('[data-id]').dataset.id}/stop`, { body: { reason } }); toast('Durduruldu, kalan jeton iade edildi.'); VIEWS.promos(main); } catch (er) { toast(er.message); }
+  });
+};
+
+// ---- Günlük görevler ----
+VIEWS.quests = async (main) => {
+  const q = await api('/quests');
+  const owner = S.me.role === 'owner';
+  const maxDay = q.list.filter((x) => x.goal > 0).reduce((a, x) => a + x.coins, 0) + q.bonus;
+  main.innerHTML = `${head('Günlük görevler', 'Kullanıcıların her gün uygulamaya dönmesi için küçük görevler. Hedef 0 yapılan görev gizlenir. Görevler her gece 00:00’da (TR) yenilenir.')}
+    <div class="stats"><div class="stat"><b>${q.stats.usersToday}</b><span>Bugün görev ilerleten</span></div><div class="stat"><b>${q.stats.allDoneToday}</b><span>Bugün hepsini bitiren</span></div>
+      <div class="stat"><b>${q.stats.coins7d}</b><span>Son 7 günde dağıtılan jeton</span></div><div class="stat"><b>${maxDay}</b><span>Kişi başı günlük en fazla jeton</span></div></div>
+    <form class="panel qform"><div class="ph"><h3>Görevler</h3><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="en" ${q.enabled ? 'checked' : ''} ${owner ? '' : 'disabled'}> Görevler açık</label></div>
+      <div class="tw"><table class="tbl"><thead><tr><th>Görev</th><th class="num">Hedef</th><th class="num">Ödül (jeton)</th><th class="num">Bugün tamamlayan</th></tr></thead><tbody>
+      ${q.list.map((x) => `<tr data-id="${esc(x.id)}"><td>${x.em} ${esc(x.title)}</td><td class="num"><input class="field" type="number" min="0" max="100" data-k="goal" value="${x.goal}" style="width:80px" ${owner ? '' : 'disabled'}></td><td class="num"><input class="field" type="number" min="0" max="1000" data-k="coins" value="${x.coins}" style="width:80px" ${owner ? '' : 'disabled'}></td><td class="num">${q.stats.byQuest[x.id] || 0}</td></tr>`).join('')}
+      <tr><td>🎁 Hepsini tamamla bonusu</td><td></td><td class="num"><input class="field" type="number" min="0" max="1000" name="bonus" value="${q.bonus}" style="width:80px" ${owner ? '' : 'disabled'}></td><td></td></tr>
+      </tbody></table></div>${owner ? `<div class="pb"><button class="btn primary">${icon('check')} Kaydet</button></div>` : ''}</form>`;
+  main.querySelector('.qform').onsubmit = async (e) => {
+    e.preventDefault(); const f = e.target;
+    const list = [...f.querySelectorAll('tr[data-id]')].map((r) => ({ id: r.dataset.id, goal: +r.querySelector('[data-k="goal"]').value, coins: +r.querySelector('[data-k="coins"]').value }));
+    try { await api('/quests', { method: 'PUT', body: { enabled: f.en.checked, bonus: +f.bonus.value, list } }); toast('Kaydedildi.'); VIEWS.quests(main); } catch (er) { toast(er.message); }
+  };
+};
 
 // ---- Bildirimler (bu cihaz) ----
 function ding() { try { const a = new AudioContext(); const o = a.createOscillator(); const g = a.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.12, a.currentTime); g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.5); o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + 0.5); } catch {} }

@@ -4,7 +4,7 @@ import {
 } from '../core.js';
 
 const TL = (n) => `${Number(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`;
-const REASON = { purchase: 'Jeton satın alma', gift: 'Canlı yayın hediyesi', fal: 'Fal', boost: 'Boost', admin: 'SwipeUp hediyesi' };
+const REASON = { purchase: 'Jeton satın alma', gift: 'Canlı yayın hediyesi', fal: 'Fal', boost: 'Boost', admin: 'SwipeUp hediyesi', promo: 'Öne çıkarma', promo_refund: 'Öne çıkarma iadesi', quest: 'Günlük görev', quest_bonus: 'Görev bonusu', invite: 'Davet ödülü', super_msg: 'Süper mesaj', frame: 'Profil çerçevesi', badge: 'Etkinlik rozeti', fal_sub: 'Fal aboneliği' };
 const PST = { pending: 'Bekliyor', paid: 'Ödendi', rejected: 'Reddedildi' };
 
 export default async function wallet(view) {

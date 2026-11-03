@@ -21,6 +21,8 @@ const routes = [
   [/^\/gorunum$/, 'look', { tabs: false }],
   [/^\/ziyaretciler$/, 'viewers', { tabs: false }],
   [/^\/davet$/, 'invite', { tabs: false }],
+  [/^\/reklam(?:\/([\w-]+))?$/, 'promote', { tabs: false }],
+  [/^\/gorevler$/, 'quests', { tabs: false }],
   [/^\/destek(?:\/([\w-]+))?$/, 'support', { tabs: false }],
   [/^\/chat\/([\w-]+)$/, 'chat', { tabs: false }],
   [/^\/chat\/([\w-]+)\/info$/, 'chatinfo', { tabs: false }],
@@ -177,6 +179,7 @@ function wireRealtime() {
     toast(n.text, { ms: ['announce', 'warning', 'order', 'verify'].includes(n.type) ? 8000 : 3500, title: n.type === 'liked' ? 'Yeni beğeni' : n.from?.name || 'SwipeUp', img: n.type === 'liked' ? null : n.from?.avatar, href });
   });
   on('likes:new', () => refreshBadges());
+  on('quests', (d) => { if (d?.done && location.hash !== '#/gorevler') toast(`✅ Görev tamamlandı: ${d.title}. Ödülünü al!`, { href: '#/gorevler', ms: 4500 }); });
   on('message', (m) => {
     if (m.from === state.me.id || m.system) return;
     const inChat = location.hash === `#/chat/${m.chatId}` && document.visibilityState === 'visible';
