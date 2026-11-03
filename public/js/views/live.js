@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, toast, el, sheet, needCoins, tick, FILTERS, filterCss,
+  shareSheet, state, api, esc, on, toast, el, sheet, needCoins, tick, FILTERS, filterCss,
 } from '../core.js';
 
 // Yayıncı efekt seçici (izleyicilerde de aynı efekt görünür)
@@ -109,11 +109,7 @@ function wireChat(root, hostId) {
   };
   bar.querySelector('.hb').onclick = () => state.socket.emit('live:heart', { hostId });
   bar.querySelector('.gb')?.addEventListener('click', () => giftSheet(hostId));
-  bar.querySelector('.sh').onclick = async () => {
-    const url = `${location.origin}/#/live/${hostId}`;
-    if (navigator.share) navigator.share({ title: 'Canlı yayın', url }).catch(() => {});
-    else { await navigator.clipboard?.writeText(url); toast('Yayın bağlantısı kopyalandı.'); }
-  };
+  bar.querySelector('.sh').onclick = () => shareSheet({ ref: { kind: 'live', id: hostId }, url: `${location.origin}/#/live/${hostId}`, title: 'Canlı yayın', text: 'SwipeUp’ta canlı yayındayız, gel! 🔴' });
   root.append(bar);
   return () => offs.forEach((f) => f());
 }

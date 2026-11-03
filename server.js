@@ -241,13 +241,13 @@ function falLock(chat, fromId) {
   if (me?.role === 'falci' && other?.role !== 'falci' && !store.find('messages', (m) => m.chatId === chat.id && m.fal)) return 'Sadece fal isteyenlere yazabilirsin.';
   return null;
 }
-function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal, location, quote, game, plan, superMsg, viewOnce }) {
+function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal, location, quote, game, plan, superMsg, viewOnce, share }) {
   text = String(text || '').slice(0, 4000).trim();
   let loc = null;
   if (location && Number.isFinite(+location.lat) && Number.isFinite(+location.lng)) {
     loc = { lat: Math.round(+location.lat * 1e5) / 1e5, lng: Math.round(+location.lng * 1e5) / 1e5, label: String(location.label || '').slice(0, 80) };
   }
-  if (!text && !media && !fal && !loc && !game && !plan) return null;
+  if (!text && !media && !fal && !loc && !game && !plan && !share) return null;
   if (!system && !fal && falLock(chat, fromId)) return null;
   if (!chat.isGroup) {
     const other = chat.members.find((m) => m !== fromId);
@@ -265,7 +265,7 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
     media: media || null, mediaType: ['image', 'video', 'audio'].includes(mediaType) ? mediaType : (media ? 'image' : null),
     duration: duration ? Math.min(600, Math.round(duration)) : null,
     reply, story: story || null, fal: fal || null, location: loc, system: !!system, reactions: {},
-    quote: quote || null, game: game || null, plan: plan || null, superMsg: !!superMsg,
+    quote: quote || null, game: game || null, plan: plan || null, superMsg: !!superMsg, share: share || null,
     viewOnce: !!(viewOnce && media && (mediaType === 'image' || !mediaType)), openedBy: [],
     at: now(), readBy: [fromId], deliveredTo: [fromId],
     expiresAt: chat.ttl && !system ? now() + chat.ttl : null,
@@ -287,7 +287,7 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
       chat.members.forEach((x) => emitTo(x, 'message:update', msgOut(m)));
     });
   }
-  const preview = fal ? `🔮 Yeni ${FAL_TYPES[fal.type]} isteği` : loc ? '📍 Konum' : msg.viewOnce ? '📷 Tek seferlik fotoğraf' : text || { video: '🎥 Video', audio: '🎤 Sesli mesaj' }[msg.mediaType] || '📷 Fotoğraf';
+  const preview = fal ? `🔮 Yeni ${FAL_TYPES[fal.type]} isteği` : loc ? '📍 Konum' : share && !text ? `📤 ${share.label} paylaştı` : msg.viewOnce ? '📷 Tek seferlik fotoğraf' : text || { video: '🎥 Video', audio: '🎤 Sesli mesaj' }[msg.mediaType] || '📷 Fotoğraf';
   chat.members.filter((m) => m !== fromId).forEach((m) => {
     notify(m, {
       type: 'message', fromId, tag: 'chat-' + chat.id,
@@ -1152,7 +1152,7 @@ app.post('/api/chats/:id/messages', auth, (req, res) => {
   const c = store.get('chats', req.params.id);
   if (!c || !c.members.includes(req.user.id)) return res.status(404).json({ error: 'Sohbet bulunamadı.' });
   const lock = falLock(c, req.user.id); if (lock) return res.status(403).json({ error: lock, falLock: true });
-  const msg = sendMessage(c, req.user.id, { ...(req.body || {}), system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false });
+  const msg = sendMessage(c, req.user.id, { ...(req.body || {}), system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false, share: null });
   if (!msg) return res.status(400).json({ error: 'Mesaj gönderilemedi.' });
   res.json(msgOut(msg));
 });
@@ -1319,6 +1319,70 @@ app.get('/api/music/search', auth, wrap(async (req, res) => {
 }));
 app.get('/api/music/featured', auth, wrap(async (req, res) => res.json({ items: await music.getFeatured(), spotify: music.enabled() })));
 
+// ---------- Uygulama içinde paylaş (Instagram'daki gibi kişilere gönder) ----------
+function shareRef(viewer, ref) {
+  const k = ref?.kind; const id = String(ref?.id || '');
+  if (k === 'post') {
+    const p = store.get('posts', id); const o = p && store.get('users', p.userId);
+    if (!p || !o || isBlocked(viewer.id, o.id) || !canSee(viewer.id, o)) return null;
+    const it = (p.items || [])[0] || {};
+    return { kind: 'post', id: p.id, label: p.type === 'reel' ? 'Vitrin videosu' : 'Gönderi', title: `@${o.username}`, sub: String(p.caption || '').slice(0, 90), image: it.poster || (it.type === 'video' ? null : it.media) || o.avatar, video: p.type === 'reel' || it.type === 'video', url: p.type === 'reel' ? `/#/vitrin/${p.id}` : `/#/p/${p.id}`, private: !!priv(o).private, ownerId: o.id };
+  }
+  if (k === 'profile') {
+    const u = store.get('users', id) || store.find('users', (x) => x.username === id);
+    if (!u || isBlocked(viewer.id, u.id)) return null;
+    return { kind: 'profile', id: u.id, label: 'Profil', title: u.name, sub: `@${u.username}${u.city ? ` · ${u.city}` : ''}`, image: u.avatar, url: `/#/u/${u.username}`, verified: !!u.verified };
+  }
+  if (k === 'live') {
+    const u = store.get('users', id);
+    if (!u || isBlocked(viewer.id, u.id)) return null;
+    return { kind: 'live', id: u.id, label: 'Canlı yayın', title: `${u.name} canlı yayında`, sub: `@${u.username}`, image: u.avatar, url: `/#/live/${u.id}` };
+  }
+  if (k === 'market') {
+    const it = store.get('mk_items', id);
+    if (!it || !store.get('settings', 'market')?.enabled) return null;
+    return { kind: 'market', id: it.id, label: 'Store ilanı', title: it.title, sub: `${Number(it.price || 0).toLocaleString('tr-TR')} ₺ · SwipeUp Store`, image: (it.photos || [])[0] || null, url: `/#/market/i/${it.id}` };
+  }
+  return null;
+}
+app.get('/api/share/targets', auth, (req, res) => {
+  const me = req.user.id; const q = String(req.query.q || '').toLocaleLowerCase('tr-TR').trim().replace(/^@/, '');
+  const out = []; const seen = new Set();
+  const addUser = (u, sub) => { if (!u || seen.has(u.id) || u.id === me || !isActive(u) || isBlocked(me, u.id) || u.role === 'falci') return; seen.add(u.id); out.push({ kind: 'user', id: u.id, name: u.name, username: u.username, avatar: u.avatar, verified: !!u.verified, sub: sub || `@${u.username}` }); };
+  const match = (s) => !q || String(s || '').toLocaleLowerCase('tr-TR').includes(q);
+  store.filter('chats', (c) => c.members.includes(me)).sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0)).slice(0, 40).forEach((c) => {
+    if (c.isGroup) { if (match(c.name) && !seen.has(c.id)) { seen.add(c.id); out.push({ kind: 'chat', id: c.id, name: c.name, avatar: c.avatar, sub: `${c.members.length} üye · grup`, group: true }); } return; }
+    const u = store.get('users', c.members.find((m) => m !== me));
+    if (u && (match(u.name) || match(u.username))) addUser(u);
+  });
+  store.filter('follows', (f) => f.from === me && f.status !== 'pending').forEach((f) => { const u = store.get('users', f.to); if (u && (match(u.name) || match(u.username))) addUser(u); });
+  if (q) rankPeople(store.filter('users', (u) => match(u.name) || match(u.username))).slice(0, 30).forEach((u) => addUser(u));
+  res.json(out.slice(0, 60));
+});
+app.post('/api/share', auth, (req, res) => {
+  const b = req.body || {};
+  const sh = shareRef(req.user, b.ref);
+  if (!sh) return res.status(404).json({ error: 'Paylaşılacak içerik bulunamadı.' });
+  const targets = (Array.isArray(b.targets) ? b.targets : []).slice(0, 20);
+  if (!targets.length) return res.status(400).json({ error: 'En az bir kişi seç.' });
+  if (limited('share:' + req.user.id, 80, 3600000)) return res.status(429).json({ error: 'Çok fazla paylaşım yaptın, biraz bekle.' });
+  const text = moderation.mask(String(b.text || '').trim().slice(0, 500));
+  const { ownerId, private: priv_, ...payload } = sh;
+  // gizli hesabın gönderisi: önizlemede içerik gösterme (alıcı takipçi değilse açamaz)
+  if (priv_) { const o = store.get('users', ownerId); payload.image = o?.avatar || null; payload.video = false; payload.sub = 'Gizli hesap · görmek için takip etmelisin'; }
+  let sent = 0; const chats = [];
+  for (const t of targets) {
+    let chat = null;
+    if (t.kind === 'chat') { const c = store.get('chats', String(t.id)); if (c?.members.includes(req.user.id)) chat = c; }
+    else { const u = store.get('users', String(t.id)); if (u && u.id !== req.user.id && isActive(u) && !isBlocked(req.user.id, u.id)) chat = chatBetween(req.user.id, u.id); }
+    if (!chat || falLock(chat, req.user.id)) continue;
+    const m = sendMessage(chat, req.user.id, { text, share: payload });
+    if (m) { sent++; chats.push(chat.id); }
+  }
+  if (!sent) return res.status(400).json({ error: 'Gönderilemedi.' });
+  res.json({ ok: true, sent, chatId: chats.length === 1 ? chats[0] : null });
+});
+
 // ---------- Yönetici telefon/masaüstü bildirimleri ----------
 async function pushAdmins(p) {
   if (!VAPID) return;
@@ -1449,7 +1513,7 @@ io.on('connection', (socket) => {
     if (!c || !c.members.includes(uid)) return ack?.({ error: 'Sohbet bulunamadı.' });
     if (limited('msg:' + uid, 60, 60000)) return ack?.({ error: 'Çok hızlı mesaj gönderiyorsun.' });
     const lock = falLock(c, uid); if (lock) return ack?.({ error: lock, falLock: true });
-    const msg = sendMessage(c, uid, { ...data, system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false });
+    const msg = sendMessage(c, uid, { ...data, system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false, share: null });
     ack?.(msg ? { ok: true, msg: msgOut(msg) } : { error: 'Mesaj gönderilemedi.' });
   });
 

@@ -1955,3 +1955,28 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .sup-f { padding: 4px 16px 20px; } .sup-img { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .sup-img img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; } .sup-img .prev { display: flex; align-items: center; gap: 8px; }
 .sup-im { display: block; max-width: 220px; border-radius: 12px; margin-bottom: 6px; }
 .sup { grid-template-columns: minmax(0, 1fr); } .sup-hero .grow { min-width: 0; }
+/* Paylaş sayfası */
+.shs { display: grid; gap: 10px; padding: 0 0 calc(var(--safe-b) + 6px); }
+.shs-s { position: relative; margin: 0 16px; } .shs-s svg { position: absolute; left: 13px; top: 12px; width: 20px; height: 20px; color: var(--muted); } .shs-s .field { padding-left: 42px; height: 44px; border-radius: 14px; }
+.shs-g { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 6px; padding: 6px 12px; max-height: 46vh; min-height: 140px; overflow: auto; align-content: start; }
+.sht { display: grid; justify-items: center; gap: 4px; min-width: 0; }
+.sht-av { position: relative; width: 62px; height: 62px; } .sht-av img { width: 62px; height: 62px; border-radius: 50%; object-fit: cover; background: var(--surface); transition: transform .15s; }
+.sht-ck { position: absolute; right: -2px; bottom: -2px; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--uv); color: var(--on-uv); border: 3px solid var(--bg); transform: scale(0); transition: transform .15s; }
+.sht-ck svg { width: 12px; height: 12px; } .sht.on .sht-ck { transform: scale(1); } .sht.on img { transform: scale(.92); }
+.sht b { font-size: 12.5px; font-weight: 650; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .sht small { font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: -4px; }
+.shs-send { display: grid; gap: 8px; padding: 6px 16px 4px; border-top: 1px solid var(--line); } .shs-send[hidden], .shs-ext[hidden] { display: none; }
+.shs-ext { display: flex; gap: 14px; overflow-x: auto; padding: 10px 16px 4px; border-top: 1px solid var(--line); scrollbar-width: none; }
+.shx { display: grid; justify-items: center; gap: 5px; flex: none; width: 66px; color: inherit; }
+.shx span { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); }
+.shx span svg { width: 24px; height: 24px; } .shx small { font-size: 11.5px; text-align: center; line-height: 1.2; }
+.c-wa span { background: #25d366; color: #fff; } .c-tg span { background: #229ed9; color: #fff; } .c-x span { background: #111; color: #fff; } .c-fb span { background: #1877f2; color: #fff; }
+.c-card span { background: var(--grad); color: var(--on-uv); }
+/* Sohbette paylaşılan içerik */
+.msg.share-msg { display: block; padding: 0; overflow: hidden; width: 230px; max-width: 100%; background: var(--surface) !important; color: var(--text) !important; border: 1px solid var(--line); white-space: normal; }
+.shm-img { position: relative; display: block; aspect-ratio: 4/5; background: #111; } .shm-img > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shm-img.profile, .shm-img.live { aspect-ratio: auto; padding: 18px 0 4px; background: linear-gradient(140deg, var(--uv-soft), color-mix(in srgb, var(--hot) 14%, var(--bg))); display: grid; place-items: center; }
+.shm-av { width: 76px; height: 76px; border-radius: 30%; object-fit: cover; }
+.shm-play { position: absolute; right: 10px; top: 10px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,.5); color: #fff; } .shm-play svg { width: 13px; height: 13px; }
+.shm-live { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px; background: #ff2d55; color: #fff; }
+.shm-b { display: grid; gap: 2px; padding: 9px 12px 10px; } .shm-b small { color: var(--muted); font-size: 11.5px; font-weight: 700; } .shm-b b { font-size: 14.5px; } .shm-b span { font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.shm-meta { font-size: 11px; color: var(--muted); padding: 0 6px; } .shm-meta .meta { float: none; margin: 0; }

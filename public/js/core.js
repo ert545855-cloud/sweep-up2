@@ -589,13 +589,76 @@ export function openComments(post) {
   return close;
 }
 
-export async function sharePost(post) {
-  const url = `${location.origin}/#/${post.type === 'reel' ? 'vitrin' : 'p'}/${post.id}`;
-  if (navigator.share) {
-    try { await navigator.share({ title: 'SwipeUp', text: post.caption || '', url }); return; } catch { return; }
-  }
-  await navigator.clipboard?.writeText(url);
-  toast('Bağlantı kopyalandı.');
+export function sharePost(post) {
+  const reel = post.type === 'reel';
+  return shareSheet({ ref: { kind: 'post', id: post.id }, url: `${location.origin}/#/${reel ? 'vitrin' : 'p'}/${post.id}`, title: 'SwipeUp', text: post.caption ? `${post.caption.slice(0, 100)}` : `@${post.user?.username || ''} SwipeUp’ta ${reel ? 'bir vitrin videosu' : 'bir gönderi'} paylaştı` });
+}
+
+// ---- Paylaş: önce uygulamadaki kişilere, sonra diğer uygulamalara ----
+const SH_ICONS = {
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>',
+  wa: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.9 11.9 0 0 0 4.6 4c1.7.7 2.3.8 3.2.7a2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.2-.2-.5-.3z"/></svg>',
+  tg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.4 4.2 2.9 11.3c-1.3.5-1.2 1.2-.2 1.5l4.7 1.5 1.8 5.6c.2.6.4.8.8.8.4 0 .6-.2.9-.5l2.3-2.2 4.7 3.5c.9.5 1.5.2 1.7-.8l3.1-14.6c.3-1.3-.5-1.9-1.3-1.5zM9.6 14.1l8.5-7.7c.4-.3-.1-.5-.6-.2l-10.4 6.6"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.8 3h3.1l-6.8 7.7 8 10.3h-6.2l-4.9-6.3L5.4 21H2.3l7.2-8.2L1.8 3h6.4l4.4 5.8zm-1.1 16.2h1.7L7.4 4.7H5.6z"/></svg>',
+  fb: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 8.5V6.8c0-.8.2-1.3 1.4-1.3H17V2.2a21 21 0 0 0-2.5-.2C12 2 10.3 3.5 10.3 6.3v2.2H7.6v3.7h2.7V22H14v-9.8h2.7l.4-3.7z"/></svg>',
+  mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+};
+export function shareSheet({ ref, url, title = 'SwipeUp', text = '', extra = [] }) {
+  const enc = encodeURIComponent; const msgTxt = text ? `${text} ${url}` : url;
+  const ext = [
+    ['copy', 'Bağlantıyı kopyala', 'c-copy'],
+    ['wa', 'WhatsApp', 'c-wa', `https://wa.me/?text=${enc(msgTxt)}`],
+    ['tg', 'Telegram', 'c-tg', `https://t.me/share/url?url=${enc(url)}&text=${enc(text)}`],
+    ['x', 'X', 'c-x', `https://twitter.com/intent/tweet?url=${enc(url)}&text=${enc(text)}`],
+    ['fb', 'Facebook', 'c-fb', `https://www.facebook.com/sharer/sharer.php?u=${enc(url)}`],
+    ['mail', 'E-posta', 'c-mail', `mailto:?subject=${enc(title)}&body=${enc(msgTxt)}`],
+    ...(navigator.share ? [['more', 'Diğer', 'c-more']] : []),
+  ];
+  const close = sheet(null, `<div class="shs">
+      <div class="shs-s">${icon('search')}<input class="field" placeholder="Ara" autocapitalize="off" autocomplete="off"></div>
+      <div class="shs-g"><div class="spinner"></div></div>
+      <div class="shs-send" hidden><input class="field shs-m" maxlength="500" placeholder="Bir mesaj yaz..."><button class="btn primary block shs-go">Gönder</button></div>
+      <div class="shs-ext">${[...extra.map(([k, l, c]) => [k, l, c]), ...ext].map(([k, l, c, href]) => (href ? `<a class="shx ${c}" href="${esc(href)}" target="_blank" rel="noopener" data-k="${k}"><span>${SH_ICONS[k] || ''}</span><small>${l}</small></a>` : `<button class="shx ${c || ''}" data-k="${k}"><span>${SH_ICONS[k] || icon(k)}</span><small>${l}</small></button>`)).join('')}</div>
+    </div>`, {
+    onMount(sh, closeFn) {
+      const grid = sh.querySelector('.shs-g'); const inp = sh.querySelector('.shs-s input'); const send = sh.querySelector('.shs-send');
+      const picked = new Map(); let list = []; let n = 0; let tmr = null;
+      const paint = () => {
+        grid.innerHTML = list.length ? list.map((t, i) => `<button class="sht ${picked.has(t.kind + t.id) ? 'on' : ''}" data-i="${i}"><span class="sht-av"><img src="${esc(t.avatar)}" alt=""><i class="sht-ck">${icon('check')}</i></span><b>${esc(t.name)}</b><small>${esc(t.group ? 'Grup' : t.username || '')}</small></button>`).join('')
+          : `<div class="empty" style="padding:24px;grid-column:1/-1">${inp.value ? 'Kimse bulunamadı.' : 'Henüz sohbetin ya da takip ettiğin kimse yok. Ara ve gönder.'}</div>`;
+        send.hidden = !picked.size;
+        sh.querySelector('.shs-go').textContent = picked.size > 1 ? `Ayrı ayrı gönder (${picked.size})` : 'Gönder';
+        sh.querySelector('.shs-ext').hidden = !!picked.size;
+      };
+      const load = async () => { const my = ++n; const r = await api(`/share/targets?q=${enc(inp.value.trim())}`).catch(() => []); if (my !== n) return; list = [...[...picked.values()].filter((p) => !r.some((x) => x.kind === p.kind && x.id === p.id)), ...r]; paint(); };
+      inp.oninput = () => { clearTimeout(tmr); tmr = setTimeout(load, 180); };
+      grid.onclick = (e) => {
+        const b = e.target.closest('[data-i]'); if (!b) return;
+        const t = list[+b.dataset.i]; const k = t.kind + t.id;
+        picked.has(k) ? picked.delete(k) : picked.set(k, t);
+        navigator.vibrate?.(8); paint();
+      };
+      sh.querySelector('.shs-go').onclick = async (e) => {
+        e.target.disabled = true;
+        try {
+          const r = await api('/share', { body: { ref, targets: [...picked.values()].map((t) => ({ kind: t.kind, id: t.id })), text: sh.querySelector('.shs-m').value } });
+          closeFn(); toast(r.sent > 1 ? `${r.sent} kişiye gönderildi.` : 'Gönderildi.', r.chatId ? { href: `#/chat/${r.chatId}` } : undefined);
+        } catch (er) { toast(er.message); e.target.disabled = false; }
+      };
+      sh.querySelector('.shs-ext').onclick = async (e) => {
+        const b = e.target.closest('[data-k]'); if (!b) return;
+        const k = b.dataset.k;
+        const ex = extra.find((x) => x[0] === k);
+        if (ex) { e.preventDefault(); closeFn(); ex[3]?.(); return; }
+        if (k === 'copy') { e.preventDefault(); try { await navigator.clipboard.writeText(url); toast('Bağlantı kopyalandı.'); } catch { prompt('Bağlantı', url); } closeFn(); return; }
+        if (k === 'more') { e.preventDefault(); closeFn(); navigator.share({ title, text, url }).catch(() => {}); return; }
+        setTimeout(closeFn, 200);
+      };
+      load();
+    },
+  });
+  return close;
 }
 
 // Kaydedilenler (cihazda)

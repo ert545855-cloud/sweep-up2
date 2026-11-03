@@ -3,7 +3,7 @@ import {
   state, api, esc, ago, on, avatar, openChatWith, sheet, refreshBadges, nm,
 } from '../core.js';
 
-const preview = (m) => (m.location ? '📍 Konum' : m.fal ? '🔮 Fal isteği' : '') || m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf');
+const preview = (m) => (m.location ? '📍 Konum' : m.fal ? '🔮 Fal isteği' : m.share && !m.text ? `📤 ${m.share.label}` : m.viewOnce ? '📷 Tek seferlik fotoğraf' : m.game ? '🎲 Oyun' : m.plan ? '📅 Buluşma planı' : '') || m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf');
 
 export default async function chats(view) {
   view.innerHTML = `<header class="topbar">

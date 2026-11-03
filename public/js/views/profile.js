@@ -4,6 +4,7 @@ import {
 } from '../core.js';
 import { gridTile } from '../components.js';
 import { voiceChip, promptCards, promptReply, superMessage, profileCard } from '../extras.js';
+import { shareSheet } from '../core.js';
 import { eventOn, eventInfo, eventEmoji } from '../event.js';
 
 export function themeMenu() {
@@ -147,19 +148,10 @@ export default async function profile(view, username) {
   view.querySelector('.fl').onclick = () => peopleSheet('Takipçiler', u.id, 'followers');
   view.querySelector('.fg').onclick = () => peopleSheet('Takip edilenler', u.id, 'following');
 
-  const shareLink = async () => {
-    const url = `${location.origin}/#/u/${u.username}`;
-    if (navigator.share) navigator.share({ title: `${u.name} (@${u.username})`, url }).catch(() => {});
-    else { await navigator.clipboard?.writeText(url); toast('Profil bağlantısı kopyalandı.'); }
-  };
-  const share = () => sheet(null, `<div class="menu"><button data-a="card">${icon('image')}<span class="grow">Profil kartı oluştur<div class="sub muted" style="font-size:12.5px">Instagram hikayesi için görsel</div></span></button><button data-a="link">${icon('link')}<span class="grow">Bağlantıyı paylaş</span></button></div>`, {
-    onMount(sh, close) {
-      sh.querySelector('.menu').onclick = (e) => {
-        const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
-        close();
-        if (a === 'card') { toast('Kart hazırlanıyor…', { ms: 1500 }); profileCard(u).catch((er) => toast(er.message)); } else shareLink();
-      };
-    },
+  const share = () => shareSheet({
+    ref: { kind: 'profile', id: u.id }, url: `${location.origin}/#/u/${u.username}`, title: `${u.name} (@${u.username})`,
+    text: self ? 'SwipeUp’ta beni bul 💘' : `${u.name} SwipeUp’ta`,
+    extra: [['image', 'Profil kartı', 'c-card', () => { toast('Kart hazırlanıyor…', { ms: 1500 }); profileCard(u).catch((er) => toast(er.message)); }]],
   });
   view.querySelector('.share')?.addEventListener('click', share);
   view.querySelector('.smsg')?.addEventListener('click', () => superMessage(u));
@@ -195,7 +187,7 @@ export default async function profile(view, username) {
         sh.querySelector('.menu').onclick = async (e) => {
           const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
           close();
-          if (a === 'share') shareLink();
+          if (a === 'share') share();
           if (a === 'smsg') superMessage(u);
           if (a === 'unmatch' && await unmatchUser(u)) profile(view, username);
           if (a === 'block' && await blockUser(u)) profile(view, username);

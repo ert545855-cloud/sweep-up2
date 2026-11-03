@@ -119,6 +119,13 @@ export default async function chat(view, chatId) {
         ${f.partner ? `<div class="fq-line">💞 ${esc(f.name)} & ${esc(f.partner.name)}${zodiacOf(f.partner.zodiac) ? ` (${zodiacOf(f.partner.zodiac)[2]} ${zodiacOf(f.partner.zodiac)[1]})` : ''}</div>` : ''}
         ${f.note ? `<p class="fq-note">${esc(f.note)}</p>` : ''}${meta}</div>`;
     }
+    if (m.share) {
+      const s = m.share;
+      return `<a class="msg share-msg" href="${esc(s.url.replace(/^\//, ''))}">
+          ${s.image ? `<span class="shm-img ${s.kind}">${s.kind === 'profile' || s.kind === 'live' ? `<img class="shm-av" src="${esc(s.image)}" alt="">` : `<img src="${esc(s.image)}" alt="" loading="lazy">`}${s.video ? `<i class="shm-play">${icon('play')}</i>` : ''}${s.kind === 'live' ? '<i class="shm-live">CANLI</i>' : ''}</span>` : ''}
+          <span class="shm-b"><small>${esc(s.label)}</small><b>${esc(s.title)}${s.verified ? ' ✓' : ''}</b>${s.sub ? `<span>${esc(s.sub)}</span>` : ''}</span></a>
+        ${m.text ? `<div class="msg">${reply}${esc(m.text)}${meta}</div>` : `<span class="shm-meta">${meta}</span>`}`;
+    }
     if (m.game) return `<div class="msg game-msg">${gameHtml(m)}${meta}</div>`;
     if (m.plan) return `<div class="msg plan-msg">${planHtml(m)}${meta}</div>`;
     if (m.viewOnce) {

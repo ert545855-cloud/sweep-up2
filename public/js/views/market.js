@@ -1,7 +1,7 @@
 // SwipeUp Store: ikinci el al-sat. Komisyon yok; kargolu siparişlerde ödeme SwipeUp güvencesinde bekler.
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, toast, sheet, ago, nm, pickFile, prepareImage, uploadPrepared, openChatWith, el,
+  shareSheet, state, api, esc, on, toast, sheet, ago, nm, pickFile, prepareImage, uploadPrepared, openChatWith, el,
 } from '../core.js';
 import { catIcon } from '../mkicons.js';
 
@@ -165,10 +165,7 @@ async function item(view, sub, id) {
   gal.addEventListener('scroll', () => { const i = Math.round(gal.scrollLeft / gal.clientWidth); view.querySelectorAll('.mk-dots i').forEach((d, k) => d.classList.toggle('on', k === i)); }, { passive: true });
   gal.onclick = (e) => { if (e.target.tagName === 'IMG') lightbox(it.photos, [...gal.children].indexOf(e.target)); };
   view.querySelector('.mmsg')?.addEventListener('click', () => openChatWith(s.id).catch((er) => toast(er.message)));
-  view.querySelector('.share').onclick = async () => {
-    const url = `${location.origin}/#/market/i/${it.id}`;
-    try { if (navigator.share) await navigator.share({ title: it.title, text: `${it.title} · ${price(it.price)} · SwipeUp Store`, url }); else { await navigator.clipboard.writeText(url); toast('Bağlantı kopyalandı.'); } } catch {}
-  };
+  view.querySelector('.share').onclick = () => shareSheet({ ref: { kind: 'market', id: it.id }, url: `${location.origin}/#/market/i/${it.id}`, title: it.title, text: `${it.title} · ${price(it.price)} · SwipeUp Store` });
   view.querySelector('.more').onclick = () => sheet(null, `<div class="menu">${it.mine
     ? `<a href="#/market/edit/${esc(it.id)}">${icon('edit')}<span class="grow">İlanı düzenle</span></a><button class="del danger">${icon('trash')}<span class="grow">İlanı kaldır</span></button>`
     : `<button class="rep">${icon('flag')}<span class="grow">İlanı bildir</span></button>`}</div>`, {
