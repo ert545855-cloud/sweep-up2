@@ -693,11 +693,11 @@ app.post('/api/posts', auth, (req, res) => {
     id: nanoid(10), userId: req.user.id, type, media: items[0].media, poster: items[0].poster || null, items, edit,
     caption, tags: extractTags(caption), likes: [], comments: [], createdAt: now(),
   });
-  notifyMentions(caption, req.user, type === 'reel' ? `/#/dalga/${p.id}` : `/#/p/${p.id}`, type === 'reel' ? 'bir dalgada' : 'bir gönderide');
+  notifyMentions(caption, req.user, type === 'reel' ? `/#/vitrin/${p.id}` : `/#/p/${p.id}`, type === 'reel' ? 'bir vitrin videosunda' : 'bir gönderide');
   store.filter('follows', (f) => f.to === req.user.id).forEach((f) => notify(f.from, {
     type: 'post', fromId: req.user.id, ref: p.id,
-    text: `${req.user.username} yeni bir ${type === 'reel' ? 'dalga' : 'gönderi'} paylaştı.`,
-    url: type === 'reel' ? `/#/dalga/${p.id}` : `/#/p/${p.id}`,
+    text: type === 'reel' ? `${req.user.username} vitrinine yeni bir video ekledi.` : `${req.user.username} yeni bir gönderi paylaştı.`,
+    url: type === 'reel' ? `/#/vitrin/${p.id}` : `/#/p/${p.id}`,
   }));
   res.json(postOut(p, req.user.id));
 });
@@ -737,7 +737,7 @@ app.post('/api/posts/:id/like', auth, (req, res) => {
   const want = req.body?.like ?? !p.likes.includes(me);
   if (want && !p.likes.includes(me)) {
     p.likes.push(me);
-    notify(p.userId, { type: 'like', fromId: me, ref: p.id, text: `${req.user.username} ${p.type === 'reel' ? 'dalganı' : 'gönderini'} beğendi.`, url: `/#/p/${p.id}` });
+    notify(p.userId, { type: 'like', fromId: me, ref: p.id, text: `${req.user.username} ${p.type === 'reel' ? 'vitrin videonu' : 'gönderini'} beğendi.`, url: `/#/p/${p.id}` });
   }
   if (!want) p.likes = p.likes.filter((x) => x !== me);
   store.update('posts', p.id, {});
@@ -872,8 +872,18 @@ setInterval(() => store.filter('stories', (s) => now() - s.at > DAY * 2).forEach
 
 // ---------- Kullanıcılar ----------
 app.get('/api/users/search', auth, (req, res) => {
-  const q = String(req.query.q || '').toLowerCase().trim();
-  if (!q) return res.json([]);
+  const q = String(req.query.q || '').toLowerCase().trim().replace(/^@/, '');
+  if (!q) {
+    // Etiketleme önerisi: takip ettiklerin ve son sohbet ettiklerin
+    const me = req.user.id; const seen = new Map();
+    store.filter('chats', (c) => !c.isGroup && c.members.includes(me)).sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0)).slice(0, 20)
+      .forEach((c) => { const o = c.members.find((m) => m !== me); if (o) seen.set(o, (seen.get(o) || 0) + 3); });
+    store.filter('follows', (f) => f.from === me && f.status !== 'pending').forEach((f) => seen.set(f.to, (seen.get(f.to) || 0) + 2));
+    store.filter('follows', (f) => f.to === me && f.status !== 'pending').forEach((f) => seen.set(f.from, (seen.get(f.from) || 0) + 1));
+    let list = [...seen.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => store.get('users', id)).filter((u) => u && isActive(u) && u.role !== 'falci' && !isBlocked(me, u.id));
+    if (list.length < 8) list = [...list, ...rankPeople(store.filter('users', (u) => u.id !== me && isActive(u) && u.role !== 'falci' && !isBlocked(me, u.id) && !seen.has(u.id))).slice(0, 8 - list.length)];
+    return res.json(list.slice(0, 12).map(brief));
+  }
   const list = rankPeople(store.filter('users', (u) => isActive(u) && !isBlocked(req.user.id, u.id) && (u.username.includes(q) || u.name.toLowerCase().includes(q))));
   res.json(list.slice(0, 30).map(brief));
 });
@@ -1309,17 +1319,42 @@ app.get('/api/music/search', auth, wrap(async (req, res) => {
 }));
 app.get('/api/music/featured', auth, wrap(async (req, res) => res.json({ items: await music.getFeatured(), spotify: music.enabled() })));
 
+// ---------- Yönetici telefon/masaüstü bildirimleri ----------
+async function pushAdmins(p) {
+  if (!VAPID) return;
+  const subs = store.all('adm_push');
+  await Promise.all(subs.map((s) => webpush.sendNotification(s.sub, JSON.stringify({ icon: '/icons/icon-192.png', ...p }), { TTL: 86400, urgency: 'high' })
+    .catch((e) => { if (e.statusCode === 404 || e.statusCode === 410) store.del('adm_push', s.id); })));
+}
+app.post('/api/admin/push', adminApi.adminAuth, (req, res) => {
+  const sub = req.body?.sub;
+  if (!sub?.endpoint || !sub?.keys) return res.status(400).json({ error: 'Abonelik geçersiz.' });
+  store.put('adm_push', { id: crypto.createHash('sha1').update(sub.endpoint).digest('hex'), adminId: req.admin.id, admin: req.admin.username, sub, ua: String(req.headers['user-agent'] || '').slice(0, 160), at: now() });
+  res.json({ ok: true, count: store.filter('adm_push', (s) => s.adminId === req.admin.id).length });
+});
+app.delete('/api/admin/push', adminApi.adminAuth, (req, res) => {
+  const ep = req.body?.endpoint; if (ep) store.del('adm_push', crypto.createHash('sha1').update(ep).digest('hex'));
+  res.json({ ok: true });
+});
+app.post('/api/admin/push/test', adminApi.adminAuth, wrap(async (req, res) => {
+  const subs = store.filter('adm_push', (s) => s.adminId === req.admin.id);
+  if (!subs.length) return res.status(400).json({ error: 'Bu cihazda bildirim açık değil.' });
+  await Promise.all(subs.map((s) => webpush.sendNotification(s.sub, JSON.stringify({ title: 'SwipeUp yönetim', body: 'Bildirimler çalışıyor 🎉', url: '/admin/#/support', tag: 'adm-test', icon: '/icons/icon-192.png' })).catch(() => {})));
+  res.json({ ok: true, count: subs.length });
+}));
+
 // ---------- Ek özellikler (mağaza, doğrulama, gizlilik, çıkartmalar, etiketler…) ----------
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
   isBlocked, limited, isMedia, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
-  online, appEvent, falci, msgOut, falLock, shownAge, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id),
+  online, appEvent, falci, msgOut, falLock, shownAge, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id), pushAdmins,
 };
 require('./server/features')(app, featureCtx);
 require('./server/genel')(app, featureCtx);
 require('./server/market')(app, featureCtx);
 require('./server/social')(app, featureCtx);
 require('./server/falai')(app, featureCtx);
+require('./server/support')(app, featureCtx);
 gameOut = featureCtx.gameOut;
 
 // ---------- Statik ----------

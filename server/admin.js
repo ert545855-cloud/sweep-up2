@@ -157,6 +157,7 @@ module.exports = function mountAdmin(app, ctx) {
       flagsOpen: store.filter('flags', (f) => f.status === 'open').length,
       payoutsOpen: store.filter('payouts', (p) => p.status === 'pending').length,
       maintenance: store.get('settings', 'maintenance')?.on ? 1 : 0,
+      supportOpen: store.filter('support', (s) => s.status === 'open').length,
       marketOpen: store.filter('mk_orders', (o) => ['odeme_kontrol', 'sorunlu', 'iade_bekliyor'].includes(o.status)).length,
       plusUsers: users.filter((u) => (u.plusUntil || 0) > t).length,
       verifiedUsers: users.filter((u) => u.verified).length,
@@ -393,7 +394,7 @@ module.exports = function mountAdmin(app, ctx) {
     if (aud === 'user') { const un = String(b.username || '').replace(/^@/, '').toLowerCase().trim(); list = list.filter((u) => u.username === un); }
     return { aud, list };
   }
-  const LINKS = ['/#/', '/#/notifications', '/#/store', '/#/genel', '/#/fal', '/#/dalga', '/#/swipe', '/#/create', '/#/verify', '/#/live'];
+  const LINKS = ['/#/', '/#/notifications', '/#/store', '/#/genel', '/#/fal', '/#/vitrin', '/#/dalga', '/#/swipe', '/#/create', '/#/verify', '/#/live'];
   app.post('/api/admin/announcements/preview', adminAuth, (req, res) => {
     const { list } = audienceOf(req.body || {});
     res.json({ count: list.length, sample: list.slice(0, 5).map((u) => u.username) });
@@ -804,7 +805,7 @@ module.exports = function mountAdmin(app, ctx) {
     store.all('verifications').forEach((v) => add(v.selfie, 'selfie', v.id, v.userId, v.at));
     return refs;
   }
-  const KIND_LABEL = { post: 'Gönderi', reel: 'Dalga', poster: 'Dalga kapağı', story: 'Hikaye', dm: 'Özel mesaj', genel: 'Genel sohbet', fal: 'Fal fotoğrafı', avatar: 'Profil fotoğrafı', photo: 'Profil fotoğrafı', selfie: 'Doğrulama selfiesi', music: 'Müzik', orphan: 'Sahipsiz' };
+  const KIND_LABEL = { post: 'Gönderi', reel: 'Vitrin', poster: 'Vitrin kapağı', story: 'Hikaye', dm: 'Özel mesaj', genel: 'Genel sohbet', fal: 'Fal fotoğrafı', avatar: 'Profil fotoğrafı', photo: 'Profil fotoğrafı', selfie: 'Doğrulama selfiesi', music: 'Müzik', orphan: 'Sahipsiz' };
 
   app.get('/api/admin/media', adminAuth, (req, res) => {
     const kind = String(req.query.kind || 'all');

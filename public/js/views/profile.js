@@ -114,7 +114,7 @@ export default async function profile(view, username) {
       <a href="#/gorunum">${icon('crown')}<span>Çerçeve ve rozet</span></a>
       <a href="#/davet">${icon('gift')}<span>Davet et, kazan</span></a></div>` : ''}
     <div class="tabs">
-      ${tabs.map((t, i) => `<button data-t="${t}" class="${i ? '' : 'on'}" aria-label="${{ grid: 'Gönderiler', reels: 'Dalgalar', saved: 'Kaydedilenler' }[t]}">${icon({ grid: 'grid', reels: 'reels', saved: 'bookmark' }[t])}</button>`).join('')}
+      ${tabs.map((t, i) => `<button data-t="${t}" class="${i ? '' : 'on'}" aria-label="${{ grid: 'Gönderiler', reels: 'Vitrin', saved: 'Kaydedilenler' }[t]}">${icon({ grid: 'grid', reels: 'reels', saved: 'bookmark' }[t])}</button>`).join('')}
     </div>
     <div class="tab-body"></div>`;
 
@@ -133,7 +133,7 @@ export default async function profile(view, username) {
     if (!items.length) {
       const msg = {
         grid: self ? ['Fotoğraf paylaş', 'Paylaştığın fotoğraflar profilinde görünür.', '#/create', 'İlk fotoğrafını paylaş'] : ['Henüz gönderi yok', '', '', ''],
-        reels: self ? ['Dalga paylaş', 'Kısa dikey videoların burada görünür.', '#/create/reel', 'Dalga oluştur'] : ['Henüz dalga yok', '', '', ''],
+        reels: self ? ['Vitrinine video ekle', 'Kısa dikey videoların burada görünür.', '#/create/reel', 'Video ekle'] : ['Vitrinde henüz video yok', '', '', ''],
         saved: ['Kaydedilenler', 'Kaydettiğin gönderiler sadece sana görünür.', '', ''],
       }[t];
       body.innerHTML = `<div class="empty" style="padding-top:28px"><div class="big">${icon(t === 'grid' ? 'camera' : t === 'reels' ? 'reels' : 'bookmark')}</div><h2>${msg[0]}</h2>${msg[1]}${msg[2] ? `<p><a class="btn primary" href="${msg[2]}">${msg[3]}</a></p>` : ''}</div>`;

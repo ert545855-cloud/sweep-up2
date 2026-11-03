@@ -222,7 +222,7 @@ function mountLayer() {
 // Tam ekran ve video ekranlarında süsleme gösterme
 function syncRoute() {
   const h = location.hash;
-  document.body.classList.toggle('fx-hide', /^#\/(live|stories|create|dalga|reels)/.test(h));
+  document.body.classList.toggle('fx-hide', /^#\/(live|stories|create|vitrin|dalga|reels)/.test(h));
 }
 window.addEventListener('hashchange', syncRoute);
 

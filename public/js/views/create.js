@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  api, toast, compressImage, uploadFile, esc, state, sheet, FILTERS, filterCss, fmtDur, prepareMedia, uploadPrepared, isVideoFile, isHeicFile, fileType, scaleStickerLayer,
+  api, toast, compressImage, uploadFile, esc, state, sheet, FILTERS, filterCss, fmtDur, prepareMedia, uploadPrepared, isVideoFile, isHeicFile, fileType, scaleStickerLayer, mentionAutocomplete, pickPerson,
 } from '../core.js';
 import { pickMusic, musicChip } from '../music.js';
 
@@ -60,10 +60,10 @@ const SPEEDS = [0.5, 0.75, 1, 1.5, 2];
 export default function create(view, kind) {
   let mode = ['reel', 'story'].includes(kind) ? kind : 'image';
   let unscale = null;
-  const TITLES = { image: 'Yeni gönderi', reel: 'Yeni dalga', story: 'Yeni hikaye' };
+  const TITLES = { image: 'Yeni gönderi', reel: 'Vitrin videosu', story: 'Yeni hikaye' };
   let items = []; // gönderi: [{file,url,filter}]
   let cur = 0;
-  let file = null; // dalga / hikaye
+  let file = null; // vitrin / hikaye
   let fileUrl = null;
   let edit = { start: 0, end: null, speed: 1, filter: '', music: null, muteOriginal: false };
   let storyFilter = '';
@@ -79,16 +79,25 @@ export default function create(view, kind) {
       <div class="seg" role="tablist">
         <button data-m="image" class="${mode === 'image' ? 'on' : ''}">Gönderi</button>
         <button data-m="story" class="${mode === 'story' ? 'on' : ''}">Hikaye</button>
-        <button data-m="reel" class="${mode === 'reel' ? 'on' : ''}">Dalga</button>
+        <button data-m="reel" class="${mode === 'reel' ? 'on' : ''}">Vitrin</button>
         <button data-m="live">Canlı</button>
       </div>
       <div class="picker"></div>
       <div class="tools"></div>
-      <textarea class="field cap" placeholder="Açıklama yaz... #etiket ve @kullanıcı ekleyebilirsin" maxlength="2200" rows="3"></textarea>
+      <div class="capw"><textarea class="field cap" placeholder="Açıklama yaz... #etiket ekle, @ yazınca kişi önerilir" maxlength="2200" rows="3"></textarea>
+        <button type="button" class="tagp">${icon('at')} Kişi etiketle</button></div>
       <div class="bar" hidden><i></i></div>
       <button class="btn primary block go2" disabled>Paylaş</button>
     </div>`;
 
+  const capEl = view.querySelector('.cap');
+  mentionAutocomplete(capEl);
+  view.querySelector('.tagp').onclick = () => pickPerson('Kişi etiketle', (u) => {
+    if (!u) return;
+    const v = capEl.value; const pos = capEl.selectionStart ?? v.length;
+    const pre = v.slice(0, pos); const ins = `${pre && !/\s$/.test(pre) ? ' ' : ''}@${u.username} `;
+    capEl.value = pre + ins + v.slice(pos); const c = pos + ins.length; capEl.focus(); capEl.setSelectionRange(c, c);
+  });
   const picker = view.querySelector('.picker');
   const tools = view.querySelector('.tools');
   const title = view.querySelector('.center');
@@ -103,7 +112,7 @@ export default function create(view, kind) {
   function paint() {
     picker.className = `picker ${mode !== 'image' ? 'reel' : ''}`;
     title.textContent = TITLES[mode];
-    view.querySelector('.cap').hidden = mode === 'story';
+    view.querySelector('.capw').hidden = mode === 'story';
     goBtns.forEach((b) => { b.disabled = !ready(); });
     tools.innerHTML = '';
     if (!ready()) {
@@ -260,6 +269,10 @@ export default function create(view, kind) {
   function addSticker(k) {
     if (stickers.length >= 4) return toast('En fazla 4 çıkartma ekleyebilirsin.');
     if (['poll', 'question', 'music'].includes(k) && stickers.some((s) => s.type === k)) return toast('Bu çıkartmadan bir tane ekleyebilirsin.');
+    if (k === 'mention') {
+      pickPerson('Birinden bahset', (u) => { if (!u) return; stickers.push({ type: 'mention', username: u.username, y: 20 }); paint(); });
+      return;
+    }
     if (k === 'music') {
       pickMusic().then((m) => {
         if (!m) return;
@@ -313,7 +326,7 @@ export default function create(view, kind) {
     const prep = async (f) => {
       try {
         const r = await prepareMedia(f);
-        if (mode === 'image' && isVideoFile(r)) { toast('Gönderiye fotoğraf ekleyebilirsin; video için Dalga’yı seç.'); return null; }
+        if (mode === 'image' && isVideoFile(r)) { toast('Gönderiye fotoğraf ekleyebilirsin; video için Vitrin’i seç.'); return null; }
         return r;
       } catch (e) { toast(e.message || 'Dosya açılamadı.'); return null; }
     };
@@ -329,7 +342,7 @@ export default function create(view, kind) {
       items.push(...ready2.slice(0, room).map((f) => ({ file: f, url: URL.createObjectURL(f), filter: '' })));
       cur = items.length - 1;
     } else {
-      if (mode === 'reel' && !isVideoFile(ready2[0])) return toast('Dalga için bir video seç.');
+      if (mode === 'reel' && !isVideoFile(ready2[0])) return toast('Vitrin için bir video seç.');
       file = ready2[0]; fileUrl = URL.createObjectURL(file);
       edit = { start: 0, end: null, speed: 1, filter: '', music: edit.music, muteOriginal: edit.muteOriginal };
       storyFilter = '';
@@ -403,8 +416,8 @@ export default function create(view, kind) {
         },
       });
       stopAudio();
-      toast('Dalga paylaşıldı.');
-      location.hash = `#/dalga/${p.id}`;
+      toast('Vitrinde paylaşıldı.');
+      location.hash = `#/vitrin/${p.id}`;
     } catch (e) {
       toast(e.message); bar.hidden = true; goBtns.forEach((b) => { b.disabled = false; });
     }

@@ -783,7 +783,7 @@ a.tag { color: var(--uv); font-weight: 600; }
 .sv-poll { margin: 0 16px 10px; padding: 12px; border-radius: var(--r-md); background: var(--surface); display: grid; gap: 6px; }
 .sh-sec { font-weight: 750; font-size: 14px; padding: 12px 16px 4px; color: var(--muted); }
 
-/* Dalga ses satırı */
+/* Vitrin ses satırı */
 .reel .snd-line { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: .92; }
 .reel .snd-line svg { width: 15px; height: 15px; flex: none; }
 .reel .snd-line span:first-of-type { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -985,7 +985,7 @@ input.sw:checked::after { transform: translateX(18px); }
 /* Gönderiler: kırpmadan göster, kutu medyanın oranını alır */
 .post-media img, .post-media video, .car-cell img, .car-cell video { object-fit: contain; }
 .post-media { background: #0d0d10; }
-/* Dalga: yatay videoyu kırpma */
+/* Vitrin: yatay videoyu kırpma */
 .reel video.land { object-fit: contain; }
 /* Hikaye: 9:16 çerçeve, medya bulanık arka planla tamamen görünür */
 .story-v, .live { left: 50%; right: auto; width: min(100vw, calc(100dvh * 9 / 16)); max-width: none; margin: 0; transform: translateX(-50%); box-shadow: 0 0 0 100vmax #000; overflow: hidden; }
@@ -1929,3 +1929,29 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .ai-btns { display: flex; justify-content: flex-end; gap: 8px; }
 .ai-done { color: var(--muted); font-size: 12.5px; }
 .spinner.sm { width: 16px; height: 16px; border-width: 2px; margin: 0; }
+/* @ etiketleme */
+.mention-pop { position: fixed; z-index: 600; max-height: 260px; overflow: auto; border-radius: 16px; background: var(--bg); border: 1px solid var(--line); box-shadow: 0 16px 40px -14px rgba(0,0,0,.45); padding: 4px; }
+.mention-pop .mp-it { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 10px; border-radius: 12px; text-align: left; }
+.mention-pop .mp-it.on, .mention-pop .mp-it:hover { background: var(--surface); }
+.mention-pop img { width: 34px; height: 34px; border-radius: 30%; object-fit: cover; flex: none; }
+.mention-pop b { display: block; font-size: 14px; } .mention-pop small { color: var(--muted); font-size: 12.5px; }
+.mp-h { padding: 6px 10px 4px; font-size: 11.5px; font-weight: 750; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.mp-empty { padding: 12px; color: var(--muted); font-size: 13.5px; text-align: center; }
+.capw { display: grid; gap: 6px; } .capw[hidden] { display: none; }
+.tagp { justify-self: start; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 999px; background: var(--surface); font-weight: 700; font-size: 13.5px; color: var(--uv); }
+.tagp svg { width: 16px; height: 16px; }
+.pp-box { padding: 0 6px 12px; display: grid; gap: 6px; }
+.pp-s { position: relative; margin: 0 10px; } .pp-s svg { position: absolute; left: 13px; top: 12px; width: 20px; height: 20px; color: var(--muted); } .pp-s .field { padding-left: 42px; }
+.pp-l { min-height: 200px; max-height: 55vh; overflow: auto; }
+/* Destek */
+.sup { padding: 0 14px 10px; display: grid; gap: 10px; }
+.sup-hero { display: flex; gap: 12px; align-items: center; padding: 16px; border-radius: var(--r-lg); background: linear-gradient(140deg, var(--uv-soft), color-mix(in srgb, var(--sky) 14%, var(--bg))); }
+.sup-hero .sh-ic { font-size: 34px; } .sup-hero b { display: block; font-family: var(--display); font-size: 17px; } .sup-hero small { color: var(--muted); font-size: 13px; }
+.sup-it { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface); }
+.sup-it.unread { box-shadow: inset 3px 0 0 var(--hot); } .sup-it .sub { font-size: 12.5px; margin-top: 2px; } .sup-it .grow { min-width: 0; }
+.pill.wait { background: color-mix(in srgb, var(--sun) 22%, transparent); color: color-mix(in srgb, var(--sun) 60%, var(--text)); }
+.faq details { padding: 12px 14px; border-radius: var(--r-md); background: var(--surface); margin-bottom: 8px; }
+.faq summary { font-weight: 700; font-size: 14.5px; cursor: pointer; } .faq p { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+.sup-f { padding: 4px 16px 20px; } .sup-img { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .sup-img img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; } .sup-img .prev { display: flex; align-items: center; gap: 8px; }
+.sup-im { display: block; max-width: 220px; border-radius: 12px; margin-bottom: 6px; }
+.sup { grid-template-columns: minmax(0, 1fr); } .sup-hero .grow { min-width: 0; }

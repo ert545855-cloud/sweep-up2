@@ -190,7 +190,7 @@ export function connectSocket() {
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',
     'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'people:new', 'likes:new',
     'call:incoming', 'call:accepted', 'call:ended', 'call:taken', 'call:signal',
-    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event', 'maintenance', 'maintenance:plan', 'falai', 'market', 'features', 'speed:count', 'speed:paired', 'speed:vote', 'speed:result', 'speed:signal', 'speed:left']
+    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event', 'maintenance', 'maintenance:plan', 'falai', 'support', 'market', 'features', 'speed:count', 'speed:paired', 'speed:vote', 'speed:result', 'speed:signal', 'speed:left']
     .forEach((ev) => s.on(ev, (d) => emit(ev, d)));
   s.on('presence', (d) => { state.presence.set(d.userId, d); emit('presence', d); });
   s.on('presence:all', (ids) => { ids.forEach((id) => state.presence.set(id, { userId: id, online: true })); emit('presence', {}); });
@@ -236,7 +236,7 @@ export function notifHref(n) {
   if (n.url && n.url.startsWith('/#/')) return n.url.slice(1);
   return ({
     match: '#/chats', live: `#/live/${n.fromId}`, follow: `#/u/${n.from?.username}`, follow_ok: `#/u/${n.from?.username}`, follow_request: '#/requests',
-    super: '#/likes', liked: '#/likes', super_msg: '#/chats', safety: '#/chats', group: '#/chats', missed: '#/chats', order: '#/store', market: '#/market', verify: '#/verify', story_answer: '#/stories/me',
+    super: '#/likes', liked: '#/likes', super_msg: '#/chats', safety: '#/chats', support: '#/destek', group: '#/chats', missed: '#/chats', order: '#/store', market: '#/market', verify: '#/verify', story_answer: '#/stories/me',
     announce: '#/notifications', warning: '#/notifications', report: '#/notifications',
   }[n.type]) || (n.ref ? `#/p/${n.ref}` : '#/notifications');
 }
@@ -541,6 +541,7 @@ export function openComments(post) {
   const close = sheet('Yorumlar', '<div class="cl"><div class="spinner"></div></div>', {
     footer: `<form class="comment-input">${avatar(state.me, 32, { dot: false })}<input name="t" placeholder="${esc(post.user.username)} için yorum ekle..." autocomplete="off" maxlength="500"><button class="link">Paylaş</button></form>`,
     async onMount(sh) {
+      mentionAutocomplete(sh.querySelector('.comment-input input'));
       const list = sh.querySelector('.cl');
       const row = (c) => `<div class="comment" data-cid="${esc(c.id)}">${avatar(c.user, 32, { dot: false })}<div class="t"><span class="b">${nm(c.user, 'username')}</span><span class="muted">${ago(c.at)}</span><div>${richText(c.text)}</div></div><button class="cmore" aria-label="Yorum seçenekleri">${icon('more')}</button></div>`;
       let cs = [];
@@ -589,7 +590,7 @@ export function openComments(post) {
 }
 
 export async function sharePost(post) {
-  const url = `${location.origin}/#/${post.type === 'reel' ? 'dalga' : 'p'}/${post.id}`;
+  const url = `${location.origin}/#/${post.type === 'reel' ? 'vitrin' : 'p'}/${post.id}`;
   if (navigator.share) {
     try { await navigator.share({ title: 'SwipeUp', text: post.caption || '', url }); return; } catch { return; }
   }
@@ -612,4 +613,86 @@ export const saved = {
 export async function openChatWith(userId) {
   const c = await api('/chats', { body: { userId } });
   location.hash = `#/chat/${c.id}`;
+}
+
+
+// ---- @ etiketleme: kişi önerisi ve kişi arama ----
+const searchPeople = (q) => api(`/users/search?q=${encodeURIComponent(q || '')}`).catch(() => []);
+export function mentionAutocomplete(input) {
+  if (!input || input.dataset.mention) return () => {};
+  input.dataset.mention = '1';
+  const pop = document.createElement('div'); pop.className = 'mention-pop'; pop.hidden = true;
+  document.body.append(pop);
+  let items = []; let sel = 0; let token = null; let tmr = null; let reqNo = 0;
+  const hide = () => { pop.hidden = true; token = null; };
+  const place = () => {
+    const r = input.getBoundingClientRect();
+    const h = Math.min(pop.scrollHeight, 260);
+    const below = window.innerHeight - r.bottom; const up = below < h + 12 && r.top > h + 12;
+    pop.style.left = `${Math.max(8, r.left)}px`; pop.style.width = `${Math.min(r.width, window.innerWidth - 16)}px`;
+    pop.style.top = up ? `${r.top - h - 6}px` : `${r.bottom + 6}px`;
+  };
+  const paint = () => {
+    if (!items.length) { pop.innerHTML = `<div class="mp-empty">${token ? 'Kimse bulunamadı' : 'Bir isim yaz'}</div>`; } else {
+      pop.innerHTML = `${token === '' ? '<div class="mp-h">Önerilen kişiler</div>' : ''}${items.map((u, i) => `<button type="button" class="mp-it ${i === sel ? 'on' : ''}" data-i="${i}"><img src="${esc(u.avatar)}" alt=""><span><b>${esc(u.name)}${u.verified ? ' ✓' : ''}</b><small>@${esc(u.username)}</small></span></button>`).join('')}`;
+    }
+    pop.hidden = false; place();
+  };
+  const find = () => {
+    const v = input.value; const pos = input.selectionStart ?? v.length;
+    const m = v.slice(0, pos).match(/(^|\s)@([\p{L}0-9._]{0,24})$/u);
+    return m ? { q: m[2], start: pos - m[2].length - 1, end: pos } : null;
+  };
+  const check = () => {
+    const t = find();
+    if (!t) { hide(); return; }
+    token = t.q;
+    clearTimeout(tmr);
+    tmr = setTimeout(async () => {
+      const n = ++reqNo; const list = await searchPeople(t.q);
+      if (n !== reqNo || token === null) return;
+      items = list.slice(0, 7); sel = 0; paint();
+    }, t.q ? 160 : 0);
+  };
+  const pick = (u) => {
+    const t = find(); if (!t || !u) return;
+    const v = input.value; const ins = `@${u.username} `;
+    input.value = v.slice(0, t.start) + ins + v.slice(t.end);
+    const c = t.start + ins.length; input.setSelectionRange(c, c);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    hide(); input.focus();
+  };
+  pop.addEventListener('pointerdown', (e) => { e.preventDefault(); const b = e.target.closest('.mp-it'); if (b) pick(items[+b.dataset.i]); });
+  input.addEventListener('input', check);
+  input.addEventListener('click', check);
+  input.addEventListener('keydown', (e) => {
+    if (pop.hidden || !items.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length; paint(); }
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); pick(items[sel]); }
+    if (e.key === 'Escape') hide();
+  }, true);
+  input.addEventListener('blur', () => setTimeout(hide, 150));
+  const onScroll = () => { if (!pop.hidden) place(); };
+  window.addEventListener('resize', onScroll); window.visualViewport?.addEventListener('resize', onScroll);
+  const obs = new MutationObserver(() => { if (!input.isConnected) { cleanup(); } });
+  obs.observe(document.body, { childList: true, subtree: true });
+  function cleanup() { pop.remove(); obs.disconnect(); window.removeEventListener('resize', onScroll); window.visualViewport?.removeEventListener('resize', onScroll); }
+  return cleanup;
+}
+// Kişi seç (arama + öneri)
+export function pickPerson(title, onPick) {
+  sheet(title || 'Kişi etiketle', `<div class="pp-box"><div class="pp-s">${icon('search')}<input class="field" placeholder="İsim ya da kullanıcı adı ara" autocapitalize="off" autocomplete="off"></div><div class="pp-l"><div class="spinner"></div></div></div>`, {
+    onMount(sh, close) {
+      const inp = sh.querySelector('input'); const box = sh.querySelector('.pp-l');
+      let n = 0; let tmr = null; let list = [];
+      const load = async () => {
+        const my = ++n; const q = inp.value.trim().replace(/^@/, '');
+        list = await searchPeople(q); if (my !== n) return;
+        box.innerHTML = (q ? '' : '<div class="mp-h">Önerilen kişiler</div>') + (list.length ? list.map((u, i) => `<button class="list-item" data-i="${i}">${avatar(u, 40, { dot: false })}<div class="grow"><div class="b">${nm(u)}</div><div class="sub">@${esc(u.username)}</div></div></button>`).join('') : '<div class="empty" style="padding:20px">Kimse bulunamadı.</div>');
+      };
+      inp.oninput = () => { clearTimeout(tmr); tmr = setTimeout(load, 180); };
+      box.onclick = (e) => { const b = e.target.closest('[data-i]'); if (!b) return; close(); onPick(list[+b.dataset.i]); };
+      load(); setTimeout(() => inp.focus(), 80);
+    },
+  });
 }

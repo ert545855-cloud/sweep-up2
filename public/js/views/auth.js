@@ -57,7 +57,7 @@ export default function auth(view, mode) {
   const reg = mode === 'register';
   view.innerHTML = `<section class="auth">
     <div class="wordmark">${logo()}</div>
-    <p class="tagline">${reg ? 'Kaydır, eşleş, dalgaları izle, canlı yayında buluş.' : 'Kaydırmaya kaldığın yerden devam et.'}</p>
+    <p class="tagline">${reg ? 'Kaydır, eşleş, vitrine göz at, canlı yayında buluş.' : 'Kaydırmaya kaldığın yerden devam et.'}</p>
     <form novalidate>
       ${reg ? `<label class="ic-field">${icon('person')}<input class="field" name="name" placeholder="Adın" autocomplete="name" maxlength="40"></label>` : ''}
       <label class="ic-field">${icon('person')}<input class="field" name="username" placeholder="${reg ? 'Kullanıcı adı' : 'Kullanıcı adı veya e-posta'}" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>

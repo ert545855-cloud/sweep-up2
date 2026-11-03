@@ -261,3 +261,17 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .seg3 button small { color: var(--muted); font-size: 11.5px; } .seg3 button.on { border-color: var(--accent, #ff5a5f); background: color-mix(in srgb, var(--accent, #ff5a5f) 8%, transparent); }
 .seg3 button:disabled { opacity: .55; cursor: not-allowed; }
 .aisample { padding: 12px 14px; border-radius: 12px; background: var(--soft); font-size: 13.5px; line-height: 1.5; max-height: 260px; overflow: auto; }
+.supgrid { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .supgrid { grid-template-columns: 1fr; } }
+.suplist { max-height: 72vh; overflow: auto; padding: 4px; }
+.supi { display: flex; gap: 10px; padding: 10px; border-radius: 10px; color: inherit; align-items: flex-start; }
+.supi:hover, .supi.on { background: var(--soft); } .supi.unread { box-shadow: inset 3px 0 0 var(--bad); } .supi.unread b::after { content: ' ●'; color: var(--bad); }
+.supi .grow { min-width: 0; } .supi .av { width: 36px; height: 36px; border-radius: 10px; object-fit: cover; flex: none; }
+.supth .ph { align-items: flex-start; }
+.supuser { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; } .supuser > .row { flex: 1; min-width: 200px; }
+.supmsgs { display: grid; gap: 10px; padding: 14px 16px; max-height: 46vh; overflow: auto; }
+.supmsgs .sm { max-width: 78%; display: grid; gap: 3px; } .supmsgs .sm.admin { justify-self: end; text-align: right; }
+.supmsgs .sm .b { padding: 9px 12px; border-radius: 14px; background: var(--soft); font-size: 14px; text-align: left; white-space: normal; }
+.supmsgs .sm.admin .b { background: color-mix(in srgb, var(--accent, #ff5a5f) 14%, transparent); }
+.supmsgs .sm img { display: block; max-width: 240px; border-radius: 10px; margin-bottom: 6px; } .supmsgs small { color: var(--muted); font-size: 11px; }
+.suprep { display: grid; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--line); } .suprep .quick { display: flex; gap: 6px; flex-wrap: wrap; }

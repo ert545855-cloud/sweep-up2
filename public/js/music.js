@@ -67,5 +67,5 @@ export function pickMusic({ allowFile = true } = {}) {
   });
 }
 
-// Müzik kartı (hikaye / dalga)
+// Müzik kartı (hikaye / vitrin)
 export const musicChip = (m) => `${m.cover ? `<img src="${esc(m.cover)}" alt="">` : icon('music')}<span><b>${esc(m.title || 'Müzik')}</b>${m.artist ? `<small>${esc(m.artist)}</small>` : ''}</span>`;

@@ -44,7 +44,7 @@ export function wireCarousel(root) {
   }, { passive: true });
 }
 
-// Dalga düzenlemesi (kırpma, hız, filtre, müzik) oynatma sırasında uygulanır
+// Vitrin videosu düzenlemesi (kırpma, hız, filtre, müzik) oynatma sırasında uygulanır
 export function applyEdit(v, edit) {
   if (!v || !edit) return () => {};
   const start = edit.start || 0;
@@ -167,7 +167,7 @@ export function autoplay(root) {
 
 export function gridTile(p) {
   const vid = p.type === 'reel' || isVideo(p.media);
-  const href = p.type === 'reel' ? `#/dalga/${p.id}` : `#/p/${p.id}`;
+  const href = p.type === 'reel' ? `#/vitrin/${p.id}` : `#/p/${p.id}`;
   return `<a href="${href}">${vid
     ? `${p.poster ? `<img src="${esc(p.poster)}" alt="" loading="lazy">` : `<video src="${esc(p.media)}#t=0.5" muted playsinline preload="metadata"></video>`}
        <span class="badge">${icon('reels')}</span><span class="views">${icon('heart')}${num(p.likeCount)}</span>`

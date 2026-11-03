@@ -49,6 +49,7 @@ export default function settings(view) {
     </div>
     <div class="group-t">Uygulama</div>
     <div class="group">
+      <a class="it" href="#/destek">${icon('question')}<span class="grow">Yardım ve destek<div class="sub">Sorun bildir, destek ekibine yaz</div></span></a>
       <a class="it" href="#/install">${icon('download')}<span class="grow">Telefona yükle<div class="sub">iPhone’da Ana Ekrana Ekle, Android’de Uygulamayı yükle</div></span></a>
       <button class="it nt">${icon('bell')}<span class="grow">Bildirimler</span></button>
       <button class="it th">${icon('sun')}<span class="grow">Tema<div class="sub">Gün batımı, Pembe rüya, Gece moru, Altın</div></span></button>

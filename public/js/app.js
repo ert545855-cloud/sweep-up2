@@ -11,7 +11,7 @@ import { checkSafety } from './extras.js';
 const routes = [
   [/^\/?$/, 'feed', { tab: 'home' }],
   [/^\/search$/, 'search', { tab: 'home' }],
-  [/^\/(?:dalga|reels)(?:\/([\w-]+))?$/, 'reels', { tab: 'reels', dark: true }],
+  [/^\/(?:vitrin|dalga|reels)(?:\/([\w-]+))?$/, 'reels', { tab: 'reels', dark: true }],
   [/^\/swipe$/, 'swipe', { tab: 'swipe' }],
   [/^\/likes$/, 'likes', { tab: 'swipe' }],
   [/^\/chats$/, 'chats', { tab: 'chats' }],
@@ -21,6 +21,7 @@ const routes = [
   [/^\/gorunum$/, 'look', { tabs: false }],
   [/^\/ziyaretciler$/, 'viewers', { tabs: false }],
   [/^\/davet$/, 'invite', { tabs: false }],
+  [/^\/destek(?:\/([\w-]+))?$/, 'support', { tabs: false }],
   [/^\/chat\/([\w-]+)$/, 'chat', { tabs: false }],
   [/^\/chat\/([\w-]+)\/info$/, 'chatinfo', { tabs: false }],
   [/^\/group\/new$/, 'groupnew', { tabs: false }],
@@ -56,7 +57,7 @@ function renderTabbar(active) {
   const b = state.badges;
   const tabs = [
     ['home', '#/', icon(active === 'home' ? 'homeFill' : 'home'), 'Ana sayfa', ''],
-    ['reels', '#/dalga', icon('reels'), 'Dalga', ''],
+    ['reels', '#/vitrin', icon('reels'), 'Vitrin', ''],
     ['swipe', '#/swipe', `<span class="center">${icon('flame')}${b.likes ? `<span class="num-badge">${b.likes > 99 ? '99+' : b.likes}</span>` : ''}</span>`, 'Kaydır ve eşleş', 'mid'],
     ['chats', '#/chats', `<span style="position:relative;display:grid">${icon('send')}${b.messages ? `<span class="num-badge">${b.messages}</span>` : ''}</span>`, 'Mesajlar', ''],
     ['me', '#/me', `<img class="me-av" src="${esc(state.me?.avatar)}" alt="">${b.notifications ? '<i class="dot-badge"></i>' : ''}`, 'Profil', ''],

@@ -23,7 +23,7 @@ export const DOCS = {
 <ul>
 <li><b>Hesap bilgileri:</b> kullanıcı adı, ad, doğum tarihi, (isteğe bağlı) e-posta, şifrenin geri döndürülemez özeti.</li>
 <li><b>Profil bilgileri:</b> fotoğraflar, biyografi, yaş, şehir, cinsiyet, ilgi alanları, burç.</li>
-<li><b>Paylaştıkların:</b> gönderiler, dalgalar, hikayeler, yorumlar, beğeniler, mesajlar, sesli mesajlar, fal istekleri.</li>
+<li><b>Paylaştıkların:</b> gönderiler, vitrin videoları, hikayeler, yorumlar, beğeniler, mesajlar, sesli mesajlar, fal istekleri.</li>
 <li><b>Konum:</b> yalnızca izin verirsen, yaklaşık 1 km hassasiyetle yuvarlanmış olarak; sohbette paylaştığın konum o mesajda saklanır.</li>
 <li><b>Doğrulama selfiesi:</b> mavi tik için gönderdiğin fotoğraf; yalnızca yönetim ekibi inceler.</li>
 <li><b>Ödeme kayıtları:</b> sipariş kodu, tutar, havale/EFT gönderen adı. Kart bilgisi toplamayız.</li>

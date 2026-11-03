@@ -8,7 +8,7 @@ export default async function post(view, id) {
       <div class="center">Gönderi</div><span class="ib"></span>
     </header><div class="pb"><div class="spinner"></div></div>`;
   const p = await api(`/posts/${id}`);
-  if (p.type === 'reel') { location.replace(`#/dalga/${p.id}`); return null; }
+  if (p.type === 'reel') { location.replace(`#/vitrin/${p.id}`); return null; }
   const pb = view.querySelector('.pb');
   pb.innerHTML = postCard(p);
   wirePost(pb.firstElementChild, p, () => { location.hash = '#/me'; });

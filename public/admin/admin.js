@@ -38,6 +38,7 @@ const FAL = { kahve: '☕️ Kahve falı', tarot: '🔮 Tarot', burc: '✨ Burç
 const SECTIONS = [
   ['overview', 'Genel bakış', 'home'],
   ['users', 'Kullanıcılar', 'users'],
+  ['support', 'Destek', 'question', 'supportOpen'],
   ['reports', 'Şikayetler', 'flag', 'reportsOpen'],
   ['appeals', 'İtirazlar', 'reply', 'appealsOpen'],
   ['flags', 'Moderasyon', 'shield', 'flagsOpen'],
@@ -100,7 +101,8 @@ function paintMaintBanner() {
 async function refreshCounts() {
   try {
     const o = await api('/overview');
-    const changed = ['reportsOpen', 'appealsOpen', 'falPending', 'flagsOpen', 'verifyOpen', 'ordersPaid', 'payoutsOpen', 'marketOpen', 'maintenance'].some((k) => S.counts[k] !== o[k]);
+    const changed = ['supportOpen', 'reportsOpen', 'appealsOpen', 'falPending', 'flagsOpen', 'verifyOpen', 'ordersPaid', 'payoutsOpen', 'marketOpen', 'maintenance'].some((k) => S.counts[k] !== o[k]);
+    if (S.counts.users && (o.supportOpen || 0) > (S.counts.supportOpen || 0)) { toast('🎧 Yeni destek mesajı var.'); ding(); }
     S.counts = o;
     paintMaintBanner();
     if (changed) document.querySelectorAll('.nav').forEach((a) => {
@@ -127,7 +129,7 @@ VIEWS.overview = async (main) => {
   main.innerHTML = `${head('Genel bakış', `Veri deposu: ${o.store === 'redis' ? 'Render Key Value' : o.store === 'postgres' ? 'PostgreSQL' : 'Sunucu diski'} · medya ${o.mediaMB} MB`)}
     <div class="stats">
       ${st(o.users, 'Toplam üye')}${st(o.newToday, 'Bugün katılan')}${st(o.new7, 'Son 7 gün katılan')}${st(o.online, 'Şu an çevrimiçi')}${st(o.active24, 'Son 24 saatte aktif')}
-      ${st(o.messagesToday, 'Bugün gönderilen mesaj')}${st(o.matches, 'Toplam eşleşme')}${st(o.posts, 'Gönderi ve dalga')}${st(o.stories, 'Yayında hikaye')}${st(o.banned, 'Askıda / yasaklı', true, '#/users')}
+      ${st(o.messagesToday, 'Bugün gönderilen mesaj')}${st(o.matches, 'Toplam eşleşme')}${st(o.posts, 'Gönderi ve vitrin videosu')}${st(o.stories, 'Yayında hikaye')}${st(o.banned, 'Askıda / yasaklı', true, '#/users')}
       ${st(o.reportsOpen, 'Açık şikayet', true, '#/reports')}${st(o.appealsOpen, 'Bekleyen itiraz', true, '#/appeals')}${st(o.falPending, 'Bekleyen fal', true, '#/fal')}
       ${st(o.flagsOpen, 'Moderasyon işareti', true, '#/flags')}${st(o.verifyOpen, 'Doğrulama bekleyen', true, '#/verify')}${st(o.ordersPaid, 'Onay bekleyen ödeme', true, '#/orders')}${st(o.payoutsOpen, 'Ödeme talebi', true, '#/payouts')}
       ${st(o.plusUsers, 'SwipeUp+ üye')}${st(o.verifiedUsers, 'Mavi tikli üye')}
@@ -415,8 +417,8 @@ VIEWS.fal = async (main) => {
 // ---- İçerik ----
 VIEWS.content = async (main) => {
   let kind = 'posts';
-  main.innerHTML = `${head('İçerik', 'Son paylaşılan gönderiler, dalgalar ve hikayeler.')}
-    <div class="tabs"><button data-k="posts" class="on">Gönderiler ve dalgalar</button><button data-k="stories">Hikayeler (24 saat)</button></div><div class="lst"><div class="spin"></div></div>`;
+  main.innerHTML = `${head('İçerik', 'Son paylaşılan gönderiler, vitrin videoları ve hikayeler.')}
+    <div class="tabs"><button data-k="posts" class="on">Gönderiler ve vitrin videoları</button><button data-k="stories">Hikayeler (24 saat)</button></div><div class="lst"><div class="spin"></div></div>`;
   const lst = main.querySelector('.lst');
   const load = async () => {
     const list = await api(`/content?kind=${kind}`);
@@ -439,7 +441,7 @@ VIEWS.content = async (main) => {
 VIEWS.media = async (main) => {
   let kind = 'all'; let q = '';
   const sel = new Map();
-  const TABS = [['all', 'Tümü'], ['post', 'Gönderi'], ['reel', 'Dalga'], ['story', 'Hikaye'], ['chat', 'Özel mesaj'], ['genel', 'Genel sohbet'], ['profile', 'Profil'], ['music', 'Müzik'], ['orphan', 'Sahipsiz']];
+  const TABS = [['all', 'Tümü'], ['post', 'Gönderi'], ['reel', 'Vitrin'], ['story', 'Hikaye'], ['chat', 'Özel mesaj'], ['genel', 'Genel sohbet'], ['profile', 'Profil'], ['music', 'Müzik'], ['orphan', 'Sahipsiz']];
   main.innerHTML = `${head('Medya', 'Uygulamaya yüklenen tüm görseller, videolar ve sesler. Seçip kaldırdığında içerik uygulamadan da çıkar ve dosya silinir.')}
     <div class="stats sm mstat"></div>
     <div class="row" style="flex-wrap:wrap;margin-bottom:10px"><div class="tabs" style="margin:0;flex-wrap:wrap">${TABS.map(([k, l], i) => `<button data-k="${k}" class="${i ? '' : 'on'}">${l}<span class="tc" data-c="${k}"></span></button>`).join('')}</div>
@@ -499,7 +501,7 @@ VIEWS.media = async (main) => {
 // ---- Duyurular ----
 VIEWS.announce = async (main) => {
   const list = await api('/announcements');
-  const LINKS = [['/#/notifications', 'Bildirimler'], ['/#/', 'Ana sayfa'], ['/#/store', 'Mağaza (SwipeUp+ / jeton)'], ['/#/genel', 'Genel sohbet'], ['/#/fal', 'Fal'], ['/#/dalga', 'Dalga'], ['/#/swipe', 'Keşfet (kaydır)'], ['/#/create', 'Paylaşım oluştur'], ['/#/verify', 'Profil doğrulama'], ['/#/live', 'Canlı yayın aç']];
+  const LINKS = [['/#/notifications', 'Bildirimler'], ['/#/', 'Ana sayfa'], ['/#/store', 'Mağaza (SwipeUp+ / jeton)'], ['/#/genel', 'Genel sohbet'], ['/#/fal', 'Fal'], ['/#/vitrin', 'Vitrin'], ['/#/swipe', 'Keşfet (kaydır)'], ['/#/create', 'Paylaşım oluştur'], ['/#/verify', 'Profil doğrulama'], ['/#/live', 'Canlı yayın aç']];
   const AUD = [['all', 'Herkes'], ['online', 'Şu an çevrimiçi olanlar'], ['plus', 'SwipeUp+ üyeleri'], ['free', 'Ücretsiz üyeler'], ['verified', 'Mavi tikliler'], ['new7', 'Son 7 günde katılanlar'], ['inactive', '7 gündür girmeyenler'], ['city', 'Şehre göre…'], ['user', 'Tek kullanıcı…']];
   main.innerHTML = `${head('Bildirim gönder', 'Seçtiğin kişilere uygulama içi bildirim ve telefonlarına anlık bildirim (push) gönderir. İstersen uygulama açılınca duyuru penceresi de çıkar.')}
     <div class="grid g21">
@@ -1040,6 +1042,82 @@ async function roomsPanel(box, owner) {
   };
 }
 
+// ---- Bildirimler (bu cihaz) ----
+function ding() { try { const a = new AudioContext(); const o = a.createOscillator(); const g = a.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.12, a.currentTime); g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.5); o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + 0.5); } catch {} }
+const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+async function adminPushState() {
+  if (!pushOk()) return 'unsupported';
+  const reg = await navigator.serviceWorker.getRegistration('/admin/');
+  const sub = await reg?.pushManager.getSubscription();
+  return sub && Notification.permission === 'granted' ? 'on' : Notification.permission === 'denied' ? 'denied' : 'off';
+}
+async function enableAdminPush() {
+  const cfg = await fetch('/api/config').then((r) => r.json());
+  if (!cfg.vapidPublicKey) throw new Error('Sunucuda bildirim anahtarı yok.');
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('Tarayıcı bildirim iznini vermedi.');
+  const reg = await navigator.serviceWorker.register('/admin/sw.js', { scope: '/admin/' });
+  await navigator.serviceWorker.ready;
+  const key = Uint8Array.from(atob(cfg.vapidPublicKey.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (cfg.vapidPublicKey.length % 4)) % 4)), (c) => c.charCodeAt(0));
+  const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+  await api('/push', { body: { sub: sub.toJSON() } });
+}
+async function disableAdminPush() {
+  const reg = await navigator.serviceWorker.getRegistration('/admin/');
+  const sub = await reg?.pushManager.getSubscription();
+  if (sub) { await api('/push', { method: 'DELETE', body: { endpoint: sub.endpoint } }).catch(() => {}); await sub.unsubscribe(); }
+}
+
+// ---- Destek talepleri ----
+const SUPST = { open: ['warn', 'Cevap bekliyor'], answered: ['ok', 'Cevaplandı'], closed: ['', 'Kapandı'] };
+const QUICK = [
+  ['Selamlama', 'Merhaba, bize yazdığın için teşekkürler. '],
+  ['Jeton yüklendi', 'Merhaba, ödemeni kontrol ettik ve jetonların hesabına yüklendi. İyi eğlenceler!'],
+  ['Bilgi iste', 'Merhaba, sorununu inceleyebilmemiz için biraz daha ayrıntı (ne zaman oldu, hangi ekranda, varsa ekran görüntüsü) paylaşabilir misin?'],
+  ['Çözüldü', 'Sorununu çözdük. Başka bir konuda yardıma ihtiyacın olursa buradan yazabilirsin.'],
+];
+let supFilter = 'open';
+VIEWS.support = async (main) => {
+  const openId = (location.hash.split('/')[2] || '');
+  const [r, ps] = await Promise.all([api(`/support?status=${supFilter}`), adminPushState().catch(() => 'unsupported')]);
+  S.counts.supportOpen = r.counts.open;
+  const pushBtn = ps === 'on' ? `<button class="btn sm pushx">${icon('bell')} Bildirimler açık</button><button class="btn sm pusht">Dene</button>`
+    : ps === 'denied' ? '<span class="chip bad">Tarayıcı bildirimleri engelli</span>' : ps === 'unsupported' ? '<span class="chip">Bu tarayıcı bildirim desteklemiyor</span>' : `<button class="btn primary sm pushon">${icon('bell')} Bu cihazda bildirim al</button>`;
+  main.innerHTML = `${head('Destek', 'Kullanıcıların açtığı destek talepleri. Cevabın uygulamada kullanıcıya bildirim olarak gider. Yeni talep ya da cevap gelince bildirim almak için bu cihazda bildirimleri aç (telefonda da açabilirsin).', `<div class="row" style="gap:6px">${pushBtn}</div>`)}
+    <div class="tabs supt">${[['open', 'Cevap bekleyen'], ['answered', 'Cevaplanan'], ['closed', 'Kapalı'], ['all', 'Tümü']].map(([k, l]) => `<button data-s="${k}" class="${supFilter === k ? 'on' : ''}">${l} <span class="muted">${r.counts[k]}</span></button>`).join('')}</div>
+    <div class="supgrid"><div class="panel suplist">${r.items.length ? r.items.map((t) => `<a class="supi ${t.adminUnread ? 'unread' : ''} ${t.id === openId ? 'on' : ''}" href="#/support/${esc(t.id)}">
+        <img class="av" src="${esc(t.user?.avatar || '')}" alt=""><div class="grow"><div class="ell"><b>${esc(t.subject)}</b></div><div class="muted ell">#${t.no} · ${esc(t.user?.name || 'Silinmiş')} · ${esc(t.categoryLabel)}</div><div class="ell" style="font-size:12.5px">${t.lastFrom === 'admin' ? '↩︎ ' : ''}${esc(t.last)}</div></div>
+        <div style="text-align:right"><span class="chip ${SUPST[t.status][0]}">${SUPST[t.status][1]}</span><div class="muted" style="font-size:11px;margin-top:4px">${dt(t.lastAt)}</div></div></a>`).join('') : '<div class="empty">Bu listede talep yok.</div>'}</div>
+      <div class="panel supth"><div class="empty">Soldan bir talep seç.</div></div></div>`;
+  main.querySelector('.supt').onclick = (e) => { const b = e.target.closest('[data-s]'); if (!b) return; supFilter = b.dataset.s; VIEWS.support(main); };
+  main.querySelector('.pushon')?.addEventListener('click', async () => { try { await enableAdminPush(); toast('Bildirimler açıldı.'); VIEWS.support(main); } catch (er) { toast(er.message); } });
+  main.querySelector('.pushx')?.addEventListener('click', async () => { if (!confirm('Bu cihazda bildirimler kapatılsın mı?')) return; await disableAdminPush(); VIEWS.support(main); });
+  main.querySelector('.pusht')?.addEventListener('click', async () => { try { await api('/push/test', { body: {} }); toast('Deneme bildirimi gönderildi.'); } catch (er) { toast(er.message); } });
+  const th = main.querySelector('.supth');
+  const openT = async (id) => {
+    const t = await api(`/support/${id}`);
+    th.innerHTML = `<div class="ph"><div><h3>${esc(t.subject)} <span class="muted">#${t.no}</span></h3><div class="muted" style="font-size:12.5px">${esc(t.categoryLabel)} · ${dt(t.at)} · <span class="chip ${SUPST[t.status][0]}">${SUPST[t.status][1]}</span></div></div>
+        <div class="row" style="gap:6px">${t.status !== 'closed' ? '<button class="btn sm st" data-st="closed">Kapat</button>' : '<button class="btn sm st" data-st="open">Yeniden aç</button>'}</div></div>
+      <div class="supuser">${userCell(t.user)}<div class="muted" style="font-size:12px">${t.user ? `${t.user.email ? esc(t.user.email) + ' · ' : ''}${t.user.coins} jeton${t.user.plus ? ' · SwipeUp+' : ''} · üye: ${d(t.user.createdAt)}${t.others ? ` · ${t.others} başka talep` : ''}` : ''}</div>${t.user ? `<a class="btn sm" href="#/users/${esc(t.user.id)}">Profil</a>` : ''}</div>
+      <div class="supmsgs">${t.msgs.map((m) => `<div class="sm ${m.from}"><div class="b">${m.image ? `<a href="${esc(m.image)}" target="_blank" rel="noopener"><img src="${esc(m.image)}" alt=""></a>` : ''}${esc(m.text).replace(/\n/g, '<br>')}</div><small>${m.from === 'admin' ? `@${esc(m.by || '')} · ` : ''}${dt(m.at)}</small></div>`).join('')}</div>
+      <form class="suprep"><div class="quick">${QUICK.map(([l], i) => `<button type="button" class="btn sm" data-q="${i}">${esc(l)}</button>`).join('')}</div>
+        <textarea class="field" name="t" rows="4" maxlength="3000" placeholder="Cevabını yaz… (kullanıcıya bildirim olarak gider)"></textarea>
+        <div class="row" style="gap:8px;justify-content:flex-end"><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="c"> Cevapla ve kapat</label><button class="btn primary">${icon('send')} Gönder</button></div></form>
+      ${t.device ? `<div class="muted" style="font-size:11px;padding:0 16px 12px">Cihaz: ${esc(t.device)}</div>` : ''}`;
+    const ms = th.querySelector('.supmsgs'); ms.scrollTop = ms.scrollHeight;
+    const f = th.querySelector('form');
+    f.querySelector('.quick').onclick = (e) => { const b = e.target.closest('[data-q]'); if (!b) return; f.t.value = (f.t.value ? `${f.t.value}\n` : '') + QUICK[+b.dataset.q][1]; f.t.focus(); };
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      try { await api(`/support/${id}/reply`, { body: { text: f.t.value, close: f.c.checked } }); toast('Cevap gönderildi.'); refreshCounts(); VIEWS.support(main); } catch (er) { toast(er.message); }
+    };
+    th.querySelector('.st').onclick = async (e) => { await api(`/support/${id}/status`, { body: { status: e.target.dataset.st } }); VIEWS.support(main); };
+    main.querySelectorAll('.supi').forEach((a) => a.classList.toggle('on', a.getAttribute('href') === `#/support/${id}`));
+    main.querySelector('.supi.on')?.classList.remove('unread');
+  };
+  if (openId) openT(openId).catch((er) => { th.innerHTML = `<div class="empty">${esc(er.message)}</div>`; });
+};
+
 // ---- Ayarlar: ödeme, fiyatlar, yasal ----
 VIEWS.settings = async (main) => {
   const [e, legal, evs] = await Promise.all([api('/economy'), api('/legal'), api('/event').catch(() => null)]);
@@ -1127,7 +1205,7 @@ document.addEventListener('error', (e) => {
 }, true);
 window.addEventListener('hashchange', render);
 render();
-setInterval(() => { if (S.token && document.visibilityState === 'visible') refreshCounts(); }, 30000);
+setInterval(() => { if (S.token && document.visibilityState === 'visible') refreshCounts(); }, 20000);
 
 // ---- Yeni sürüm: panel kendini yeniler (yazı yazılıyorsa düğmeyle) ----
 let panelVersion = null;
