@@ -44,6 +44,7 @@ const SECTIONS = [
   ['verify', 'Doğrulama', 'verified', 'verifyOpen'],
   ['orders', 'Siparişler', 'coin', 'ordersPaid'],
   ['payouts', 'Kazançlar', 'gift', 'payoutsOpen'],
+  ['market', 'Store', 'bag', 'marketOpen'],
   ['ledger', 'Gelir ve gider', 'sliders'],
   ['fal', 'Fal', 'star', 'falPending'],
   ['content', 'İçerik', 'grid'],
@@ -52,6 +53,7 @@ const SECTIONS = [
   ['notes', 'Notlar', 'edit'],
   ['audit', 'İşlem kaydı', 'eye'],
   ['database', 'Veritabanı', 'grid'],
+  ['maintenance', 'Bakım modu', 'timer'],
   ['settings', 'Ayarlar', 'settings'],
   ['admins', 'Yöneticiler', 'key'],
 ];
@@ -84,18 +86,23 @@ async function render() {
     <aside class="side"><div class="brand"><img class="mark" src="/icons/mark.png" alt="">swipeup <small>yönetim</small></div>${nav()}
       <div class="who"><b>${esc(S.me.name)}</b><span class="muted">@${esc(S.me.username)} · ${S.me.role === 'owner' ? 'Sahip' : 'Yönetici'}</span>
       <div class="row"><a class="btn sm" href="/" target="_blank" rel="noopener">Uygulamayı aç</a><button class="btn sm lo">Çıkış</button></div></div></aside>
-    <div><nav class="topnav">${nav()}</nav><main class="main"></main></div></div>`;
+    <div><nav class="topnav">${nav()}</nav><div class="mbn"></div><main class="main"></main></div></div>`;
   root.querySelector('.lo').onclick = () => { localStorage.removeItem('su_admin'); S.token = null; S.me = null; render(); };
   const main = root.querySelector('.main');
   main.innerHTML = '<div class="spin"></div>';
-  if (!S.counts.users) refreshCounts();
+  if (!S.counts.users) refreshCounts(); else paintMaintBanner();
   try { await (VIEWS[cur] || VIEWS.overview)(main); } catch (e) { main.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function paintMaintBanner() {
+  const b = document.querySelector('.mbn'); if (!b) return;
+  b.innerHTML = S.counts.maintenance ? `<a class="maintbar" href="#/maintenance">${icon('timer')}<span><b>Bakım modu açık.</b> Kullanıcılar uygulamaya giremiyor.</span><span class="go">Yönet</span></a>` : '';
 }
 async function refreshCounts() {
   try {
     const o = await api('/overview');
-    const changed = ['reportsOpen', 'appealsOpen', 'falPending', 'flagsOpen', 'verifyOpen', 'ordersPaid', 'payoutsOpen'].some((k) => S.counts[k] !== o[k]);
+    const changed = ['reportsOpen', 'appealsOpen', 'falPending', 'flagsOpen', 'verifyOpen', 'ordersPaid', 'payoutsOpen', 'marketOpen', 'maintenance'].some((k) => S.counts[k] !== o[k]);
     S.counts = o;
+    paintMaintBanner();
     if (changed) document.querySelectorAll('.nav').forEach((a) => {
       const k = SECTIONS.find((s) => a.getAttribute('href') === `#/${s[0]}`)?.[3];
       if (!k) return;
@@ -667,6 +674,130 @@ VIEWS.orders = async (main) => {
   await load();
 };
 
+// ---- SwipeUp Store ----
+const MST = {
+  odeme_bekliyor: ['', 'Ödeme bekleniyor'], odeme_kontrol: ['warn', 'Ödeme bildirildi'], odendi: ['info', 'Emanette · kargo bekleniyor'], kargoda: ['info', 'Kargoda'],
+  bulusma: ['info', 'Elden · buluşma'], teslim_onay: ['warn', 'Elden · onay bekliyor'], sorunlu: ['bad', 'Sorun bildirildi'], iade_bekliyor: ['bad', 'İade yapılacak'],
+  iade_edildi: ['', 'İade edildi'], tamamlandi: ['ok', 'Tamamlandı'], iptal: ['', 'İptal'],
+};
+const MACTS = {
+  odeme_kontrol: [['confirm_payment', 'Ödeme geldi', 'ok'], ['reject_payment', 'Ödeme yok', 'danger']],
+  odendi: [['refund', 'İptal et, iade', 'danger']],
+  kargoda: [['release', 'Teslimi onayla, satıcıya öde', 'ok'], ['refund', 'Alıcıya iade', 'danger']],
+  teslim_onay: [['release', 'Teslimi onayla', 'ok'], ['refund', 'Siparişi iptal et', 'danger']],
+  sorunlu: [['release', 'Satıcı haklı · satıcıya öde', 'ok'], ['refund', 'Alıcı haklı · iade', 'danger']],
+  iade_bekliyor: [['refunded', 'İadeyi yaptım', 'ok']],
+};
+const MCONFIRM = {
+  confirm_payment: 'Bu tutar SwipeUp hesabına açıklamada sipariş koduyla ulaştı mı? Onaylayınca satıcıya "kargola" bildirimi gider.',
+  release: 'Sipariş satıcı lehine kapanacak ve tutar satıcının Store bakiyesine geçecek. Emin misin?',
+  refund: 'Sipariş alıcı lehine kapanacak. Kargolu siparişlerde tutarı alıcının IBAN’ına iade etmen gerekecek. Emin misin?',
+  refunded: 'Tutarı alıcının IBAN’ına gönderdin mi?',
+};
+VIEWS.market = async (main) => {
+  let tab = 'action'; let q = '';
+  const pics = (t, arr) => (arr?.length ? `<div class="mkev"><span>${t}</span>${arr.map((u) => `<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" alt=""></a>`).join('')}</div>` : '');
+  main.innerHTML = `${head('SwipeUp Store', 'İkinci el pazar · komisyon yok. Kargolu siparişlerde alıcı tutarı SwipeUp hesabına havale eder; ödemeyi onaylayınca para emanete alınır, alıcı teslim aldığını onaylayınca (ya da süre dolunca) satıcının Store bakiyesine geçer. Satıcı ödemeleri <a href="#/payouts">Kazançlar</a> bölümünde.')}
+    <div class="stats sm sum"></div>
+    <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:12px"><div class="tabs mtabs" style="margin:0"></div><input class="field mq" placeholder="Kod, ürün, kullanıcı ya da takip kodu ara" style="max-width:320px"></div>
+    <div class="panel"><div class="tw lst"><div class="spin"></div></div></div>
+    <div class="msettings"></div>`;
+  const lst = main.querySelector('.lst');
+  const TABS = [['action', 'İşlem bekleyen'], ['emanet', 'Emanette'], ['elden', 'Elden'], ['bekleyen', 'Ödeme bekleyen'], ['biten', 'Bitenler'], ['tumu', 'Tümü'], ['items', 'İlanlar']];
+  let rows = [];
+  const load = async () => {
+    const r = await api(`/market?tab=${tab === 'items' ? 'action' : tab}&q=${encodeURIComponent(q)}`);
+    const s = r.stats;
+    main.querySelector('.sum').innerHTML = `<div class="stat"><b>${s.active}</b><span>Aktif ilan</span></div><div class="stat"><b class="money">${tl(s.heldTL)}</b><span>Emanette (${s.heldCount} sipariş)</span></div>
+      <div class="stat"><b class="money in">${tl(s.monthTL)}</b><span>Bu ay tamamlanan (${s.monthCount})</span></div><div class="stat"><b class="money">${tl(s.balancesTL)}</b><span>Satıcı bakiyeleri</span></div>
+      <div class="stat ${s.payoutsPending ? 'alert' : ''}"><b>${s.payoutsPending}</b><span>Bekleyen satıcı ödemesi</span>${s.payoutsPending ? '<a href="#/payouts">Görüntüle</a>' : ''}</div>`;
+    main.querySelector('.mtabs').innerHTML = TABS.map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}${k !== 'items' && s.counts[k] ? ` <span class="tc">${s.counts[k]}</span>` : ''}</button>`).join('');
+    if (S.me.role === 'owner' && !main.querySelector('.msettings form')) {
+      main.querySelector('.msettings').innerHTML = `<form class="panel eco" style="margin-top:14px;max-width:640px"><div class="ph"><h3>Store kuralları</h3></div><div class="pb fgrid">
+        <label>Satıcının kargolama süresi (gün)<input class="field" type="number" name="shipDays" value="${r.settings.shipDays}"></label>
+        <label>Kargodan sonra otomatik teslim onayı (gün)<input class="field" type="number" name="autoDays" value="${r.settings.autoDays}"></label>
+        <label>En az ödeme talebi (₺)<input class="field" type="number" name="minPayout" value="${r.settings.minPayout}"></label>
+        <button class="btn primary" style="justify-self:start">${icon('check')} Kaydet</button></div></form>`;
+      main.querySelector('.msettings form').onsubmit = async (e) => { e.preventDefault(); const f = e.target; try { await api('/market/settings', { method: 'PUT', body: { shipDays: f.shipDays.value, autoDays: f.autoDays.value, minPayout: f.minPayout.value } }); toast('Store kuralları kaydedildi.'); } catch (er) { toast(er.message); } };
+    }
+    if (tab === 'items') return loadItems();
+    rows = r.orders;
+    lst.innerHTML = rows.length ? `<table class="tbl"><thead><tr><th>Kod</th><th>Ürün</th><th>Alıcı</th><th>Satıcı</th><th class="num">Tutar</th><th>Durum</th><th>Tarih</th><th></th></tr></thead><tbody>
+      ${rows.map((o) => `<tr data-id="${esc(o.id)}" class="mrow"><td><b class="mono">${esc(o.code)}</b><div class="muted" style="font-size:11.5px">${o.method === 'kargo' ? '📦 Kargo' : '🤝 Elden'}</div></td>
+        <td><div class="row"><img class="av sq" src="${esc(o.photo)}" alt=""><span class="ell" style="max-width:180px">${esc(o.title)}</span></div></td>
+        <td>${userCell(o.buyer)}</td><td>${userCell(o.seller)}</td><td class="num"><b>${tl(o.amount)}</b></td>
+        <td><span class="chip ${MST[o.status][0]}">${MST[o.status][1]}</span></td><td>${dt(o.at)}</td>
+        <td><div class="row" style="gap:6px;flex-wrap:wrap">${(MACTS[o.status] || []).filter(([a]) => !(o.method === 'elden' && a === 'refunded')).map(([a, l, c]) => `<button class="btn sm ${c}" data-a="${a}">${l}</button>`).join('')}<button class="btn sm det">Ayrıntı</button></div></td></tr>
+        <tr class="mdet" data-for="${esc(o.id)}" hidden><td colspan="8"><div class="mdbox">
+          <div class="mdcol"><b>Sipariş</b>${o.method === 'kargo' ? `<div>Ürün ${tl(o.price)} + kargo ${tl(o.shipFee)} (${o.shipPayer === 'satici' ? 'satıcı öder' : 'alıcı öder'})</div>` : '<div>Elden teslim · ödeme yüz yüze</div>'}
+            ${o.sender ? `<div>Gönderen: <b>${esc(o.sender)}</b></div>` : ''}${o.buyerIban ? `<div>İade IBAN: <b class="mono">${esc(o.buyerIban)}</b></div>` : ''}
+            ${o.address ? `<div>Adres: ${esc(o.address.name)} · ${esc(o.address.phone)}<br>${esc(o.address.text)}</div>` : ''}
+            ${o.tracking ? `<div>Kargo: <b>${esc(o.carrierName || '')}</b> <span class="mono">${esc(o.tracking)}</span> ${o.trackUrl ? `<a href="${esc(o.trackUrl)}" target="_blank">takip</a>` : ''}</div>` : ''}
+            ${o.problem ? `<div class="mprob"><b>Sorun:</b> ${esc(o.problem.text)}</div>` : ''}</div>
+          <div class="mdcol">${pics('Paketin içi', o.packInside)}${pics('Paketin dışı', o.packOutside)}${pics('Satıcı teslim', o.sellerPhoto)}${pics('Alıcı teslim', o.buyerPhoto)}${pics('Sorun fotoğrafları', o.problem?.photos)}</div>
+          <div class="mdcol mlog"><b>Geçmiş</b>${(o.log || []).slice().reverse().map((l) => `<div><span class="muted">${dt(l.at)}</span> ${esc(l.text)}</div>`).join('')}</div>
+        </div></td></tr>`).join('')}</tbody></table>` : '<div class="empty">Bu listede sipariş yok.</div>';
+  };
+  const loadItems = async () => {
+    const items = await api(`/market/items?status=all&q=${encodeURIComponent(q)}`);
+    const IST = { active: ['ok', 'Yayında'], reserved: ['warn', 'Rezerve'], sold: ['info', 'Satıldı'], removed: ['', 'Kaldırıldı'] };
+    lst.innerHTML = items.length ? `<table class="tbl"><thead><tr><th>İlan</th><th>Satıcı</th><th class="num">Fiyat</th><th>Durum</th><th class="num">Görüntülenme</th><th>Şikayet</th><th>Tarih</th><th></th></tr></thead><tbody>
+      ${items.map((i) => `<tr data-item="${esc(i.id)}"><td><div class="row"><img class="av sq" src="${esc(i.photo)}" alt=""><div class="grow"><div class="ell" style="max-width:240px"><b>${esc(i.title)}</b></div><div class="muted ell" style="max-width:240px;font-size:12px">${esc(i.desc || '')}</div></div></div></td>
+        <td>${userCell(i.seller)}</td><td class="num"><b>${tl(i.price)}</b></td><td><span class="chip ${IST[i.status]?.[0] || ''}">${IST[i.status]?.[1] || i.status}</span></td><td class="num">${i.views}</td>
+        <td>${i.reports ? `<span class="chip bad">${i.reports}</span>` : '—'}</td><td>${dt(i.at)}</td>
+        <td>${['active'].includes(i.status) ? `<button class="btn sm danger" data-rm="1">${icon('trash')} Kaldır</button>` : ''}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">İlan yok.</div>';
+  };
+  main.querySelector('.mtabs').onclick = (e) => { const b = e.target.closest('[data-t]'); if (!b) return; tab = b.dataset.t; load(); };
+  let qt = null;
+  main.querySelector('.mq').oninput = (e) => { clearTimeout(qt); qt = setTimeout(() => { q = e.target.value.trim(); load(); }, 300); };
+  lst.onclick = async (e) => {
+    const det = e.target.closest('.det');
+    if (det) { const id = det.closest('[data-id]').dataset.id; const r = lst.querySelector(`.mdet[data-for="${CSS.escape(id)}"]`); r.hidden = !r.hidden; return; }
+    const rm = e.target.closest('[data-rm]');
+    if (rm) {
+      const id = rm.closest('[data-item]').dataset.item;
+      const reason = prompt('Kaldırma nedeni (satıcı görür):', 'Topluluk kurallarına aykırı ilan'); if (reason === null) return;
+      try { await api(`/market/items/${id}/remove`, { body: { reason } }); toast('İlan kaldırıldı.'); load(); } catch (er) { toast(er.message); }
+      return;
+    }
+    const b = e.target.closest('[data-a]'); if (!b) return;
+    const id = b.closest('[data-id]').dataset.id; const a = b.dataset.a;
+    const o = rows.find((x) => x.id === id);
+    if (MCONFIRM[a] && !confirm(MCONFIRM[a] + (a === 'refunded' && o?.buyerIban ? `\n\nIBAN: ${o.buyerIban}\nTutar: ${tl(o.amount)}` : ''))) return;
+    let note = '';
+    if (['reject_payment', 'refund', 'release'].includes(a)) { note = prompt('Not (iki taraf da görür, isteğe bağlı):', a === 'reject_payment' ? 'Ödeme hesabımıza ulaşmadı.' : ''); if (note === null) return; }
+    try { await api(`/market/orders/${id}`, { body: { action: a, note } }); toast('İşlem tamam.'); load(); refreshCounts(); } catch (er) { toast(er.message); }
+  };
+  await load();
+};
+
+// ---- Bakım modu ----
+VIEWS.maintenance = async (main) => {
+  const m = await api('/maintenance');
+  const owner = S.me.role === 'owner';
+  const dtl2 = (ms) => { if (!ms) return ''; const x = new Date(ms); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
+  main.innerHTML = `${head('Bakım modu', 'Açıkken kullanıcılar uygulamaya giremez ve “Bakımdayız” ekranını görür; açık oturumlar hemen kapanır. Yönetim paneli çalışmaya devam eder. Kapatınca uygulama herkeste kendiliğinden geri açılır.')}
+    <form class="panel maintf ${m.on ? 'on' : ''}" style="max-width:640px"><div class="pb" style="display:grid;gap:14px">
+      <div class="mstate"><span class="dot"></span><div><b>${m.on ? 'Bakım modu AÇIK' : 'Uygulama açık'}</b><div class="muted">${m.on ? `${dt(m.at)} tarihinde ${esc(m.by || '')} açtı. Kullanıcılar şu an giremiyor.` : 'Kullanıcılar uygulamayı normal kullanıyor.'}</div></div></div>
+      <label class="fl">Kullanıcılara gösterilecek mesaj<textarea class="field" name="message" rows="3" maxlength="300" placeholder="ör. Yeni özellikler için kısa bir bakım yapıyoruz. 30 dakika içinde döneceğiz.">${esc(m.message || '')}</textarea></label>
+      <label class="fl">Tahmini dönüş (isteğe bağlı)<input class="field" type="datetime-local" name="until" value="${dtl2(m.until)}"></label>
+      ${owner ? `<div class="row" style="gap:8px;flex-wrap:wrap">${m.on
+    ? `<button class="btn ok" data-on="0">${icon('check')} Bakımı bitir, uygulamayı aç</button><button class="btn" data-on="1">Mesajı güncelle</button>`
+    : `<button class="btn danger" data-on="1">${icon('timer')} Bakım modunu aç</button>`}</div>` : '<p class="muted">Bakım modunu sadece sahip yönetici açıp kapatabilir.</p>'}
+    </div></form>`;
+  main.querySelector('form').onclick = async (e) => {
+    const b = e.target.closest('[data-on]'); if (!b) return;
+    e.preventDefault();
+    const f = main.querySelector('form');
+    const on = b.dataset.on === '1';
+    if (on && !m.on && !confirm('Bakım modu açılsın mı? Uygulamadaki herkesin oturumu hemen kapanacak.')) return;
+    try {
+      await api('/maintenance', { method: 'PUT', body: { on, message: f.message.value, until: f.until.value ? new Date(f.until.value).getTime() : null } });
+      toast(on ? 'Bakım modu açık.' : 'Bakım bitti, uygulama açıldı.'); refreshCounts(); render();
+    } catch (er) { toast(er.message); }
+  };
+};
+
 // ---- Kazançlar ve ödeme talepleri ----
 VIEWS.payouts = async (main) => {
   const r = await api('/payouts');
@@ -674,7 +805,7 @@ VIEWS.payouts = async (main) => {
   main.innerHTML = `${head('Kazançlar', `Canlı yayın hediyeleri ve ücretli fallardan kullanıcılara kalan pay. 1 kazanç jetonu = ${tl(r.coinTL)}.`)}
     <div class="grid g2">
       <div class="panel"><div class="ph"><h3>Ödeme talepleri</h3></div><div class="tw">${r.items.length ? `<table class="tbl"><thead><tr><th>Kullanıcı</th><th class="num">Tutar</th><th>IBAN / ad</th><th>Tarih</th><th></th></tr></thead><tbody>
-        ${r.items.map((p) => `<tr data-id="${esc(p.id)}"><td>${userCell(p.user)}</td><td class="num"><b>${tl(p.amount)}</b><div class="muted" style="font-size:11.5px">${p.coins} jeton</div></td><td><span class="mono">${esc(p.iban)}</span><div class="muted">${esc(p.name)}</div></td><td>${dt(p.at)}</td>
+        ${r.items.map((p) => `<tr data-id="${esc(p.id)}"><td>${userCell(p.user)}</td><td class="num"><b>${tl(p.amount)}</b><div class="muted" style="font-size:11.5px">${p.kind === 'store' ? '🛍️ Store satışı' : `${p.coins} jeton`}</div></td><td><span class="mono">${esc(p.iban)}</span><div class="muted">${esc(p.name)}</div></td><td>${dt(p.at)}</td>
           <td>${p.status === 'pending' ? `<div class="row"><button class="btn sm ok" data-ok="1">Ödendi</button><button class="btn sm danger" data-ok="0">Reddet</button></div>` : `<span class="chip ${PS[p.status][0]}">${PS[p.status][1]}</span>`}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Ödeme talebi yok.</div>'}</div></div>
       <div class="panel"><div class="ph"><h3>En çok kazananlar</h3></div><div class="tw">${r.earners.length ? `<table class="tbl"><thead><tr><th>Kullanıcı</th><th class="num">Toplam</th><th class="num">Bakiye</th></tr></thead><tbody>
         ${r.earners.map((u) => `<tr><td>${userCell(u)}</td><td class="num">${u.total}</td><td class="num">${u.balance} <div class="muted" style="font-size:11.5px">${tl(u.balanceTL)}</div></td></tr>`).join('')}</tbody></table>` : '<div class="empty">Henüz kazanç yok.</div>'}</div></div>

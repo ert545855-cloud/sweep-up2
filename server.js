@@ -300,6 +300,17 @@ app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false,
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
 
+// ---------- Bakım modu: uygulama kapalı, yönetim paneli çalışır ----------
+const maintenance = () => { const m = store.get('settings', 'maintenance'); return m?.on ? { on: true, message: m.message || '', until: m.until || null, at: m.at || null } : null; };
+const MAINT_OK = /^\/api\/(admin(\/|$)|version$|config$|maintenance$|event$)/;
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api/') || MAINT_OK.test(req.path)) return next();
+  const m = maintenance();
+  if (!m) return next();
+  res.status(503).json({ error: 'SwipeUp şu an bakımda. Kısa süre sonra geri döneceğiz.', maintenance: m });
+});
+app.get('/api/maintenance', (req, res) => res.json({ maintenance: maintenance() }));
+
 const adminApi = require('./server/admin')(app, {
   store, io, emitTo, notify, brief, isOnline, online, lives, removeChat, limited, ipOf,
   secret: () => JWT_SECRET, endLive: (id) => endLive(id), eco, purgeUser: (id) => purgeUser(id), dropMediaCache: (id) => dropMediaCache(id),
@@ -340,7 +351,7 @@ app.get('/api/config', (req, res) => {
   let uid = null;
   try { uid = jwt.verify((req.headers.authorization || '').slice(7), JWT_SECRET).id; } catch {}
   const { id, ...legal } = store.get('settings', 'legal') || {};
-  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now() });
+  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now(), maintenance: maintenance() });
 });
 
 // ---------- Kimlik ----------
@@ -1267,10 +1278,11 @@ app.get('/api/music/featured', auth, wrap(async (req, res) => res.json({ items: 
 // ---------- Ek özellikler (mağaza, doğrulama, gizlilik, çıkartmalar, etiketler…) ----------
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
-  isBlocked, limited, isMedia, cardOut, purgeUser, moderation,
+  isBlocked, limited, isMedia, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
 };
 require('./server/features')(app, featureCtx);
 require('./server/genel')(app, featureCtx);
+require('./server/market')(app, featureCtx);
 
 // ---------- Statik ----------
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -1288,6 +1300,7 @@ app.use((err, req, res, next) => {
 
 // ================= Socket.IO =================
 io.use((socket, next) => {
+  if (maintenance()) return next(new Error('maintenance'));
   try {
     const { id } = jwt.verify(socket.handshake.auth?.token, JWT_SECRET);
     const u = store.get('users', id);

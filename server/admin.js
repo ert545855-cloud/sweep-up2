@@ -156,6 +156,8 @@ module.exports = function mountAdmin(app, ctx) {
       verifyOpen: store.filter('verifications', (v) => v.status === 'pending').length,
       flagsOpen: store.filter('flags', (f) => f.status === 'open').length,
       payoutsOpen: store.filter('payouts', (p) => p.status === 'pending').length,
+      maintenance: store.get('settings', 'maintenance')?.on ? 1 : 0,
+      marketOpen: store.filter('mk_orders', (o) => ['odeme_kontrol', 'sorunlu', 'iade_bekliyor'].includes(o.status)).length,
       plusUsers: users.filter((u) => (u.plusUntil || 0) > t).length,
       verifiedUsers: users.filter((u) => u.verified).length,
       income: sum('gelir'), expense: sum('gider'),
@@ -552,7 +554,14 @@ module.exports = function mountAdmin(app, ctx) {
     const paid = !!req.body?.paid;
     const note = String(req.body?.note || '').slice(0, 300);
     const u = store.get('users', p.userId);
-    if (paid) {
+    if (p.kind === 'store') {
+      // Store satıcı ödemesi: emanetteki para satıcıya aktarılır (gelir/gider değildir)
+      if (paid) notify(p.userId, { type: 'market', text: `💸 ${p.amount} ₺ Store satış ödemen hesabına gönderildi.`, title: 'SwipeUp Store', url: '/#/market/balance' });
+      else {
+        if (u) store.update('users', u.id, { mkBalance: Math.round(((u.mkBalance || 0) + p.amount) * 100) / 100 });
+        notify(p.userId, { type: 'market', text: `Store ödeme talebin reddedildi, tutar bakiyene geri eklendi.${note ? ' ' + note : ''}`, title: 'SwipeUp Store', url: '/#/market/balance' });
+      }
+    } else if (paid) {
       const day = new Date(); const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
       store.put('adm_ledger', { id: nanoid(10), type: 'gider', amount: p.amount, date: ymd, category: 'Yayıncı / falcı ödemesi', note: `@${u?.username || '?'} · ${p.coins} jeton · ${p.iban}`, currency: 'TRY', by: req.admin.username, auto: true, createdAt: now() });
       notify(p.userId, { type: 'order', text: `💸 ${p.amount} ₺ kazanç ödemen hesabına gönderildi.`, title: 'SwipeUp', url: '/#/wallet' });
@@ -604,6 +613,22 @@ module.exports = function mountAdmin(app, ctx) {
     io.emit('event', { event: ev, now: now() });
     audit(req.admin, 'etkinlik takvimini güncelledi', null, list.map((e) => `${appEvent.EVENTS[e.kind].name}: ${new Date(e.start).toISOString().slice(0, 10)} → ${new Date(e.end).toISOString().slice(0, 10)}`).join(', ') || 'boş');
     res.json({ ok: true, list, active: ev });
+  });
+
+  // ================= Bakım modu =================
+  app.get('/api/admin/maintenance', adminAuth, (req, res) => res.json(store.get('settings', 'maintenance') || { on: false }));
+  app.put('/api/admin/maintenance', adminAuth, owner, (req, res) => {
+    const b = req.body || {};
+    const on = !!b.on;
+    const until = +b.until > now() ? +b.until : null;
+    const doc = store.put('settings', { id: 'maintenance', on, message: String(b.message || '').trim().slice(0, 300), until, at: now(), by: req.admin.username });
+    if (on) {
+      // Açık oturumlara haber ver, sonra bağlantıları kapat
+      io.emit('maintenance', { on: true, message: doc.message, until: doc.until });
+      setTimeout(() => { for (const [, s] of io.of('/').sockets) s.disconnect(true); }, 800);
+    }
+    audit(req.admin, on ? 'bakım modunu açtı' : 'bakım modunu kapattı', null, doc.message || '');
+    res.json(doc);
   });
 
   // ================= Profil doğrulama =================
@@ -831,5 +856,5 @@ module.exports = function mountAdmin(app, ctx) {
     res.type('application/json').send(JSON.stringify(data));
   });
 
-  return { statusOf, ensureAdmin: ctx.ensureAdmin };
+  return { statusOf, ensureAdmin: ctx.ensureAdmin, adminAuth, owner, audit };
 };

@@ -18,6 +18,7 @@ export default async function feed(view) {
     <div class="event-slot"></div>
     <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
     <a class="genel-row feedg" href="#/genel"><span class="genel-ic">${icon('users')}</span><span class="grow"><b>Genel sohbet</b><small>Herkes burada, sen de katıl</small></span><span class="go-chip">Sohbete gir</span></a>
+    <a class="mk-entry" href="#/market"><span class="mk-ei">${icon('bag')}</span><span class="grow"><b>SwipeUp Store</b><small>İkinci el al, sat · komisyon yok · güvenli ödeme</small></span><span class="go-chip">Göz at</span></a>
     <div class="push-slot"></div>
     <div class="people"></div>
     <div class="posts"><div class="spinner"></div></div>`;

@@ -37,6 +37,8 @@ const routes = [
   [/^\/verify$/, 'verify', { tabs: false }],
   [/^\/requests$/, 'requests', { tabs: false }],
   [/^\/tag\/([^/]+)$/, 'tag', { tab: 'home' }],
+  [/^\/market\/(i|o|new|edit)(?:\/([\w-]+))?$/, 'market', { tabs: false }],
+  [/^\/market(?:\/(\w+))?(?:\/([\w-]+))?$/, 'market', { tab: 'home' }],
 ];
 
 const view = document.getElementById('view');
@@ -183,6 +185,26 @@ function wireRealtime() {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshBadges(); });
 }
 
+// ---- Bakım modu ----
+let maintTimer = null;
+function showMaintenance(m) {
+  if (!m) return;
+  let ov = document.querySelector('.maint');
+  const until = m.until ? new Date(m.until).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : null;
+  const html = `<div class="in"><div class="gear">${icon('settings')}</div><img class="lg" src="/icons/mark.png" alt="">
+    <h1>Bakımdayız</h1><p>${esc(m.message || 'SwipeUp’ı daha iyi hâle getirmek için kısa bir bakım yapıyoruz. Birazdan geri döneceğiz.')}</p>
+    ${until ? `<div class="eta">Tahmini dönüş: <b>${esc(until)}</b></div>` : ''}
+    <small>Bu sayfayı kapatmana gerek yok; bakım bitince uygulama kendiliğinden açılır.</small></div>`;
+  if (!ov) { ov = el(`<div class="maint" role="alert">${html}</div>`); document.body.append(ov); } else ov.innerHTML = html;
+  document.body.classList.add('in-maint');
+  state.socket?.disconnect();
+  clearInterval(maintTimer);
+  maintTimer = setInterval(async () => {
+    try { const r = await fetch('/api/maintenance', { cache: 'no-store' }).then((x) => x.json()); if (!r.maintenance) { clearInterval(maintTimer); location.reload(); } else showMaintenance(r.maintenance); } catch {}
+  }, 20000);
+}
+on('maintenance', showMaintenance);
+
 // Yönetimden gelen açılış duyurusu (her duyuru bir kez gösterilir)
 function showAnnouncement(a) {
   let seen = [];
@@ -240,6 +262,7 @@ async function boot() {
     } catch { state.token = null; }
   }
   if (!state.config) state.config = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
+  if (state.config?.maintenance) { showMaintenance(state.config.maintenance); return; }
   afterBoot(state.config?.version);
   initEvent(state.config);
   // İlk ziyarette telefona yükleme kılavuzu (iPhone: Safari → Ana Ekrana Ekle)

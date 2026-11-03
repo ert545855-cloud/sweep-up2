@@ -30,6 +30,7 @@ export async function api(path, opts = {}) {
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && state.token) { logout(); throw new Error(data.error); }
   if (res.status === 423) { emit('banned', data); throw new Error(data.error); }
+  if (res.status === 503 && data.maintenance) { emit('maintenance', data.maintenance); throw new Error(data.error); }
   if (!res.ok) throw new Error(data.error || 'Bir şeyler ters gitti.');
   return data;
 }
@@ -179,6 +180,7 @@ export function connectSocket() {
   state.socket = s;
   s.on('connect_error', (e) => {
     if (e.message === 'unauthorized') logout();
+    if (e.message === 'maintenance') { s.disconnect(); fetch('/api/maintenance').then((r) => r.json()).then((d) => d.maintenance && emit('maintenance', d.maintenance)).catch(() => {}); }
     if (e.message === 'banned') { s.disconnect(); api('/me').then((m) => m.ban && emit('banned', m.ban)).catch(() => {}); }
   });
   s.on('account:deleted', () => logout());
@@ -188,7 +190,7 @@ export function connectSocket() {
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',
     'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'people:new', 'likes:new',
     'call:incoming', 'call:accepted', 'call:ended', 'call:taken', 'call:signal',
-    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event']
+    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event', 'maintenance', 'market']
     .forEach((ev) => s.on(ev, (d) => emit(ev, d)));
   s.on('presence', (d) => { state.presence.set(d.userId, d); emit('presence', d); });
   s.on('presence:all', (ids) => { ids.forEach((id) => state.presence.set(id, { userId: id, online: true })); emit('presence', {}); });
@@ -234,7 +236,7 @@ export function notifHref(n) {
   if (n.url && n.url.startsWith('/#/')) return n.url.slice(1);
   return ({
     match: '#/chats', live: `#/live/${n.fromId}`, follow: `#/u/${n.from?.username}`, follow_ok: `#/u/${n.from?.username}`, follow_request: '#/requests',
-    super: '#/likes', liked: '#/likes', group: '#/chats', missed: '#/chats', order: '#/store', verify: '#/verify', story_answer: '#/stories/me',
+    super: '#/likes', liked: '#/likes', group: '#/chats', missed: '#/chats', order: '#/store', market: '#/market', verify: '#/verify', story_answer: '#/stories/me',
     announce: '#/notifications', warning: '#/notifications', report: '#/notifications',
   }[n.type]) || (n.ref ? `#/p/${n.ref}` : '#/notifications');
 }

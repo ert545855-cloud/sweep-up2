@@ -218,3 +218,26 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .evf .evst { font-size: 12px; }
 .chip.warn { background: color-mix(in srgb, #f59e0b 16%, transparent); color: #b45309; }
 @media (max-width: 760px) { .evf .evhead { display: none; } .evf .evrow { grid-template-columns: 1fr 1fr; } }
+.av.sq { border-radius: 8px; object-fit: cover; }
+.mdbox { display: grid; grid-template-columns: 1.1fr 1fr 1.2fr; gap: 16px; padding: 10px 4px; font-size: 13px; }
+.mdcol { display: grid; gap: 6px; align-content: start; }
+.mlog > div { font-size: 12.5px; }
+.mkev { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mkev span { width: 100%; font-weight: 650; color: var(--muted); font-size: 12px; }
+.mkev img { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; }
+.mprob { padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--bad) 10%, transparent); }
+@media (max-width: 900px) { .mdbox { grid-template-columns: 1fr; } }
+.maintbar { display: flex; align-items: center; gap: 10px; margin: 14px 20px 0; padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--bad) 14%, var(--panel)); color: var(--text); border: 1px solid color-mix(in srgb, var(--bad) 40%, transparent); }
+.maintbar svg { width: 20px; height: 20px; color: var(--bad); }
+.maintbar span:first-of-type { flex: 1; }
+.maintbar .go { font-weight: 700; color: var(--bad); }
+.maintf .mstate { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.maintf.on .mstate { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.maintf .mstate .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 25%, transparent); flex: none; }
+.maintf.on .mstate .dot { background: var(--bad); box-shadow: 0 0 0 4px color-mix(in srgb, var(--bad) 25%, transparent); animation: mpulse 1.4s ease-in-out infinite; }
+@keyframes mpulse { 50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--bad) 0%, transparent); } }
+.maintf .fl { display: grid; gap: 6px; font-weight: 650; font-size: 13px; color: var(--muted); }
+.maintf .fl .field { color: var(--text); }
+.maintf .btn.ok { background: var(--ok); color: #fff; }
+.lst .tbl td .mono, .lst .tbl td.num b { white-space: nowrap; }
+.lst .tbl td:nth-child(7) { white-space: nowrap; }
