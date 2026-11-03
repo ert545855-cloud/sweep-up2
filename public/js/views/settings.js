@@ -11,7 +11,7 @@ const PRIV = [
 ];
 import { notifSettings, themeMenu } from './profile.js';
 import { openFilters } from './swipe.js';
-import { eventInfo, eventLive, eventEnabled, setEventEnabled, PUMPKIN } from '../event.js';
+import { eventInfo, eventLive, eventEnabled, setEventEnabled, eventIcon, eventEmoji } from '../event.js';
 
 export default function settings(view) {
   const me = state.me;
@@ -45,7 +45,7 @@ export default function settings(view) {
       <a class="it" href="#/install">${icon('download')}<span class="grow">Telefona yükle<div class="sub">iPhone’da Ana Ekrana Ekle, Android’de Uygulamayı yükle</div></span></a>
       <button class="it nt">${icon('bell')}<span class="grow">Bildirimler</span></button>
       <button class="it th">${icon('sun')}<span class="grow">Tema<div class="sub">Gün batımı, Pembe rüya, Gece moru, Altın</div></span></button>
-      ${eventLive() ? `<label class="it ev-it"><span class="ev-ic">${PUMPKIN}</span><span class="grow">${esc(eventInfo().name)} teması<div class="sub">${esc(new Date(eventInfo().end - 1).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }))} gününe kadar. Sonra seçtiğin tema kendiliğinden geri gelir.</div></span><input type="checkbox" class="sw sw-ev" ${eventEnabled() ? 'checked' : ''}></label>` : ''}
+      ${eventLive() ? `<label class="it ev-it"><span class="ev-ic">${eventIcon()}</span><span class="grow">${esc(eventInfo().name)} teması<div class="sub">${esc(new Date(eventInfo().end - 1).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }))} gününe kadar. Sonra seçtiğin tema kendiliğinden geri gelir.</div></span><input type="checkbox" class="sw sw-ev" ${eventEnabled() ? 'checked' : ''}></label>` : ''}
     </div>
     <div class="group-t">Yasal ve verilerim</div>
     <div class="group">
@@ -60,7 +60,7 @@ export default function settings(view) {
 
   view.querySelector('.sw-ev')?.addEventListener('change', (e) => {
     setEventEnabled(e.target.checked);
-    toast(e.target.checked ? `${eventInfo().name} teması açıldı 🎃` : 'Etkinlik teması kapatıldı. Seçtiğin tema geri geldi.');
+    toast(e.target.checked ? `${eventInfo().name} teması açıldı ${eventEmoji()}` : 'Etkinlik teması kapatıldı. Seçtiğin tema geri geldi.');
   });
   view.querySelectorAll('.sw[data-k]').forEach((c) => {
     c.onchange = async () => {

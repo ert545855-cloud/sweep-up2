@@ -590,20 +590,20 @@ module.exports = function mountAdmin(app, ctx) {
   // ================= Etkinlik teması =================
   const appEvent = require('./event');
   app.get('/api/admin/event', adminAuth, (req, res) => {
-    const e = appEvent.settings(store);
-    res.json({ ...e, kinds: Object.entries(appEvent.EVENTS).map(([id, v]) => ({ id, name: v.name })), active: appEvent.current(store), now: now() });
+    const { list, builtIn } = appEvent.list(store);
+    res.json({ list, builtIn, kinds: Object.entries(appEvent.EVENTS).map(([id, v]) => ({ id, name: v.name })), active: appEvent.current(store), now: now() });
   });
   app.put('/api/admin/event', adminAuth, owner, (req, res) => {
-    const b = req.body || {};
-    const kind = b.kind === 'none' ? 'none' : String(b.kind || '');
-    if (kind !== 'none' && !appEvent.EVENTS[kind]) return res.status(400).json({ error: 'Etkinlik bulunamadı.' });
-    const start = +b.start; const end = +b.end;
-    if (kind !== 'none' && (!start || !end || end <= start)) return res.status(400).json({ error: 'Bitiş, başlangıçtan sonra olmalı.' });
-    store.put('settings', { id: 'event', kind, start: start || null, end: end || null });
+    const raw = Array.isArray(req.body?.list) ? req.body.list : [];
+    if (raw.some((e) => !appEvent.EVENTS[e.kind])) return res.status(400).json({ error: 'Etkinlik bulunamadı.' });
+    if (raw.some((e) => !(+e.end > +e.start))) return res.status(400).json({ error: 'Her etkinlikte bitiş, başlangıçtan sonra olmalı.' });
+    const list = appEvent.clean(raw);
+    for (let i = 1; i < list.length; i++) if (list[i].start < list[i - 1].end) return res.status(400).json({ error: `${appEvent.EVENTS[list[i].kind].name} ile ${appEvent.EVENTS[list[i - 1].kind].name} tarihleri çakışıyor.` });
+    store.put('settings', { id: 'event', list });
     const ev = appEvent.current(store);
     io.emit('event', { event: ev, now: now() });
-    audit(req.admin, kind === 'none' ? 'etkinlik temasını kapattı' : 'etkinlik temasını ayarladı', null, ev ? `${ev.name}: ${new Date(ev.start).toISOString()} → ${new Date(ev.end).toISOString()}` : '');
-    res.json({ ok: true, active: ev });
+    audit(req.admin, 'etkinlik takvimini güncelledi', null, list.map((e) => `${appEvent.EVENTS[e.kind].name}: ${new Date(e.start).toISOString().slice(0, 10)} → ${new Date(e.end).toISOString().slice(0, 10)}`).join(', ') || 'boş');
+    res.json({ ok: true, list, active: ev });
   });
 
   // ================= Profil doğrulama =================

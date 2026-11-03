@@ -212,3 +212,9 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .tabs .tc { color: var(--muted); font-weight: 600; font-size: 12px; }
 .dbbar { height: 10px; border-radius: 5px; background: var(--soft); overflow: hidden; margin-top: 10px; }
 .dbbar i { display: block; height: 100%; border-radius: 5px; }
+.evf .evhead, .evf .evrow { display: grid; grid-template-columns: 1.1fr 1fr 1fr 110px 40px; gap: 8px; align-items: center; }
+.evf .evhead { font-size: 12px; font-weight: 650; color: var(--muted); margin-bottom: 6px; }
+.evf .evlist { display: grid; gap: 8px; }
+.evf .evst { font-size: 12px; }
+.chip.warn { background: color-mix(in srgb, #f59e0b 16%, transparent); color: #b45309; }
+@media (max-width: 760px) { .evf .evhead { display: none; } .evf .evrow { grid-template-columns: 1fr 1fr; } }

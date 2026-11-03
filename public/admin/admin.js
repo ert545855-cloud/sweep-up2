@@ -729,30 +729,49 @@ VIEWS.database = async (main) => {
 // ---- Etkinlik teması (ör. Cadılar Bayramı haftası) ----
 const dtl = (ms) => { if (!ms) return ''; const d = new Date(ms); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
 const fdt = (ms) => new Date(ms).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+const EV_EMOJI = { halloween: '🎃', yilbasi: '🎄', sevgililer: '💘' };
+function evRow(e, kinds, owner, nowMs) {
+  const st = !e.start || !e.end ? '' : nowMs >= e.end ? '<span class="chip">Bitti</span>' : nowMs >= e.start ? '<span class="chip ok">Şu an açık</span>' : '<span class="chip warn">Bekliyor</span>';
+  return `<div class="evrow">
+    <select class="field" data-k="kind" ${owner ? '' : 'disabled'}>${kinds.map((k) => `<option value="${k.id}" ${e.kind === k.id ? 'selected' : ''}>${EV_EMOJI[k.id] || ''} ${esc(k.name)}</option>`).join('')}</select>
+    <input class="field" type="datetime-local" data-k="start" value="${dtl(e.start)}" ${owner ? '' : 'disabled'}>
+    <input class="field" type="datetime-local" data-k="end" value="${dtl(e.end)}" ${owner ? '' : 'disabled'}>
+    <span class="evst">${st}</span>
+    ${owner ? `<button type="button" class="btn sm danger rme" aria-label="Sil">${icon('trash')}</button>` : ''}</div>`;
+}
 function eventPanel(s, owner) {
   const a = s.active;
-  const st = !a ? 'Kapalı' : s.now < a.start ? `${fdt(a.start)} tarihinde başlayacak` : `Şu an açık · ${fdt(a.end)} tarihinde biter`;
-  return `<form class="panel evf" style="margin-top:14px;max-width:640px"><div class="ph"><h3>Etkinlik teması 🎃</h3><span class="chip ${a && s.now >= a.start ? 'ok' : ''}">${esc(st)}</span></div><div class="pb fgrid">
-    <label>Tema<select class="field" name="kind" ${owner ? '' : 'disabled'}><option value="none" ${s.kind === 'none' ? 'selected' : ''}>Yok</option>${s.kinds.map((k) => `<option value="${k.id}" ${s.kind === k.id ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></label>
-    <label>Başlangıç<input class="field" type="datetime-local" name="start" value="${dtl(s.start)}" ${owner ? '' : 'disabled'}></label>
-    <label>Bitiş<input class="field" type="datetime-local" name="end" value="${dtl(s.end)}" ${owner ? '' : 'disabled'}></label>
-    <p class="muted" style="margin:0;font-size:12.5px">Tema bu aralıkta herkeste açılır (yarasalar, örümcek, hayalet, balkabağı, cadı şapkalı logo, akışta duyuru kartı). Bitişte kendiliğinden kalkar ve herkesin kendi seçtiği tema geri gelir. Kullanıcılar Ayarlar’dan kapatabilir.</p>
-    ${owner ? `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary">${icon('check')} Etkinliği kaydet</button><button type="button" class="btn now">Şimdi başlat (7 gün)</button></div>` : ''}</div></form>`;
+  const head = !a ? 'Takvimde etkinlik yok' : s.now < a.start ? `Sıradaki: ${EV_EMOJI[a.id] || ''} ${a.name} · ${fdt(a.start)}` : `Şu an açık: ${EV_EMOJI[a.id] || ''} ${a.name} · ${fdt(a.end)} tarihinde biter`;
+  return `<form class="panel evf" style="margin-top:14px;max-width:860px"><div class="ph"><h3>Etkinlik temaları</h3><span class="chip ${a && s.now >= a.start ? 'ok' : ''}">${esc(head)}</span></div><div class="pb">
+    <div class="evhead"><span>Tema</span><span>Başlangıç</span><span>Bitiş</span><span></span></div>
+    <div class="evlist">${s.list.map((e) => evRow(e, s.kinds, owner, s.now)).join('')}</div>
+    <p class="muted" style="margin:10px 0 0;font-size:12.5px">Her tema kendi tarihinde herkeste kendiliğinden açılır, bitince kalkar ve herkesin kendi seçtiği tema geri gelir. Kullanıcılar Ayarlar’dan kapatabilir.
+      <br>🎃 Yarasa, örümcek, hayalet · 🎄 Kar, yılbaşı ışıkları, kızak, yeni yıl geri sayımı ve gece yarısı havai fişek · 💘 Uçuşan kalpler, gül yaprakları, açık pembe tema.</p>
+    ${owner ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary">${icon('check')} Takvimi kaydet</button><button type="button" class="btn adde">${icon('plus')} Etkinlik ekle</button></div>` : ''}</div></form>`;
 }
-function wireEventPanel(main) {
+function wireEventPanel(main, s) {
   const f = main.querySelector('.evf'); if (!f) return;
-  const save = async (body) => {
+  f.onclick = (ev) => {
+    if (ev.target.closest('.rme')) ev.target.closest('.evrow').remove();
+    if (ev.target.closest('.adde')) {
+      const last = [...f.querySelectorAll('.evrow')].map((r) => new Date(r.querySelector('[data-k=end]').value).getTime()).filter(Boolean).pop() || Date.now();
+      const st = Math.max(last, Date.now());
+      f.querySelector('.evlist').insertAdjacentHTML('beforeend', evRow({ kind: s.kinds[0].id, start: st, end: st + 7 * 86400000 }, s.kinds, true, Date.now()));
+    }
+  };
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const list = [...f.querySelectorAll('.evrow')].map((r) => ({
+      kind: r.querySelector('[data-k=kind]').value,
+      start: new Date(r.querySelector('[data-k=start]').value).getTime(),
+      end: new Date(r.querySelector('[data-k=end]').value).getTime(),
+    }));
     try {
-      const r = await api('/event', { method: 'PUT', body });
-      toast(r.active ? 'Etkinlik teması kaydedildi.' : 'Etkinlik teması kapatıldı.');
+      const r = await api('/event', { method: 'PUT', body: { list } });
+      toast(r.active ? 'Etkinlik takvimi kaydedildi.' : 'Takvim kaydedildi; yaklaşan etkinlik yok.');
       render();
     } catch (er) { toast(er.message); }
   };
-  f.onsubmit = (ev) => { ev.preventDefault(); save({ kind: f.kind.value, start: new Date(f.start.value).getTime(), end: new Date(f.end.value).getTime() }); };
-  f.querySelector('.now')?.addEventListener('click', () => {
-    const kind = f.kind.value === 'none' ? 'halloween' : f.kind.value;
-    const s = Date.now(); save({ kind, start: s, end: s + 7 * 86400000 });
-  });
 }
 
 // ---- Ayarlar: ödeme, fiyatlar, yasal ----
@@ -793,7 +812,7 @@ VIEWS.settings = async (main) => {
       ${owner ? `<div class="savebar"><button class="btn primary">${icon('check')} Kaydet</button></div>` : ''}
     </form>
     ${evs ? eventPanel(evs, owner) : ''}`;
-  wireEventPanel(main);
+  if (evs) wireEventPanel(main, evs);
   const f = main.querySelector('form');
   const COLS = { plans: PLAN, packs: PACK, gifts: GIFT };
   f.onclick = (ev) => {

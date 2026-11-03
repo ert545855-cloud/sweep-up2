@@ -268,6 +268,10 @@ export const FILTERS = [
   ['neon', 'Neon', 'saturate(2.2) contrast(1.2) hue-rotate(-12deg)'],
   ['cadi', 'Cadı', 'sepia(.6) saturate(2.1) hue-rotate(-22deg) contrast(1.3) brightness(.82)'],
   ['hayalet', 'Hayalet', 'grayscale(.7) contrast(.9) brightness(1.18) sepia(.2) hue-rotate(170deg) saturate(1.6)'],
+  ['kar', 'Kar', 'brightness(1.14) contrast(1.06) saturate(.75) sepia(.08) hue-rotate(175deg) saturate(1.3)'],
+  ['isilti', 'Işıltı', 'sepia(.3) saturate(1.55) brightness(1.1) contrast(1.08) hue-rotate(-6deg)'],
+  ['ask', 'Aşk', 'sepia(.22) saturate(1.5) hue-rotate(-32deg) brightness(1.08) contrast(.96)'],
+  ['ruya', 'Rüya', 'brightness(1.16) contrast(.84) saturate(1.25) sepia(.12) hue-rotate(-18deg) blur(.3px)'],
 ];
 export const filterCss = (id) => (FILTERS.find((f) => f[0] === id) || FILTERS[0])[2];
 

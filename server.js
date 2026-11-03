@@ -732,7 +732,7 @@ app.post('/api/posts/:id/comments', auth, (req, res) => {
 
 // ---------- Hikayeler (24 saat) ----------
 const storyAlive = (s) => now() - s.at < DAY;
-const FILTERS = ['canli', 'siyahbeyaz', 'noir', 'sicak', 'soguk', 'altin', 'vintage', 'retro', 'soluk', 'pastel', 'pembe', 'dram', 'sinema', 'gece', 'neon', 'cadi', 'hayalet'];
+const FILTERS = ['canli', 'siyahbeyaz', 'noir', 'sicak', 'soguk', 'altin', 'vintage', 'retro', 'soluk', 'pastel', 'pembe', 'dram', 'sinema', 'gece', 'neon', 'cadi', 'hayalet', 'kar', 'isilti', 'ask', 'ruya'];
 function cleanSticker(st) {
   if (!st || typeof st !== 'object') return null;
   const y = Math.max(5, Math.min(90, +st.y || 60));
