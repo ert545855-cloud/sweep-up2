@@ -8,6 +8,7 @@ const PRIV = [
   ['hideLastSeen', 'eye', 'Son görülmeyi gizle', 'Çevrimiçi durumun ve son görülmen kimseye görünmez'],
   ['hideRead', 'dcheck', 'Okundu bilgisini kapat', 'Mavi tik gönderilmez; sen de başkalarınınkini göremezsin'],
   ['hideFromDeck', 'flame', 'Kaydırmada beni gösterme', 'Keşfet destesinde yeni kişilere çıkmazsın'],
+  ['hideAge', 'person', 'Yaşımı gizle', 'Yaşın profilinde ve kaydırma kartında görünmez; yaş filtreleri yine çalışır'],
   ['hideVisits', 'eye', 'Profil ziyaretlerimi gösterme', 'Baktığın profillerin ziyaretçi listesinde görünmezsin'],
 ];
 import { notifSettings, themeMenu } from './profile.js';

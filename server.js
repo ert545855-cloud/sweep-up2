@@ -78,6 +78,7 @@ function notifyMentions(text, from, url, what) {
   });
 }
 
+const shownAge = (u) => (priv(u).hideAge ? null : u.age ?? null);
 function pub(u, viewerId) {
   if (!u) return null;
   const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, ...rest } = u;
@@ -91,6 +92,7 @@ function pub(u, viewerId) {
     lastSeen: hidden ? null : u.lastSeen,
     live: lives.has(u.id),
     plus: isPlus(u), verified: !!u.verified,
+    age: self ? u.age ?? null : shownAge(u), ageHidden: !!priv(u).hideAge,
     prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
     ...(self ? { email: email || '', hasLocation: lat != null, birthdate: birthdate || null, coins: coins || 0, earnings: earnings || 0, needsBirthdate: !birthdate, refCode: refCode || null, falSub: falSub || null, frames: frames || [] } : {}),
     ...(viewerId && !self ? { isFollowing: !!fdoc && fdoc.status !== 'pending', requested: fdoc?.status === 'pending', distanceKm: distance(store.get('users', viewerId), u) } : {}),
@@ -508,7 +510,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (b.privacy && typeof b.privacy === 'object') {
     const cur = priv(req.user);
     const np = { ...cur };
-    ['private', 'hideLastSeen', 'hideRead', 'hideFromDeck', 'hideVisits'].forEach((k) => { if (b.privacy[k] !== undefined) np[k] = !!b.privacy[k]; });
+    ['private', 'hideLastSeen', 'hideRead', 'hideFromDeck', 'hideVisits', 'hideAge'].forEach((k) => { if (b.privacy[k] !== undefined) np[k] = !!b.privacy[k]; });
     patch.privacy = np;
     // Gizli hesap kapatılınca bekleyen istekleri kabul et
     if (cur.private && !np.private) store.filter('follows', (f) => f.to === req.user.id && f.status === 'pending').forEach((f) => store.update('follows', f.id, { status: null }));
@@ -1038,7 +1040,7 @@ function cardOut(me, u, likedYou) {
   const posts = store.filter('posts', (p) => p.userId === u.id && p.type === 'image' && canSee(me.id, u)).slice(0, 3).map((p) => p.media);
   const photos = [...(u.photos || []), ...posts].filter(Boolean);
   return {
-    ...brief(u), age: u.age, city: u.city, bio: u.bio, interests: u.interests || [],
+    ...brief(u), age: shownAge(u), city: u.city, bio: u.bio, interests: u.interests || [],
     distanceKm: distance(me, u), likedYou: eco.isPlus(me) ? likedYou : false,
     boosted: (u.boostUntil || 0) > now(),
     photos: photos.length ? photos : [u.avatar],
@@ -1051,7 +1053,7 @@ app.get('/api/likes', auth, (req, res) => {
   const mySwipes = new Set(store.filter('swipes', (s) => s.from === me).map((s) => s.to));
   const list = store.filter('swipes', (s) => s.to === me && s.dir !== 'left' && !mySwipes.has(s.from) && !isBlocked(me, s.from))
     .sort((a, b) => b.at - a.at)
-    .map((s) => { const u = store.get('users', s.from); return u && isActive(u) && { ...brief(u), age: u.age, city: u.city, super: s.dir === 'super', at: s.at, photo: (u.photos || [])[0] || u.avatar }; })
+    .map((s) => { const u = store.get('users', s.from); return u && isActive(u) && { ...brief(u), age: shownAge(u), city: u.city, super: s.dir === 'super', at: s.at, photo: (u.photos || [])[0] || u.avatar }; })
     .filter(Boolean);
   if (eco.isPlus(req.user)) return res.json({ plus: true, count: list.length, items: list });
   // Ücretsiz üyeler: süper beğeniler açık, diğerleri bulanık ve kimliksiz
@@ -1310,7 +1312,7 @@ app.get('/api/music/featured', auth, wrap(async (req, res) => res.json({ items: 
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
   isBlocked, limited, isMedia, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
-  online, appEvent, falci, msgOut, falLock, dropMediaCache: (id) => dropMediaCache(id),
+  online, appEvent, falci, msgOut, falLock, shownAge, dropMediaCache: (id) => dropMediaCache(id),
 };
 require('./server/features')(app, featureCtx);
 require('./server/genel')(app, featureCtx);

@@ -70,7 +70,7 @@ export default async function profile(view, username) {
   const reels = u.posts.filter((p) => p.type === 'reel');
   const tabs = self ? ['grid', 'reels', 'saved'] : ['grid', 'reels'];
   const avHref = u.live ? `#/live/${u.id}` : u.hasStory ? `#/stories/${u.id}` : self ? '#/create/story' : null;
-  const meta = [u.age, u.city, !self && u.distanceKm ? `${u.distanceKm} km` : null].filter(Boolean);
+  const meta = [self && u.ageHidden && u.age ? `${u.age} · gizli` : u.age, u.city, !self && u.distanceKm ? `${u.distanceKm} km` : null].filter(Boolean);
 
   view.innerHTML = `<header class="topbar">
       ${self ? `<a class="ib soft" href="#/create" aria-label="Oluştur">${icon('plus')}</a>` : `<button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button>`}

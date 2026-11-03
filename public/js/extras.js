@@ -173,7 +173,7 @@ export async function profileCard(u) {
   x.fillStyle = sh; x.fillRect(cx + 40, cy + 40, pw, ph);
   x.restore();
   x.fillStyle = '#fff'; x.font = '800 76px "Bricolage Grotesque", Inter, sans-serif';
-  x.fillText(`${u.name.split(' ')[0]}${u.age ? `, ${u.age}` : ''}${u.verified ? ' ✓' : ''}`, cx + 80, cy + 40 + ph - 70);
+  x.fillText(`${u.name.split(' ')[0]}${u.age && !u.privacy?.hideAge ? `, ${u.age}` : ''}${u.verified ? ' ✓' : ''}`, cx + 80, cy + 40 + ph - 70);
   if (u.city) { x.font = '600 38px Inter, sans-serif'; x.fillStyle = 'rgba(255,255,255,.9)'; x.fillText(`📍 ${u.city}`, cx + 82, cy + 40 + ph - 20); }
   let y = cy + 40 + ph + 80;
   x.fillStyle = '#2a1630';

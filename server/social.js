@@ -86,7 +86,7 @@ module.exports = function social(app, ctx) {
     const seen = new Map();
     store.filter('pviews', (v) => v.to === req.user.id && v.at >= since).sort((a, b) => b.at - a.at).forEach((v) => { if (!seen.has(v.from)) seen.set(v.from, v.at); });
     const list = [...seen.entries()].map(([id, at]) => ({ u: user(id), at })).filter((x) => x.u && !isBlocked(req.user.id, x.u.id));
-    if (eco.isPlus(req.user)) return res.json({ plus: true, count: list.length, items: list.map(({ u, at }) => ({ ...brief(u), age: u.age, city: u.city, at, photo: (u.photos || [])[0] || u.avatar })) });
+    if (eco.isPlus(req.user)) return res.json({ plus: true, count: list.length, items: list.map(({ u, at }) => ({ ...brief(u), age: ctx.shownAge(u), city: u.city, at, photo: (u.photos || [])[0] || u.avatar })) });
     res.json({ plus: false, count: list.length, items: list.slice(0, 12).map(({ u, at }) => ({ photo: (u.photos || [])[0] || u.avatar, at })) });
   });
   // eski ziyaret kayıtlarını temizle
@@ -417,7 +417,7 @@ module.exports = function social(app, ctx) {
   };
   const speedCount = () => queue.size + inRound.size;
   const broadcastSpeed = () => io.to('speed').emit('speed:count', { waiting: queue.size, live: inRound.size });
-  const peerCard = (u) => ({ ...brief(u), age: u.age, city: u.city, bio: u.bio, interests: u.interests || [], prompt: u.prompts?.[0] ? { q: PROMPT[u.prompts[0].id], a: u.prompts[0].a } : null });
+  const peerCard = (u) => ({ ...brief(u), age: ctx.shownAge(u), city: u.city, bio: u.bio, interests: u.interests || [], prompt: u.prompts?.[0] ? { q: PROMPT[u.prompts[0].id], a: u.prompts[0].a } : null });
   function tryPair() {
     const list = [...queue.values()].sort((x, y) => x.at - y.at);
     for (let i = 0; i < list.length; i++) {
