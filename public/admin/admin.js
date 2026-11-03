@@ -698,6 +698,7 @@ VIEWS.market = async (main) => {
   let tab = 'action'; let q = '';
   const pics = (t, arr) => (arr?.length ? `<div class="mkev"><span>${t}</span>${arr.map((u) => `<a href="${esc(u)}" target="_blank"><img src="${esc(u)}" alt=""></a>`).join('')}</div>` : '');
   main.innerHTML = `${head('SwipeUp Store', 'İkinci el pazar · komisyon yok. Kargolu siparişlerde alıcı tutarı SwipeUp hesabına havale eder; ödemeyi onaylayınca para emanete alınır, alıcı teslim aldığını onaylayınca (ya da süre dolunca) satıcının Store bakiyesine geçer. Satıcı ödemeleri <a href="#/payouts">Kazançlar</a> bölümünde.')}
+    <div class="mvis"></div>
     <div class="stats sm sum"></div>
     <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:12px"><div class="tabs mtabs" style="margin:0"></div><input class="field mq" placeholder="Kod, ürün, kullanıcı ya da takip kodu ara" style="max-width:320px"></div>
     <div class="panel"><div class="tw lst"><div class="spin"></div></div></div>
@@ -708,6 +709,14 @@ VIEWS.market = async (main) => {
   const load = async () => {
     const r = await api(`/market?tab=${tab === 'items' ? 'action' : tab}&q=${encodeURIComponent(q)}`);
     const s = r.stats;
+    const vis = !!r.settings.enabled;
+    main.querySelector('.mvis').innerHTML = `<div class="panel mvisp ${vis ? 'on' : ''}"><div class="pb row" style="gap:12px;flex-wrap:wrap">
+      <span class="dot"></span><div class="grow"><b>${vis ? 'Store uygulamada görünüyor' : 'Store uygulamada gizli'}</b><div class="muted" style="font-size:12.5px">${vis ? 'Kullanıcılar ana sayfadaki kartla ve Ayarlar’dan Store’a girebiliyor.' : 'Ana sayfa kartı, Ayarlar bağlantısı ve Store sayfaları kullanıcılara kapalı. İlanlar, siparişler ve bakiyeler silinmedi; açınca kaldığı yerden devam eder.'}</div></div>
+      ${S.me.role === 'owner' ? `<button class="btn ${vis ? '' : 'primary'} mvt">${vis ? 'Gizle' : 'Uygulamada göster'}</button>` : ''}</div></div>`;
+    main.querySelector('.mvt')?.addEventListener('click', async () => {
+      if (!confirm(vis ? 'Store uygulamadan gizlensin mi? Açık siparişler panelden yönetilmeye devam eder.' : 'Store tüm kullanıcılara açılsın mı?')) return;
+      try { await api('/market/visibility', { method: 'PUT', body: { enabled: !vis } }); toast(vis ? 'Store gizlendi.' : 'Store yayında!'); load(); } catch (er) { toast(er.message); }
+    });
     main.querySelector('.sum').innerHTML = `<div class="stat"><b>${s.active}</b><span>Aktif ilan</span></div><div class="stat"><b class="money">${tl(s.heldTL)}</b><span>Emanette (${s.heldCount} sipariş)</span></div>
       <div class="stat"><b class="money in">${tl(s.monthTL)}</b><span>Bu ay tamamlanan (${s.monthCount})</span></div><div class="stat"><b class="money">${tl(s.balancesTL)}</b><span>Satıcı bakiyeleri</span></div>
       <div class="stat ${s.payoutsPending ? 'alert' : ''}"><b>${s.payoutsPending}</b><span>Bekleyen satıcı ödemesi</span>${s.payoutsPending ? '<a href="#/payouts">Görüntüle</a>' : ''}</div>`;

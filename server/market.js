@@ -64,7 +64,9 @@ const OPEN = ['odeme_bekliyor', 'odeme_kontrol', 'odendi', 'kargoda', 'bulusma',
 module.exports = function market(app, ctx) {
   const { store, io, auth, wrap, eco, notify, emitTo, brief, isBlocked, limited, isMedia, moderation, chatBetween, sendMessage } = ctx;
   const now = () => Date.now();
-  const settings = () => ({ shipDays: 3, autoDays: 7, minPayout: 10, ...(store.get('settings', 'market') || {}) });
+  const settings = () => ({ shipDays: 3, autoDays: 7, minPayout: 10, enabled: false, ...(store.get('settings', 'market') || {}) });
+  // Store gizliyken kullanıcı uç noktaları kapalı (veriler ve yönetim paneli korunur)
+  app.use('/api/market', (req, res, next) => (settings().enabled ? next() : res.status(404).json({ error: 'SwipeUp Store şu an kullanılamıyor.', hidden: true })));
   const catOf = (id) => CATEGORIES.find((c) => c.id === id);
   const tl = (n) => Math.round(+n * 100) / 100;
   const media = (arr, max) => (Array.isArray(arr) ? arr : []).map(String).filter(isMedia).slice(0, max);
@@ -540,9 +542,16 @@ module.exports = function market(app, ctx) {
       const b = req.body || {};
       const n = (v, lo, hi, d) => (Number.isFinite(+v) ? Math.max(lo, Math.min(hi, +v)) : d);
       const cur = settings();
-      const next = { id: 'market', shipDays: n(b.shipDays, 1, 14, cur.shipDays) | 0, autoDays: n(b.autoDays, 2, 30, cur.autoDays) | 0, minPayout: n(b.minPayout, 1, 10000, cur.minPayout) };
+      const next = { id: 'market', enabled: cur.enabled, shipDays: n(b.shipDays, 1, 14, cur.shipDays) | 0, autoDays: n(b.autoDays, 2, 30, cur.autoDays) | 0, minPayout: n(b.minPayout, 1, 10000, cur.minPayout) };
       store.put('settings', next);
       audit(req.admin, 'Store ayarlarını güncelledi', null, `kargo ${next.shipDays} gün, otomatik onay ${next.autoDays} gün, en az ödeme ${next.minPayout} ₺`);
+      res.json(settings());
+    });
+    app.put('/api/admin/market/visibility', adminAuth, owner, (req, res) => {
+      const enabled = !!req.body?.enabled;
+      store.put('settings', { ...settings(), id: 'market', enabled });
+      io.emit('features', { market: enabled });
+      audit(req.admin, enabled ? 'Store’u uygulamada görünür yaptı' : 'Store’u uygulamada gizledi');
       res.json(settings());
     });
   }

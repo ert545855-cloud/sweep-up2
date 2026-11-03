@@ -131,6 +131,7 @@ async function router() {
   if (!match) { location.hash = '#/'; return; }
   if (!state.token && !match.opts.public && !match.opts.any) { location.hash = '#/login'; return; }
   if (state.me?.needsBirthdate && state.me.role !== 'falci' && !match.opts.any) return showBirthGate();
+  if (match.name === 'market' && !state.config?.features?.market) { location.hash = '#/'; return; }
   if (state.token && match.opts.public) { location.hash = '#/'; return; }
 
   const my = ++navToken;
@@ -204,6 +205,12 @@ function showMaintenance(m) {
   }, 20000);
 }
 on('maintenance', showMaintenance);
+// Özellik aç/kapat (ör. Store) yönetimden anında uygulanır
+on('features', (f) => {
+  if (!state.config) return;
+  state.config.features = { ...(state.config.features || {}), ...f };
+  if (/^#\/(market|$)|^#?$/.test(location.hash) || location.hash === '#/settings') router();
+});
 
 // Yönetimden gelen açılış duyurusu (her duyuru bir kez gösterilir)
 function showAnnouncement(a) {

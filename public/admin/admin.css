@@ -241,3 +241,6 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .maintf .btn.ok { background: var(--ok); color: #fff; }
 .lst .tbl td .mono, .lst .tbl td.num b { white-space: nowrap; }
 .lst .tbl td:nth-child(7) { white-space: nowrap; }
+.mvisp { margin-bottom: 14px; }
+.mvisp .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); flex: none; }
+.mvisp.on .dot { background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 25%, transparent); }
