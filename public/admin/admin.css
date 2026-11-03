@@ -250,3 +250,9 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .room-row .dchip input{display:none}
 .room-row .dchip span{display:inline-block;padding:5px 7px;border-radius:8px;font-size:12px;background:var(--soft,#f2f2f5);cursor:pointer;user-select:none}
 .room-row .dchip input:checked+span{background:var(--accent,#ff5a5f);color:#fff}
+.maintf .checks, .maintp .checks { display: grid; gap: 8px; font-size: 13.5px; }
+.maintf .checks label { display: flex; align-items: center; gap: 8px; }
+.maintf .checks input { width: 17px; height: 17px; accent-color: var(--accent, #ff5a5f); }
+.maintf .checks input:disabled + * , .maintf .checks label:has(input:disabled) { opacity: .5; }
+.maintp .kv { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.maintp .kv span { color: var(--muted); } .maintp .kv b { text-align: right; font-weight: 650; }

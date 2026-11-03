@@ -616,20 +616,104 @@ module.exports = function mountAdmin(app, ctx) {
   });
 
   // ================= Bakım modu =================
-  app.get('/api/admin/maintenance', adminAuth, (req, res) => res.json(store.get('settings', 'maintenance') || { on: false }));
+  const trFmt = (t, o) => new Date(t).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', ...o });
+  const whenTxt = (t) => trFmt(t, { day: 'numeric', month: 'long', weekday: 'long', hour: '2-digit', minute: '2-digit' });
+  const hmTxt = (t) => trFmt(t, { hour: '2-digit', minute: '2-digit' });
+  const sameDay = (a, b) => trFmt(a, { dateStyle: 'short' }) === trFmt(b, { dateStyle: 'short' });
+  const rangeTxt = (st, en) => (en ? (sameDay(st, en) ? `${whenTxt(st)}–${hmTxt(en)}` : `${whenTxt(st)} – ${whenTxt(en)}`) : whenTxt(st));
+  // Tüm aktif kullanıcılara bildirim (uygulama içi + telefon bildirimi)
+  const notifyEveryone = (text, tag) => {
+    const list = store.filter('users', (u) => statusOf(u) === 'active');
+    list.forEach((u) => notify(u.id, { type: 'announce', title: 'SwipeUp', text, url: '/#/notifications', tag }));
+    return list.length;
+  };
+  const planDoc = () => store.get('settings', 'maint_plan');
+  const planOut = (p) => (p && !p.started ? { start: p.start, end: p.end || null, message: p.message || '' } : null);
+  // Bakımı aç / kapat (elle ya da plana göre)
+  function setMaintenance(on, { message = '', until = null, by = 'sistem', notifyUsers = false, planId = null } = {}) {
+    const prev = store.get('settings', 'maintenance');
+    const doc = store.put('settings', { id: 'maintenance', on, message: String(message || '').trim().slice(0, 300), until: on ? until : null, at: now(), by, planId: on ? planId : null });
+    if (on) {
+      io.emit('maintenance', { on: true, message: doc.message, until: doc.until });
+      setTimeout(() => { for (const [, sk] of io.of('/').sockets) sk.disconnect(true); }, 800);
+      if (notifyUsers) notifyEveryone(`🛠️ SwipeUp bakıma alındı${doc.until ? `, ${hmTxt(doc.until)} civarı geri döneceğiz` : ''}.${doc.message ? ` ${doc.message}` : ''}`, 'maint');
+    } else if (prev?.on && notifyUsers) {
+      notifyEveryone('✅ Bakım bitti, SwipeUp yeniden açık. Kaldığın yerden devam edebilirsin!', 'maint');
+    }
+    return doc;
+  }
+
+  app.get('/api/admin/maintenance', adminAuth, (req, res) => res.json({ ...(store.get('settings', 'maintenance') || { on: false }), plan: planDoc() || null, users: store.filter('users', (u) => statusOf(u) === 'active').length }));
   app.put('/api/admin/maintenance', adminAuth, owner, (req, res) => {
     const b = req.body || {};
     const on = !!b.on;
     const until = +b.until > now() ? +b.until : null;
-    const doc = store.put('settings', { id: 'maintenance', on, message: String(b.message || '').trim().slice(0, 300), until, at: now(), by: req.admin.username });
-    if (on) {
-      // Açık oturumlara haber ver, sonra bağlantıları kapat
-      io.emit('maintenance', { on: true, message: doc.message, until: doc.until });
-      setTimeout(() => { for (const [, s] of io.of('/').sockets) s.disconnect(true); }, 800);
-    }
+    const cur = store.get('settings', 'maintenance');
+    const changing = on !== !!cur?.on;
+    const doc = setMaintenance(on, { message: b.message, until, by: req.admin.username, notifyUsers: changing && !!b.notify });
+    // Planlı bakım elle bitirildiyse planı da kapat
+    if (!on && planDoc()?.started) store.del('settings', 'maint_plan');
     audit(req.admin, on ? 'bakım modunu açtı' : 'bakım modunu kapattı', null, doc.message || '');
     res.json(doc);
   });
+  // İleri tarihli bakım planı
+  app.put('/api/admin/maintenance/plan', adminAuth, owner, (req, res) => {
+    const b = req.body || {};
+    const start = +b.start; const end = b.end ? +b.end : null;
+    if (!(start > now() + 60000)) return res.status(400).json({ error: 'Başlangıç zamanı en az 1 dakika sonrası olmalı.' });
+    if (start > now() + 90 * DAY) return res.status(400).json({ error: 'En fazla 90 gün sonrasına planlanabilir.' });
+    if (end && end <= start) return res.status(400).json({ error: 'Bitiş, başlangıçtan sonra olmalı.' });
+    const remind = [0, 15, 30, 60, 120, 1440].includes(+b.remind) ? +b.remind : 30;
+    const prev = planDoc();
+    const p = store.put('settings', {
+      id: 'maint_plan', pid: nanoid(8), start, end, message: String(b.message || '').trim().slice(0, 300),
+      remind, notifyStart: b.notifyStart !== false, notifyEnd: b.notifyEnd !== false, autoEnd: !!end && b.autoEnd !== false,
+      announced: null, reminded: false, started: false, by: req.admin.username, at: now(),
+    });
+    let reach = 0;
+    if (b.announce) {
+      const changed = prev && !prev.started && prev.announced;
+      reach = notifyEveryone(`🛠️ ${changed ? 'Bakım zamanı değişti: ' : 'Planlı bakım: '}${end ? `${rangeTxt(start, end)} arasında SwipeUp kullanılamayacak.` : `${whenTxt(start)} itibarıyla SwipeUp bir süre bakımda olacak.`}${p.message ? ` ${p.message}` : ''}`, 'maint-plan');
+      store.update('settings', 'maint_plan', { announced: now(), reach });
+    }
+    io.emit('maintenance:plan', planOut(planDoc()));
+    audit(req.admin, 'bakım planladı', null, `${rangeTxt(start, end)}${b.announce ? ` · ${reach} kişiye duyuruldu` : ''}`);
+    res.json(planDoc());
+  });
+  app.delete('/api/admin/maintenance/plan', adminAuth, owner, (req, res) => {
+    const p = planDoc();
+    if (!p) return res.json({ ok: true });
+    store.del('settings', 'maint_plan');
+    if (p.announced && !p.started && req.query.notify !== '0') notifyEveryone(`✅ ${rangeTxt(p.start, p.end)} için planlanan bakım iptal edildi. SwipeUp açık kalacak.`, 'maint-plan');
+    io.emit('maintenance:plan', null);
+    audit(req.admin, 'bakım planını iptal etti', null, rangeTxt(p.start, p.end));
+    res.json({ ok: true });
+  });
+  // Zamanlayıcı: hatırlatma, otomatik başlatma ve bitirme
+  setInterval(() => {
+    const p = planDoc(); const t = now();
+    if (!p) return;
+    if (!p.started) {
+      if (p.remind && !p.reminded && t >= p.start - p.remind * 60000 && t < p.start) {
+        store.update('settings', 'maint_plan', { reminded: true });
+        const mins = Math.max(1, Math.round((p.start - t) / 60000));
+        notifyEveryone(`⏰ Hatırlatma: ${mins >= 60 ? `${Math.round(mins / 60)} saat` : `${mins} dakika`} sonra (${hmTxt(p.start)}) SwipeUp bakıma giriyor${p.end ? `, ${hmTxt(p.end)} civarı döneceğiz` : ''}.`, 'maint-plan');
+      }
+      if (t >= p.start) {
+        store.update('settings', 'maint_plan', { started: t });
+        if (!store.get('settings', 'maintenance')?.on) setMaintenance(true, { message: p.message, until: p.end, by: `plan (${p.by})`, notifyUsers: p.notifyStart, planId: p.pid });
+        audit({ username: 'sistem', id: null }, 'planlı bakımı başlattı', null, rangeTxt(p.start, p.end));
+        io.emit('maintenance:plan', null);
+      }
+      return;
+    }
+    const m = store.get('settings', 'maintenance');
+    if (p.autoEnd && p.end && t >= p.end) {
+      if (m?.on && m.planId === p.pid) setMaintenance(false, { by: 'plan', notifyUsers: p.notifyEnd });
+      store.del('settings', 'maint_plan');
+      audit({ username: 'sistem', id: null }, 'planlı bakımı bitirdi', null, rangeTxt(p.start, p.end));
+    } else if (!m?.on) store.del('settings', 'maint_plan'); // elle bitirildi
+  }, 15000).unref();
 
   // ================= Profil doğrulama =================
   app.get('/api/admin/verifications', adminAuth, (req, res) => {

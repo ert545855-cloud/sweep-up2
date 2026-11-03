@@ -1917,3 +1917,6 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .fal-lock .btn { flex: none; }
 .rp-fal { flex: 1; display: flex; align-items: center; justify-content: center; height: 44px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.5); color: #fff; font-weight: 700; font-size: 14.5px; }
 .profile-btns .fal-go { flex: 1; }
+.maint-plan { display: flex; align-items: center; gap: 12px; margin: 4px 14px 10px; padding: 12px 8px 12px 14px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--sun) 16%, var(--bg)); border: 1px solid color-mix(in srgb, var(--sun) 45%, transparent); }
+.maint-plan .mp-ic { font-size: 24px; } .maint-plan b { display: block; font-size: 14.5px; } .maint-plan small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+.maint-plan .mp-x { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none; } .maint-plan .mp-x svg { width: 16px; height: 16px; }

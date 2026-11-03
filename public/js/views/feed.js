@@ -15,6 +15,7 @@ export default async function feed(view) {
       <a class="ib" href="#/notifications" aria-label="Bildirimler">${icon('bell')}<i class="dot-badge nb" style="top:8px;right:8px;${state.badges.notifications ? '' : 'display:none'}"></i></a>
     </header>
     <div class="stories" aria-label="Hikayeler ve canlı yayınlar"></div>
+    <div class="maint-slot"></div>
     <div class="event-slot"></div>
     <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
     <div class="social-row"><a class="genel-row feedg" href="#/genel"><span class="genel-ic">${icon('users')}</span><span class="grow"><b>Genel sohbet</b><small>Herkes burada</small></span></a>
@@ -86,6 +87,20 @@ export default async function feed(view) {
   offs.push(on('reconnected', () => { loadStories(); loadPeople(); }));
   offs.push(on('badges', (b) => { view.querySelector('.nb').style.display = b.notifications ? '' : 'none'; }));
   offs.push(paintEventBanner(view.querySelector('.event-slot')));
+  // Planlı bakım duyurusu
+  const maintSlot = view.querySelector('.maint-slot');
+  const paintMaint = () => {
+    const p = state.config?.maintPlan;
+    let hidden = false; try { hidden = p && localStorage.getItem('su_maint_hide') === String(p.start); } catch {}
+    if (!p || hidden || p.start < Date.now()) { maintSlot.innerHTML = ''; return; }
+    const o = { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' };
+    const st = new Date(p.start); const en = p.end ? new Date(p.end) : null;
+    const when = `${st.toLocaleString('tr-TR', o)}${en ? ` – ${en.toDateString() === st.toDateString() ? en.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : en.toLocaleString('tr-TR', o)}` : ''}`;
+    maintSlot.innerHTML = `<div class="maint-plan"><span class="mp-ic">🛠️</span><div class="grow"><b>Planlı bakım</b><small>${esc(when)} ${p.end ? 'arasında SwipeUp kullanılamayacak.' : 'itibarıyla SwipeUp bir süre bakımda olacak.'}${p.message ? ` ${esc(p.message)}` : ''}</small></div><button class="ib mp-x" aria-label="Gizle">${icon('close')}</button></div>`;
+    maintSlot.querySelector('.mp-x').onclick = () => { try { localStorage.setItem('su_maint_hide', String(p.start)); } catch {} maintSlot.innerHTML = ''; };
+  };
+  paintMaint();
+  offs.push(on('maintenance:plan', (p) => { if (state.config) state.config.maintPlan = p; paintMaint(); }));
 
   // Bildirim izni kartı
   (async () => {

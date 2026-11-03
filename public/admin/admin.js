@@ -784,27 +784,99 @@ VIEWS.market = async (main) => {
 VIEWS.maintenance = async (main) => {
   const m = await api('/maintenance');
   const owner = S.me.role === 'owner';
+  const p = m.plan;
   const dtl2 = (ms) => { if (!ms) return ''; const x = new Date(ms); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
+  const REM = [[0, 'Hatırlatma yok'], [15, '15 dakika önce'], [30, '30 dakika önce'], [60, '1 saat önce'], [120, '2 saat önce'], [1440, '1 gün önce']];
+  const left = (t) => { const d = t - Date.now(); if (d <= 0) return 'şimdi'; const h = Math.floor(d / 3600000); const mi = Math.round((d % 3600000) / 60000); return h >= 24 ? `${Math.floor(h / 24)} gün ${h % 24} saat sonra` : h ? `${h} saat ${mi} dk sonra` : `${mi} dk sonra`; };
+  const def = new Date(); def.setDate(def.getDate() + 1); def.setHours(3, 0, 0, 0);
+  const planPanel = () => {
+    if (p && !p.started) {
+      return `<div class="panel maintp" style="max-width:640px"><div class="ph"><h3>${icon('timer')} Planlı bakım</h3><span class="chip warn">${esc(left(p.start))}</span></div><div class="pb" style="display:grid;gap:10px">
+        <div class="kv"><span>Başlangıç</span><b>${dt(p.start)}</b></div>
+        <div class="kv"><span>Bitiş</span><b>${p.end ? `${dt(p.end)}${p.autoEnd ? ' · otomatik açılır' : ''}` : 'Elle bitirilecek'}</b></div>
+        ${p.message ? `<div class="kv"><span>Mesaj</span><b>${esc(p.message)}</b></div>` : ''}
+        <div class="kv"><span>Duyuru</span><b>${p.announced ? `${dt(p.announced)} · ${p.reach} kişiye gönderildi` : 'Gönderilmedi'}</b></div>
+        <div class="kv"><span>Hatırlatma</span><b>${p.remind ? `${(REM.find((r) => r[0] === p.remind) || [0, ''])[1]}${p.reminded ? ' · gönderildi' : ''}` : 'Yok'}</b></div>
+        <div class="kv"><span>Bildirimler</span><b>${[p.notifyStart && 'başlarken', p.notifyEnd && p.end && 'bitince'].filter(Boolean).join(', ') || 'yok'}</b></div>
+        <p class="muted" style="margin:0;font-size:12.5px">Zamanı gelince uygulama kendiliğinden bakıma girer; uygulamada ana sayfada “Planlı bakım” kartı görünür.</p>
+        ${owner ? `<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" data-edit>Düzenle</button><button class="btn danger" data-cancel>Planı iptal et</button></div>` : ''}
+      </div></div>`;
+    }
+    return '';
+  };
+  const planForm = (x) => `<form class="panel maintf planf" style="max-width:640px" ${p && !p.started && !x ? 'hidden' : ''}><div class="ph"><h3>${icon('timer')} İleri tarihli bakım planla</h3></div><div class="pb" style="display:grid;gap:14px">
+      <div class="grid g2" style="gap:12px">
+        <label class="fl">Başlangıç<input class="field" type="datetime-local" name="start" value="${dtl2(x?.start || def.getTime())}" min="${dtl2(Date.now())}"></label>
+        <label class="fl">Bitiş (isteğe bağlı)<input class="field" type="datetime-local" name="end" value="${dtl2(x?.end || def.getTime() + 3600000)}"></label>
+      </div>
+      <label class="fl">Kullanıcılara gösterilecek mesaj<textarea class="field" name="message" rows="2" maxlength="300" placeholder="ör. Sunucu güncellemesi yapıyoruz.">${esc(x?.message || '')}</textarea></label>
+      <label class="fl">Hatırlatma bildirimi<select class="field" name="remind">${REM.map(([v, l]) => `<option value="${v}" ${(x ? x.remind : 30) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="checks">
+        <label><input type="checkbox" name="announce" checked> Şimdi tüm kullanıcılara duyur <span class="muted">(${m.users} kişi, telefon bildirimi + uygulama içi)</span></label>
+        <label><input type="checkbox" name="notifyStart" ${x && !x.notifyStart ? '' : 'checked'}> Bakım başlayınca bildirim gönder</label>
+        <label><input type="checkbox" name="notifyEnd" ${x && !x.notifyEnd ? '' : 'checked'}> Bakım bitince “yeniden açıldık” bildirimi gönder</label>
+        <label><input type="checkbox" name="autoEnd" ${x && !x.autoEnd ? '' : 'checked'}> Bitiş saatinde uygulamayı otomatik aç</label>
+      </div>
+      <div class="preview muted" style="font-size:12.5px"></div>
+      ${owner ? `<div class="row" style="gap:8px"><button class="btn primary" data-plan>${icon('check')} ${x ? 'Planı güncelle' : 'Bakımı planla'}</button>${x ? '<button type="button" class="btn" data-close>Vazgeç</button>' : ''}</div>` : '<p class="muted">Bakım planını sadece sahip yönetici yapabilir.</p>'}
+    </div></form>`;
   main.innerHTML = `${head('Bakım modu', 'Açıkken kullanıcılar uygulamaya giremez ve “Bakımdayız” ekranını görür; açık oturumlar hemen kapanır. Yönetim paneli çalışmaya devam eder. Kapatınca uygulama herkeste kendiliğinden geri açılır.')}
-    <form class="panel maintf ${m.on ? 'on' : ''}" style="max-width:640px"><div class="pb" style="display:grid;gap:14px">
-      <div class="mstate"><span class="dot"></span><div><b>${m.on ? 'Bakım modu AÇIK' : 'Uygulama açık'}</b><div class="muted">${m.on ? `${dt(m.at)} tarihinde ${esc(m.by || '')} açtı. Kullanıcılar şu an giremiyor.` : 'Kullanıcılar uygulamayı normal kullanıyor.'}</div></div></div>
+    <div style="display:grid;gap:16px">
+    <form class="panel maintf now ${m.on ? 'on' : ''}" style="max-width:640px"><div class="pb" style="display:grid;gap:14px">
+      <div class="mstate"><span class="dot"></span><div><b>${m.on ? 'Bakım modu AÇIK' : 'Uygulama açık'}</b><div class="muted">${m.on ? `${dt(m.at)} tarihinde ${esc(m.by || '')} açtı. Kullanıcılar şu an giremiyor.${m.planId && p?.autoEnd && p.end ? ` ${dt(p.end)} tarihinde otomatik açılacak.` : ''}` : 'Kullanıcılar uygulamayı normal kullanıyor.'}</div></div></div>
       <label class="fl">Kullanıcılara gösterilecek mesaj<textarea class="field" name="message" rows="3" maxlength="300" placeholder="ör. Yeni özellikler için kısa bir bakım yapıyoruz. 30 dakika içinde döneceğiz.">${esc(m.message || '')}</textarea></label>
       <label class="fl">Tahmini dönüş (isteğe bağlı)<input class="field" type="datetime-local" name="until" value="${dtl2(m.until)}"></label>
+      <div class="checks"><label><input type="checkbox" name="notify" checked> ${m.on ? 'Bitirince kullanıcılara “yeniden açıldık” bildirimi gönder' : 'Kullanıcılara bakım bildirimi gönder'}</label></div>
       ${owner ? `<div class="row" style="gap:8px;flex-wrap:wrap">${m.on
     ? `<button class="btn ok" data-on="0">${icon('check')} Bakımı bitir, uygulamayı aç</button><button class="btn" data-on="1">Mesajı güncelle</button>`
-    : `<button class="btn danger" data-on="1">${icon('timer')} Bakım modunu aç</button>`}</div>` : '<p class="muted">Bakım modunu sadece sahip yönetici açıp kapatabilir.</p>'}
-    </div></form>`;
-  main.querySelector('form').onclick = async (e) => {
+    : `<button class="btn danger" data-on="1">${icon('timer')} Bakım modunu şimdi aç</button>`}</div>` : '<p class="muted">Bakım modunu sadece sahip yönetici açıp kapatabilir.</p>'}
+    </div></form>
+    ${planPanel()}
+    ${m.on ? '' : planForm(null)}
+    </div>`;
+  const now = main.querySelector('form.now');
+  now.onclick = async (e) => {
     const b = e.target.closest('[data-on]'); if (!b) return;
     e.preventDefault();
-    const f = main.querySelector('form');
     const on = b.dataset.on === '1';
-    if (on && !m.on && !confirm('Bakım modu açılsın mı? Uygulamadaki herkesin oturumu hemen kapanacak.')) return;
+    if (on && !m.on && !confirm('Bakım modu şimdi açılsın mı? Uygulamadaki herkesin oturumu hemen kapanacak.')) return;
     try {
-      await api('/maintenance', { method: 'PUT', body: { on, message: f.message.value, until: f.until.value ? new Date(f.until.value).getTime() : null } });
+      await api('/maintenance', { method: 'PUT', body: { on, message: now.message.value, until: now.until.value ? new Date(now.until.value).getTime() : null, notify: now.notify.checked } });
       toast(on ? 'Bakım modu açık.' : 'Bakım bitti, uygulama açıldı.'); refreshCounts(); render();
     } catch (er) { toast(er.message); }
   };
+  const wirePlan = (f) => {
+    if (!f) return;
+    const prev = () => {
+      const st = f.start.value ? new Date(f.start.value) : null; const en = f.end.value ? new Date(f.end.value) : null;
+      f.querySelector('.preview').textContent = st ? `Duyuru metni: “🛠️ Planlı bakım: ${st.toLocaleString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}${en ? `–${en.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} arasında SwipeUp kullanılamayacak.` : ' itibarıyla SwipeUp bir süre bakımda olacak.'}${f.message.value ? ` ${f.message.value}` : ''}”` : '';
+      f.autoEnd.disabled = !f.end.value; f.notifyEnd.disabled = !f.end.value && !f.autoEnd.checked;
+    };
+    f.oninput = prev; prev();
+    f.onclick = async (e) => {
+      if (e.target.closest('[data-close]')) { e.preventDefault(); render(); return; }
+      if (!e.target.closest('[data-plan]')) return;
+      e.preventDefault();
+      if (!f.start.value) return toast('Başlangıç zamanını seç.');
+      const body = {
+        start: new Date(f.start.value).getTime(), end: f.end.value ? new Date(f.end.value).getTime() : null, message: f.message.value, remind: +f.remind.value,
+        announce: f.announce.checked, notifyStart: f.notifyStart.checked, notifyEnd: f.notifyEnd.checked, autoEnd: f.autoEnd.checked,
+      };
+      if (body.announce && !confirm(`Bakım planı ${m.users} kullanıcıya bildirim olarak gönderilecek. Devam edilsin mi?`)) return;
+      try { await api('/maintenance/plan', { method: 'PUT', body }); toast(body.announce ? 'Bakım planlandı ve kullanıcılara duyuruldu.' : 'Bakım planlandı.'); render(); } catch (er) { toast(er.message); }
+    };
+  };
+  wirePlan(main.querySelector('form.planf'));
+  main.querySelector('[data-edit]')?.addEventListener('click', () => {
+    const f = main.querySelector('form.planf'); if (!f) return;
+    f.outerHTML = planForm(p); const nf = main.querySelector('form.planf'); nf.announce.checked = !!p.announced; wirePlan(nf);
+    nf.scrollIntoView({ behavior: 'smooth' });
+  });
+  main.querySelector('[data-cancel]')?.addEventListener('click', async () => {
+    const tell = p.announced ? confirm('Plan iptal edilsin mi?\n\nKullanıcılara önceden duyurulmuştu; iptal bildirimi gönderilecek. (İptal için Tamam)') : confirm('Plan iptal edilsin mi?');
+    if (!tell) return;
+    try { await api('/maintenance/plan', { method: 'DELETE' }); toast('Bakım planı iptal edildi.'); render(); } catch (er) { toast(er.message); }
+  });
 };
 
 // ---- Kazançlar ve ödeme talepleri ----

@@ -370,7 +370,7 @@ app.get('/api/config', (req, res) => {
   let uid = null;
   try { uid = jwt.verify((req.headers.authorization || '').slice(7), JWT_SECRET).id; } catch {}
   const { id, ...legal } = store.get('settings', 'legal') || {};
-  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now(), maintenance: maintenance(), features: { market: !!store.get('settings', 'market')?.enabled }, superMsgCoins: eco.get().superMsgCoins });
+  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now(), maintenance: maintenance(), maintPlan: (() => { const p = store.get('settings', 'maint_plan'); return p && !p.started ? { start: p.start, end: p.end || null, message: p.message || '' } : null; })(), features: { market: !!store.get('settings', 'market')?.enabled }, superMsgCoins: eco.get().superMsgCoins });
 });
 
 // ---------- Kimlik ----------
