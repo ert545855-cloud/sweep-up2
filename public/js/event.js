@@ -51,15 +51,7 @@ const ARROW = `<svg viewBox="0 0 120 24" aria-hidden="true"><path d="M8 12h96" s
   <path d="M2 6l10 6-10 6M8 6l10 6-10 6" fill="none" stroke="#ff8fb1" stroke-width="2"/>
   <path d="M104 12c0-4 3-7 6-7s5 2 5 5c0 4-6 8-11 9 1-2 0-5 0-7z" fill="#ff3d6e" transform="rotate(90 110 12)"/></svg>`;
 const FLAKE = '<svg viewBox="0 0 24 24" aria-hidden="true"><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7"/><path d="M9 4l3 2.5L15 4M9 20l3-2.5 3 2.5M3.5 10.5L6.5 9.6 6 6.6M17.5 17.4l.5-3 3 .9M3.5 13.5l3 .9-.5 3M17.5 6.6l.5 3 3-.9"/></g></svg>';
-const SLEIGH = `<svg viewBox="0 0 170 44" aria-hidden="true"><g fill="#ffd27a">
-  <path d="M112 22h34c5 0 8-3 9-9h4c-1 9-6 15-14 15h-33z"/><path d="M106 34h50c6 0 9-3 10-7" fill="none" stroke="#ffd27a" stroke-width="2.4" stroke-linecap="round"/>
-  <path d="M116 34v-6M146 34v-6" stroke="#ffd27a" stroke-width="2"/><circle cx="130" cy="13" r="4"/><path d="M124 22c0-6 3-9 6-9s6 3 6 9z"/><path d="M127 10l4-7 4 6z"/>
-  <ellipse cx="22" cy="22" rx="11" ry="5"/><path d="M31 19c3-3 4-7 4-10l3 1c0 4-2 8-5 11z"/><path d="M35 8l-3-5M35 8l4-4M36 9l5-1" stroke="#ffd27a" stroke-width="1.6"/>
-  <path d="M14 25l-5 8M18 26l-1 8M27 26l3 8M30 25l6 7" stroke="#ffd27a" stroke-width="1.8" stroke-linecap="round"/>
-  <ellipse cx="66" cy="22" rx="11" ry="5"/><path d="M75 19c3-3 4-7 4-10l3 1c0 4-2 8-5 11z"/><path d="M79 8l-3-5M79 8l4-4M80 9l5-1" stroke="#ffd27a" stroke-width="1.6"/>
-  <path d="M58 25l-5 8M62 26l-1 8M71 26l3 8M74 25l6 7" stroke="#ffd27a" stroke-width="1.8" stroke-linecap="round"/>
-  <path d="M33 20Q50 26 55 21M77 20Q95 26 112 24" fill="none" stroke="#ffd27a" stroke-width="1"/></g>
-  <circle cx="82" cy="9" r="2" fill="#ff4d5e"/></svg>`;
+const SLEIGH = '<img src="/img/yilbasi-kizak.webp" alt="" width="195" height="88" decoding="async">';
 
 function web() {
   const spokes = [0, 16, 32, 48, 64, 80, 90].map((a) => (a * Math.PI) / 180);
