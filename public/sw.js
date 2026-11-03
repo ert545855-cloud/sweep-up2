@@ -1,5 +1,5 @@
 // SwipeUp service worker: anlık bildirimler + çevrimdışı kabuk
-const CACHE = 'swipeup-v28';
+const CACHE = 'swipeup-v29';
 const SHELL = ['/', '/css/app.css', '/js/app.js', '/js/core.js', '/js/icons.js', '/js/components.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/mark.png', '/js/music.js', '/js/update.js', '/js/event.js'];
 
 self.addEventListener('install', (e) => {

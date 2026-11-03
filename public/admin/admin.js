@@ -374,12 +374,19 @@ VIEWS.ledger = async (main) => {
 
 // ---- Fal ----
 VIEWS.fal = async (main) => {
-  const r = await api('/fal');
+  const [r, ai] = await Promise.all([api('/fal'), api('/falai').catch(() => null)]);
   S.counts.falPending = r.pending;
   main.innerHTML = `${head('Fal', 'Falcı Teyze hesabına gelen istekler. Cevaplar uygulamada Falcı Teyze hesabından verilir.')}
     <div class="stats"><div class="stat"><b>${r.total}</b><span>Toplam istek</span></div><div class="stat ${r.pending ? 'alert' : ''}"><b>${r.pending}</b><span>Bekleyen</span></div>
       <div class="stat"><b>${r.avgMin == null ? '—' : r.avgMin < 60 ? `${r.avgMin} dk` : `${(r.avgMin / 60).toFixed(1)} sa`}</b><span>Ortalama cevap süresi</span></div>
       ${Object.entries(FAL).map(([k, l]) => `<div class="stat"><b>${r.byType[k] || 0}</b><span>${l} · ${r.prices[k] || 0} jeton</span></div>`).join('')}</div>
+    ${ai ? `<div class="panel aip" style="margin-bottom:14px"><div class="ph"><h3>✨ Yapay zeka (Google Gemini)</h3>${ai.hasKey ? '<span class="chip ok">Anahtar tanımlı</span>' : '<span class="chip bad">GEMINI_API_KEY yok</span>'}</div><div class="pb" style="display:grid;gap:12px">
+      <div class="seg3">${[['off', 'Kapalı', 'Falcı Teyze kendisi yazar'], ['draft', 'Taslak', 'Yapay zeka yazar, Falcı Teyze kontrol edip gönderir'], ['auto', 'Otomatik', 'Cevap birkaç saniyede kendiliğinden gider']].map(([k, t, d]) => `<button data-mode="${k}" class="${ai.saved === k ? 'on' : ''}" ${S.me.role === 'owner' && ai.hasKey ? '' : 'disabled'}><b>${t}</b><small>${d}</small></button>`).join('')}</div>
+      <div class="muted" style="font-size:12.5px">Modeller: ${esc((ai.stats.models || []).join(' → ') || '—')} · Başarılı: ${ai.stats.ok} · Hatalı: ${ai.stats.fail}${ai.stats.lastModel ? ` · Son kullanılan: ${esc(ai.stats.lastModel)}` : ''}<br>Toplam ${ai.counts.total} taslak · ${ai.counts.sent} gönderildi (${ai.counts.auto} otomatik, ${ai.counts.edited} düzenlenerek)${ai.stats.lastError ? `<br><span style="color:var(--bad)">Son hata: ${esc(ai.stats.lastError)}</span>` : ''}</div>
+      <div class="row" style="gap:8px"><button class="btn sm aitest" ${ai.hasKey ? '' : 'disabled'}>Bağlantıyı test et</button><span class="muted ait" style="font-size:12.5px"></span></div>
+      <div class="aiout" hidden></div>
+      <p class="muted" style="margin:0;font-size:12px">Ücretsiz katmanda günlük istek sınırı vardır; sınır dolunca istekler Falcı Teyze'nin kuyruğunda bekler. Ücretsiz katmanda gönderilen içerik Google tarafından ürün geliştirme için kullanılabilir.</p>
+    </div></div>` : ''}
     ${r.falci ? `<div class="panel" style="margin-bottom:14px"><div class="ph"><h3>Falcı Teyze kazancı</h3><a class="btn sm" href="#/settings">Fiyatlar</a></div><div class="pb"><div class="stats sm" style="margin:0">
       <div class="stat"><b>${r.paidCount}</b><span>Ücretli fal</span></div>
       <div class="stat"><b>${r.coinsSpent}</b><span>Harcanan jeton</span></div>
@@ -388,6 +395,17 @@ VIEWS.fal = async (main) => {
     </div></div></div>` : ''}
     <div class="panel"><div class="tw">${r.items.length ? `<table class="tbl"><thead><tr><th>Kullanıcı</th><th>Tür</th><th>Not</th><th>Gönderildi</th><th>Durum</th></tr></thead><tbody>
       ${r.items.map((x) => `<tr><td>${userCell(x.user)}</td><td>${FAL[x.type]}${x.price ? `<div class="muted" style="font-size:11.5px">${x.price} jeton</div>` : ''}</td><td class="muted" style="max-width:320px">${esc((x.note || '').slice(0, 120)) || '—'}${x.images?.length ? ` · ${x.images.length} fotoğraf` : ''}</td><td>${dt(x.at)}</td><td>${x.status === 'answered' ? `<span class="chip ok">Cevaplandı</span><div class="muted" style="font-size:11.5px">${dt(x.answeredAt)}</div>` : '<span class="chip warn">Bekliyor</span>'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Henüz fal isteği yok.</div>'}</div></div>`;
+  main.querySelector('.seg3')?.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-mode]'); if (!b || b.disabled) return;
+    if (b.dataset.mode === 'auto' && !confirm('Otomatik modda fal cevapları Falcı Teyze kontrol etmeden gönderilir. Açılsın mı?')) return;
+    try { await api('/falai', { method: 'PUT', body: { mode: b.dataset.mode } }); toast('Kaydedildi.'); VIEWS.fal(main); } catch (er) { toast(er.message); }
+  });
+  main.querySelector('.aitest')?.addEventListener('click', async (e) => {
+    const t = main.querySelector('.ait'); const out = main.querySelector('.aiout');
+    e.target.disabled = true; t.textContent = 'Deneniyor…';
+    try { const x = await api('/falai/test', { body: {} }); t.textContent = `✓ Çalışıyor · ${esc(x.model)} · ${(x.ms / 1000).toFixed(1)} sn`; out.hidden = false; out.innerHTML = `<div class="aisample">${esc(x.text).replace(/\n/g, '<br>')}</div>`; } catch (er) { t.textContent = `✗ ${er.message}`; }
+    e.target.disabled = false;
+  });
   main.querySelector('.settle')?.addEventListener('click', async (e) => {
     if (!confirm(`Falcı Teyze'nin ${tl(r.falci.balanceTL)} kazancı ödendi olarak işaretlensin mi? Gelir-gidere gider olarak eklenir.`)) return;
     try { await api(`/users/${e.target.dataset.id}/settle`, { body: {} }); toast('Ödendi olarak işaretlendi.'); VIEWS.fal(main); } catch (er) { toast(er.message); }

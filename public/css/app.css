@@ -1920,3 +1920,12 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .maint-plan { display: flex; align-items: center; gap: 12px; margin: 4px 14px 10px; padding: 12px 8px 12px 14px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--sun) 16%, var(--bg)); border: 1px solid color-mix(in srgb, var(--sun) 45%, transparent); }
 .maint-plan .mp-ic { font-size: 24px; } .maint-plan b { display: block; font-size: 14.5px; } .maint-plan small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.35; }
 .maint-plan .mp-x { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none; } .maint-plan .mp-x svg { width: 16px; height: 16px; }
+.fal-q > a.row { color: inherit; }
+.ai-box { display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: color-mix(in srgb, var(--uv) 9%, var(--bg)); border: 1px dashed color-mix(in srgb, var(--uv) 40%, transparent); }
+.ai-box.wait { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+.ai-box.err b { color: var(--hot); font-size: 14px; } .ai-box.err small { color: var(--muted); font-size: 12px; word-break: break-word; }
+.ai-h { font-weight: 750; font-size: 14px; } .ai-h small { color: var(--muted); font-weight: 500; margin-left: 4px; }
+.ai-t { min-height: 150px; font-size: 14.5px; line-height: 1.45; resize: vertical; }
+.ai-btns { display: flex; justify-content: flex-end; gap: 8px; }
+.ai-done { color: var(--muted); font-size: 12.5px; }
+.spinner.sm { width: 16px; height: 16px; border-width: 2px; margin: 0; }

@@ -8,6 +8,7 @@ import {
 
 const head = (title, to = '#/fal') => `<header class="topbar"><a class="ib" href="${to}" aria-label="Geri">${icon('back')}</a><div class="center">${esc(title)}</div><span class="ib"></span></header>`;
 const note = '<p class="fal-note">Fallar eğlence amaçlıdır.</p>';
+const aiNote = () => (state.config?.falAi && state.config.falAi !== 'off' ? '<p class="fal-note">Yorumlar yapay zeka desteğiyle hazırlanır, eğlence amaçlıdır.</p>' : note);
 const statusChip = (s) => (s === 'answered' ? '<span class="chip fal-ok">Cevaplandı</span>' : '<span class="chip fal-wait-chip">Bekliyor</span>');
 
 let shop = null;
@@ -39,7 +40,7 @@ async function hub(view) {
   const me = state.me;
   if (me.role === 'falci') return queue(view);
   view.innerHTML = `<header class="topbar"><a class="ib" href="#/" aria-label="Geri">${icon('back')}</a><h1 style="justify-content:center"><span>Fal</span></h1><span class="ib"></span></header>
-    <div class="fal-hero teyze"><span class="fz"></span><div class="grow"><b>Falcı Teyze</b><p>Fincanına, kartlarına ve yıldızlarına kendisi bakar. Cevabı Mesajlar’a düşer.</p></div></div>
+    <div class="fal-hero teyze"><span class="fz"></span><div class="grow"><b>Falcı Teyze</b><p>Fincanına, kartlarına ve yıldızlarına bakar. Cevabı Mesajlar’a düşer.</p></div></div>
     <div class="fal-grid">
       ${Object.entries(FAL_TYPES).map(([k, t]) => `<a class="fal-tile" href="#/fal/${k}"><span class="em">${t.em}</span><b>${t.name}</b><span>${{
     kahve: 'Fincanının fotoğraflarını gönder.', tarot: 'Üç kart çek, Falcı Teyze yorumlasın.', burc: 'Burcunu ve sorunu yaz.', uyum: 'Biriyle aranızdaki uyuma baksın.',
@@ -47,7 +48,7 @@ async function hub(view) {
     </div>
     <div class="fal-sub-box"></div>
     <a class="fal-bal" href="#/store">${icon('coin')}<span>Bakiye: <b class="cb">…</b> jeton</span><span class="link">Jeton al</span></a>
-    <div class="mine"></div>${note}`;
+    <div class="mine"></div>${aiNote()}`;
   const [f, mine] = await Promise.all([api('/fal/falci').catch(() => null), api('/fal/mine').catch(() => []), loadShop()]);
   if (shop) {
     view.querySelector('.cb').textContent = shop.coins;
@@ -105,21 +106,54 @@ async function queue(view) {
     const items = list.filter((x) => filter === 'all' || x.status === filter);
     const pend = list.filter((x) => x.status === 'pending').length;
     view.querySelector('[data-f="pending"]').textContent = pend ? `Bekleyenler · ${pend}` : 'Bekleyenler';
-    ql.innerHTML = items.length ? items.map((x) => `<a class="fal-q" href="#/chat/${esc(x.chatId)}">
-        <div class="row">${avatar(x.user, 44)}<div class="grow"><div class="b">${esc(x.user?.name || x.name)}</div><div class="sub muted">${FAL_TYPES[x.type].em} ${FAL_TYPES[x.type].name} · ${ago(x.at, true)}</div></div>${statusChip(x.status)}</div>
-        ${x.images?.length ? `<div class="fq-imgs">${x.images.map((u) => `<img src="${esc(u)}" alt="" loading="lazy">`).join('')}</div>` : ''}
-        ${x.cards?.length ? `<div class="fq-cards">${x.cards.map((c) => `<span class="chip">${c.em} ${esc(c.name)}${c.rev ? ' (ters)' : ''}</span>`).join('')}</div>` : ''}
+    ql.innerHTML = items.length ? items.map((x) => `<div class="fal-q" data-mid="${esc(x.messageId)}">
+        <a class="row" href="#/chat/${esc(x.chatId)}">${avatar(x.user, 44)}<div class="grow"><div class="b">${esc(x.user?.name || x.name)}</div><div class="sub muted">${FAL_TYPES[x.type].em} ${FAL_TYPES[x.type].name} · ${ago(x.at, true)}</div></div>${statusChip(x.status)}</a>
+        ${x.images?.length ? `<div class="fq-imgs">${x.images.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="" loading="lazy"></a>`).join('')}</div>` : ''}
+        ${x.cards?.length ? `<div class="fq-cards">${x.cards.map((c) => `<span class="chip"><small>${esc(c.pos || '')}</small> ${c.em} ${esc(c.name)}${c.rev ? ' (ters)' : ''}</span>`).join('')}</div>` : ''}
         ${x.note ? `<p class="fq-note">${esc(x.note)}</p>` : ''}
-      </a>`).join('')
+        ${x.status === 'pending' ? aiBox(x) : x.ai?.status === 'sent' ? `<div class="ai-done">${x.ai.auto ? '✨ Yapay zeka cevabı otomatik gönderildi' : x.ai.edited === false ? '✨ Taslak olduğu gibi gönderildi' : ''}</div>` : ''}
+      </div>`).join('')
       : `<div class="empty"><div class="big">${icon('check')}</div><h2>${filter === 'pending' ? 'Bekleyen fal yok' : 'Henüz yok'}</h2>${filter === 'pending' ? 'Yeni istek gelince bildirim alırsın.' : ''}</div>`;
   };
-  const load = async () => { list = await api('/fal/queue'); paint(); };
+  const aiOn = () => state.config?.falAi && state.config.falAi !== 'off';
+  function aiBox(x) {
+    const a = x.ai;
+    if (!a || a.status === 'none') return aiOn() ? '<div class="ai-box"><button class="btn sm ai-regen">✨ Yapay zeka taslağı hazırla</button></div>' : '';
+    if (a.status === 'working') return '<div class="ai-box wait"><span class="spinner sm"></span> ✨ Taslak hazırlanıyor…</div>';
+    if (a.status === 'error') return `<div class="ai-box err"><b>Taslak hazırlanamadı</b><small>${esc(a.error || '')}</small><button class="btn sm ai-regen">Tekrar dene</button></div>`;
+    if (a.status === 'ready') {
+      return `<div class="ai-box"><div class="ai-h">✨ Yapay zeka taslağı <small>okuyup düzenleyebilirsin</small></div>
+        <textarea class="field ai-t" rows="8">${esc(a.text)}</textarea>
+        <div class="ai-btns"><button class="btn sm ai-regen">Yeniden yaz</button><button class="btn primary sm ai-send">${icon('send')} Gönder</button></div></div>`;
+    }
+    return '';
+  }
+  ql.addEventListener('click', async (e) => {
+    const card = e.target.closest('[data-mid]'); if (!card) return;
+    const mid = card.dataset.mid;
+    try {
+      if (e.target.closest('.ai-regen')) { e.preventDefault(); await api(`/fal/ai/${mid}/regen`, { body: {} }); const it = list.find((x) => x.messageId === mid); if (it) { it.ai = { status: 'working' }; paint(); } }
+      if (e.target.closest('.ai-send')) {
+        e.preventDefault();
+        const btn = e.target.closest('.ai-send'); btn.disabled = true;
+        await api(`/fal/ai/${mid}/send`, { body: { text: card.querySelector('.ai-t').value } });
+        toast('Fal cevabı gönderildi 🔮'); load();
+      }
+    } catch (er) { toast(er.message); e.target.closest('button') && (e.target.closest('button').disabled = false); }
+  });
+  const load = async () => {
+    // düzenlenmekte olan taslakları koru
+    const typing = [...ql.querySelectorAll('.ai-t')].filter((t) => t === document.activeElement).map((t) => t.closest('[data-mid]').dataset.mid);
+    const fresh = await api('/fal/queue');
+    if (typing.length) fresh.forEach((x) => { if (typing.includes(x.messageId)) x.ai = list.find((y) => y.messageId === x.messageId)?.ai || x.ai; });
+    list = fresh; paint();
+  };
   await load();
   view.querySelector('.seg').onclick = (e) => {
     const b = e.target.closest('[data-f]'); if (!b) return;
     filter = b.dataset.f; view.querySelectorAll('.seg button').forEach((x) => x.classList.toggle('on', x === b)); paint();
   };
-  const offs = [on('message', (m) => { if (m.fal) load(); }), on('message:update', (m) => { if (m.fal) load(); })];
+  const offs = [on('message', (m) => { if (m.fal) load(); }), on('message:update', (m) => { if (m.fal) load(); }), on('falai', () => load())];
   return () => offs.forEach((f) => f());
 }
 

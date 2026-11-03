@@ -372,7 +372,7 @@ app.get('/api/config', (req, res) => {
   let uid = null;
   try { uid = jwt.verify((req.headers.authorization || '').slice(7), JWT_SECRET).id; } catch {}
   const { id, ...legal } = store.get('settings', 'legal') || {};
-  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now(), maintenance: maintenance(), maintPlan: (() => { const p = store.get('settings', 'maint_plan'); return p && !p.started ? { start: p.start, end: p.end || null, message: p.message || '' } : null; })(), features: { market: !!store.get('settings', 'market')?.enabled }, superMsgCoins: eco.get().superMsgCoins });
+  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now(), maintenance: maintenance(), maintPlan: (() => { const p = store.get('settings', 'maint_plan'); return p && !p.started ? { start: p.start, end: p.end || null, message: p.message || '' } : null; })(), features: { market: !!store.get('settings', 'market')?.enabled }, superMsgCoins: eco.get().superMsgCoins, falAi: featureCtx.falAiMode?.() || 'off' });
 });
 
 // ---------- Kimlik ----------
@@ -1252,6 +1252,7 @@ app.post('/api/fal', auth, (req, res) => {
   const msg = sendMessage(chat, req.user.id, { text: payload.note, fal: payload });
   if (!msg) return res.status(400).json({ error: 'Fal isteği gönderilemedi.' });
   featureCtx.useFalSub?.(req.user, fp.use);
+  featureCtx.onFalRequest?.(msg);
   if (price) {
     eco.spend(req.user.id, price, 'fal', { ref: msg.id });
     eco.earn(f.id, Math.round(price * eco.get().falciShare), 'fal', { ref: msg.id, fromId: req.user.id });
@@ -1272,7 +1273,7 @@ app.get('/api/fal/queue', auth, (req, res) => {
   const list = store.filter('messages', (m) => m.fal && store.get('chats', m.chatId)?.members.includes(req.user.id))
     .sort((a, b) => (a.fal.status === 'pending') === (b.fal.status === 'pending') ? b.at - a.at : (a.fal.status === 'pending' ? -1 : 1))
     .slice(0, 200)
-    .map((m) => ({ ...m.fal, chatId: m.chatId, messageId: m.id, user: brief(store.get('users', m.from)) }));
+    .map((m) => ({ ...m.fal, chatId: m.chatId, messageId: m.id, user: brief(store.get('users', m.from)), ai: featureCtx.falDraft?.(m.id) || null }));
   res.json(list);
 });
 
@@ -1312,12 +1313,13 @@ app.get('/api/music/featured', auth, wrap(async (req, res) => res.json({ items: 
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
   isBlocked, limited, isMedia, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
-  online, appEvent, falci, msgOut, falLock, shownAge, dropMediaCache: (id) => dropMediaCache(id),
+  online, appEvent, falci, msgOut, falLock, shownAge, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id),
 };
 require('./server/features')(app, featureCtx);
 require('./server/genel')(app, featureCtx);
 require('./server/market')(app, featureCtx);
 require('./server/social')(app, featureCtx);
+require('./server/falai')(app, featureCtx);
 gameOut = featureCtx.gameOut;
 
 // ---------- Statik ----------

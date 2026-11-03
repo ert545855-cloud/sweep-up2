@@ -396,7 +396,7 @@ module.exports = function social(app, ctx) {
       if (!u.zodiac) { notify(u.id, { type: 'order', text: '🔮 Haftalık burç yorumun için profiline burcunu ekle, sonra Fal’dan iste.', url: '/#/fal' }); return; }
       const chat = chatBetween(u.id, f.id);
       const msg = sendMessage(chat, u.id, { text: 'Haftalık abonelik burç yorumu', fal: { id: nanoid(8), type: 'burc', note: 'Haftalık abonelik burç yorumu', images: [], cards: [], partner: null, zodiac: u.zodiac, name: u.name, status: 'pending', at: now(), price: 0, sub: true } });
-      if (msg) store.update('users', u.id, { falSub: { ...user(u.id).falSub, burcWeek: week() } });
+      if (msg) { store.update('users', u.id, { falSub: { ...user(u.id).falSub, burcWeek: week() } }); ctx.onFalRequest?.(msg); }
     });
   }, 15 * 60000).unref();
 

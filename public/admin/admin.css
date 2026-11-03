@@ -256,3 +256,8 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .maintf .checks input:disabled + * , .maintf .checks label:has(input:disabled) { opacity: .5; }
 .maintp .kv { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13.5px; }
 .maintp .kv span { color: var(--muted); } .maintp .kv b { text-align: right; font-weight: 650; }
+.seg3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.seg3 button { display: grid; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--panel, transparent); cursor: pointer; }
+.seg3 button small { color: var(--muted); font-size: 11.5px; } .seg3 button.on { border-color: var(--accent, #ff5a5f); background: color-mix(in srgb, var(--accent, #ff5a5f) 8%, transparent); }
+.seg3 button:disabled { opacity: .55; cursor: not-allowed; }
+.aisample { padding: 12px 14px; border-radius: 12px; background: var(--soft); font-size: 13.5px; line-height: 1.5; max-height: 260px; overflow: auto; }

@@ -40,7 +40,7 @@ export const DOCS = {
 <h3>Kimler görebilir</h3>
 <p>Profilin ve herkese açık paylaşımların diğer üyelere görünür. Gizli hesap açarsan gönderi ve hikayelerini sadece onayladığın takipçiler görür. Mesajların yalnızca sohbetteki kişilere iletilir; yönetim ekibi yalnızca bir şikayet ya da otomatik moderasyon kaydı olduğunda ilgili mesajı görebilir. Verilerini satmayız ve reklam amacıyla üçüncü kişilerle paylaşmayız.</p>
 <h3>Hizmet sağlayıcılar</h3>
-<p>Uygulama bulut sunucularda barındırılır; anlık bildirimler tarayıcı/işletim sistemi bildirim servisleri üzerinden, sesli ve görüntülü aramalar ise gerektiğinde bir aktarma (TURN) sunucusu üzerinden iletilir. Bu sağlayıcılar yurt dışında bulunabilir.</p>
+<p>Uygulama bulut sunucularda barındırılır; anlık bildirimler tarayıcı/işletim sistemi bildirim servisleri üzerinden, sesli ve görüntülü aramalar ise gerektiğinde bir aktarma (TURN) sunucusu üzerinden iletilir. Fal isteklerinde yorum hazırlamak için fal notun, burç ve kart bilgilerin ve fincan fotoğrafların Google’ın yapay zeka hizmetine (Gemini API) gönderilir; adın, kullanıcı adın ve iletişim bilgilerin gönderilmez. Bu sağlayıcılar yurt dışında bulunabilir.</p>
 <h3>Saklama süresi</h3>
 <p>Verilerini hesabın açık olduğu sürece saklarız. Hikayeler 24 saat sonra, kaybolan mesajlar seçtiğin süre sonunda silinir. Hesabını sildiğinde profilin, paylaşımların, eşleşmelerin ve mesajların kalıcı olarak silinir; yasal olarak saklamamız gereken ödeme kayıtları ilgili süre boyunca tutulur.</p>
 <h3>Hakların</h3>
