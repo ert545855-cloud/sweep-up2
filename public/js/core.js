@@ -103,7 +103,7 @@ export function connectSocket() {
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',
     'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'people:new', 'likes:new',
     'call:incoming', 'call:accepted', 'call:ended', 'call:taken', 'call:signal',
-    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup']
+    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event']
     .forEach((ev) => s.on(ev, (d) => emit(ev, d)));
   s.on('presence', (d) => { state.presence.set(d.userId, d); emit('presence', d); });
   s.on('presence:all', (ids) => { ids.forEach((id) => state.presence.set(id, { userId: id, online: true })); emit('presence', {}); });
@@ -181,6 +181,8 @@ export const FILTERS = [
   ['sinema', 'Sinema', 'contrast(1.2) saturate(.85) sepia(.18) hue-rotate(160deg) brightness(.95)'],
   ['gece', 'Gece', 'hue-rotate(200deg) saturate(.85) brightness(.85) contrast(1.2)'],
   ['neon', 'Neon', 'saturate(2.2) contrast(1.2) hue-rotate(-12deg)'],
+  ['cadi', 'Cadı', 'sepia(.6) saturate(2.1) hue-rotate(-22deg) contrast(1.3) brightness(.82)'],
+  ['hayalet', 'Hayalet', 'grayscale(.7) contrast(.9) brightness(1.18) sepia(.2) hue-rotate(170deg) saturate(1.6)'],
 ];
 export const filterCss = (id) => (FILTERS.find((f) => f[0] === id) || FILTERS[0])[2];
 

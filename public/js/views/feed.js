@@ -3,6 +3,7 @@ import {
   state, api, esc, on, isOn, toast, enablePush, pushSupported, pushEnabled, pushHint, logo, openChatWith, nm,
 } from '../core.js';
 import { postCard, wirePost, autoplay } from '../components.js';
+import { paintEventBanner } from '../event.js';
 
 export default async function feed(view) {
   view.innerHTML = `
@@ -14,6 +15,7 @@ export default async function feed(view) {
       <a class="ib" href="#/notifications" aria-label="Bildirimler">${icon('bell')}<i class="dot-badge nb" style="top:8px;right:8px;${state.badges.notifications ? '' : 'display:none'}"></i></a>
     </header>
     <div class="stories" aria-label="Hikayeler ve canlı yayınlar"></div>
+    <div class="event-slot"></div>
     <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
     <a class="genel-row feedg" href="#/genel"><span class="genel-ic">${icon('users')}</span><span class="grow"><b>Genel sohbet</b><small>Herkes burada, sen de katıl</small></span><span class="go-chip">Sohbete gir</span></a>
     <div class="push-slot"></div>
@@ -80,6 +82,7 @@ export default async function feed(view) {
   offs.push(on('people:new', loadPeople));
   offs.push(on('reconnected', () => { loadStories(); loadPeople(); }));
   offs.push(on('badges', (b) => { view.querySelector('.nb').style.display = b.notifications ? '' : 'none'; }));
+  offs.push(paintEventBanner(view.querySelector('.event-slot')));
 
   // Bildirim izni kartı
   (async () => {

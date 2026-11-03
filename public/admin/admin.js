@@ -726,9 +726,38 @@ VIEWS.database = async (main) => {
   });
 };
 
+// ---- Etkinlik teması (ör. Cadılar Bayramı haftası) ----
+const dtl = (ms) => { if (!ms) return ''; const d = new Date(ms); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+const fdt = (ms) => new Date(ms).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+function eventPanel(s, owner) {
+  const a = s.active;
+  const st = !a ? 'Kapalı' : s.now < a.start ? `${fdt(a.start)} tarihinde başlayacak` : `Şu an açık · ${fdt(a.end)} tarihinde biter`;
+  return `<form class="panel evf" style="margin-top:14px;max-width:640px"><div class="ph"><h3>Etkinlik teması 🎃</h3><span class="chip ${a && s.now >= a.start ? 'ok' : ''}">${esc(st)}</span></div><div class="pb fgrid">
+    <label>Tema<select class="field" name="kind" ${owner ? '' : 'disabled'}><option value="none" ${s.kind === 'none' ? 'selected' : ''}>Yok</option>${s.kinds.map((k) => `<option value="${k.id}" ${s.kind === k.id ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></label>
+    <label>Başlangıç<input class="field" type="datetime-local" name="start" value="${dtl(s.start)}" ${owner ? '' : 'disabled'}></label>
+    <label>Bitiş<input class="field" type="datetime-local" name="end" value="${dtl(s.end)}" ${owner ? '' : 'disabled'}></label>
+    <p class="muted" style="margin:0;font-size:12.5px">Tema bu aralıkta herkeste açılır (yarasalar, örümcek, hayalet, balkabağı, cadı şapkalı logo, akışta duyuru kartı). Bitişte kendiliğinden kalkar ve herkesin kendi seçtiği tema geri gelir. Kullanıcılar Ayarlar’dan kapatabilir.</p>
+    ${owner ? `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary">${icon('check')} Etkinliği kaydet</button><button type="button" class="btn now">Şimdi başlat (7 gün)</button></div>` : ''}</div></form>`;
+}
+function wireEventPanel(main) {
+  const f = main.querySelector('.evf'); if (!f) return;
+  const save = async (body) => {
+    try {
+      const r = await api('/event', { method: 'PUT', body });
+      toast(r.active ? 'Etkinlik teması kaydedildi.' : 'Etkinlik teması kapatıldı.');
+      render();
+    } catch (er) { toast(er.message); }
+  };
+  f.onsubmit = (ev) => { ev.preventDefault(); save({ kind: f.kind.value, start: new Date(f.start.value).getTime(), end: new Date(f.end.value).getTime() }); };
+  f.querySelector('.now')?.addEventListener('click', () => {
+    const kind = f.kind.value === 'none' ? 'halloween' : f.kind.value;
+    const s = Date.now(); save({ kind, start: s, end: s + 7 * 86400000 });
+  });
+}
+
 // ---- Ayarlar: ödeme, fiyatlar, yasal ----
 VIEWS.settings = async (main) => {
-  const [e, legal] = await Promise.all([api('/economy'), api('/legal')]);
+  const [e, legal, evs] = await Promise.all([api('/economy'), api('/legal'), api('/event').catch(() => null)]);
   const owner = S.me.role === 'owner';
   const rows = (list, cols) => list.map((x, i) => `<div class="erow" data-i="${i}">${cols.map(([k, ph, w, type]) => `<input class="field" data-k="${k}" value="${esc(x[k] ?? '')}" placeholder="${ph}" style="width:${w}" ${type ? `type="${type}" step="any"` : ''}>`).join('')}<button type="button" class="btn sm danger rmr">${icon('trash')}</button></div>`).join('');
   const PACK = [['coins', 'Jeton', '100px', 'number'], ['price', 'Fiyat ₺', '110px', 'number'], ['tag', 'Etiket', '130px']];
@@ -762,7 +791,9 @@ VIEWS.settings = async (main) => {
         <label>Adres<input class="field" name="laddress" value="${esc(legal.address || '')}"></label>
         <p class="muted" style="margin:0;font-size:12.5px">Gizlilik politikası ve KVKK metninde gösterilir.</p></div></div>
       ${owner ? `<div class="savebar"><button class="btn primary">${icon('check')} Kaydet</button></div>` : ''}
-    </form>`;
+    </form>
+    ${evs ? eventPanel(evs, owner) : ''}`;
+  wireEventPanel(main);
   const f = main.querySelector('form');
   const COLS = { plans: PLAN, packs: PACK, gifts: GIFT };
   f.onclick = (ev) => {

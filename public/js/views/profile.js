@@ -3,11 +3,12 @@ import {
   state, api, esc, num, avatar, sheet, toast, openChatWith, saved, enablePush, disablePush, pushEnabled, pushHint, blockUser, reportUser, unmatchUser, lastSeen, isOn, SKINS, applySkin, currentSkin, nm, richText,
 } from '../core.js';
 import { gridTile } from '../components.js';
+import { eventOn, eventInfo } from '../event.js';
 
 export function themeMenu() {
   const mode = localStorage.getItem('su_theme') || 'system';
   const cur = currentSkin();
-  sheet('Tema', `<div class="skin-grid">${SKINS.map((k) => `<button class="skin-opt ${cur === k.id ? 'on' : ''}" data-s="${k.id}">
+  sheet('Tema', `${eventOn() ? `<p class="ev-note">🎃 Şu an <b>${esc(eventInfo().name)}</b> teması açık. Seçtiğin tema etkinlik bitince görünür; istersen Ayarlar’dan etkinlik temasını kapatabilirsin.</p>` : ''}<div class="skin-grid">${SKINS.map((k) => `<button class="skin-opt ${cur === k.id ? 'on' : ''}" data-s="${k.id}">
       <span class="pv" style="background:${k.pv}"><i style="background:${k.a}"></i><i style="background:${k.a}"></i></span>
       <b>${esc(k.name)}</b><span>${esc(k.note)}</span></button>`).join('')}</div>
     <div class="mode" ${cur === 'gunbatimi' ? '' : 'hidden'}><div class="group-t" style="padding-left:16px">Gün batımı modu</div>

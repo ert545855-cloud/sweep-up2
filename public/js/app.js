@@ -5,6 +5,7 @@ import {
 import { initCalls } from './calls.js';
 import { checkVersion, recover, afterBoot } from './update.js';
 import { maybeShowInstall } from './install.js';
+import { initEvent } from './event.js';
 
 const routes = [
   [/^\/?$/, 'feed', { tab: 'home' }],
@@ -240,6 +241,7 @@ async function boot() {
   }
   if (!state.config) state.config = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));
   afterBoot(state.config?.version);
+  initEvent(state.config);
   // İlk ziyarette telefona yükleme kılavuzu (iPhone: Safari → Ana Ekrana Ekle)
   setTimeout(maybeShowInstall, state.token ? 4000 : 1500);
   // Beklenmeyen modül hataları (eski sürüm kalıntısı) → güncelleme ekranı

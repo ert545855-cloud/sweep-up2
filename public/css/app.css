@@ -1129,3 +1129,128 @@ a.snd-line { color: #fff; }
 .ins-cta span { flex: 1; display: grid; }
 .ins-cta small { color: var(--muted); font-size: 12.5px; }
 .ins-cta > svg { width: 20px; height: 20px; color: var(--uv); }
+
+/* ===================== Etkinlik teması: Cadılar Bayramı ===================== */
+/* data-event, seçili temanın (data-skin) üstüne yazar; etkinlik bitince kaldırılır. */
+:root[data-event="halloween"] {
+  color-scheme: dark;
+  --bg: #0e0a14; --surface: #1a1322; --surface-2: #251b30; --text: #f6efe6; --muted: #ab9fb8;
+  --line: #2e2338; --uv: #ff7a1a; --uv-press: #f06a0a; --uv-soft: rgba(255, 122, 26, .14);
+  --grad: linear-gradient(120deg, #ffb13b 0%, #ff6a1a 48%, #9b3dff 100%); --on-uv: #ffffff; --hot: #ff5a2a;
+  --shadow: 0 14px 34px -14px rgba(0, 0, 0, .85); --glow: rgba(255, 122, 26, .5);
+  --page: radial-gradient(60% 34% at 108% -6%, rgba(255, 122, 26, .30), transparent 70%),
+          radial-gradient(60% 36% at -12% 104%, rgba(140, 60, 255, .30), transparent 70%),
+          radial-gradient(30% 18% at 82% 6%, rgba(255, 236, 190, .10), transparent 70%), #0e0a14;
+}
+:root[data-event] body, :root[data-event] #app { background: var(--page); background-attachment: fixed; }
+:root[data-event] #app { border-color: var(--line); }
+:root[data-event] .btn.primary, :root[data-event] #tabbar .center, :root[data-event] .swipe-btns .like, :root[data-event] .composer .go, :root[data-event] .me .msg { box-shadow: 0 8px 22px -8px var(--glow); }
+:root[data-event] .person-card, :root[data-event] .push-card, :root[data-event] .stats, :root[data-event] .group, :root[data-event] .fal-tile { box-shadow: inset 0 0 0 1px var(--line), 0 0 28px -18px var(--glow); }
+:root[data-event] .card { box-shadow: 0 0 0 1px var(--line), 0 18px 40px -18px var(--glow); }
+/* Pembe temanın buzlu cam görünümünü etkinlik süresince kapat */
+:root[data-event][data-skin="pembe"] :is(.person-card, .push-card, .stats, .group, .field, .composer .box, .them .msg, .fal-tile, .post-actions button) { -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root[data-event][data-skin="pembe"] :is(.composer, .topbar) { background: color-mix(in srgb, var(--bg) 82%, transparent); }
+:root[data-event] .auth::before, :root[data-event] .auth::after { display: none; }
+:root[data-event] .wordmark { color: var(--text); }
+
+/* Logoya cadı şapkası */
+:root[data-event="halloween"] .wordmark { position: relative; }
+:root[data-event="halloween"] .wordmark::before {
+  content: ""; position: absolute; left: -6px; top: -9px; width: 27px; height: 23px; transform: rotate(-20deg); pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 56'%3E%3Cellipse cx='32' cy='47' rx='30' ry='7' fill='%23241532'/%3E%3Cpath d='M14 46C22 34 26 20 31 4c5-2 11 2 14 10l-6 2c3 10 7 20 11 30z' fill='%23332046'/%3E%3Cpath d='M16 39q16 6 32 0l2 7q-18 6-36 0z' fill='%23ff7a1a'/%3E%3Crect x='28' y='38' width='8' height='8' rx='1.5' fill='none' stroke='%23ffd36b' stroke-width='2'/%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,.5)); animation: hat-tilt 4s ease-in-out infinite; transform-origin: 70% 90%;
+}
+:root[data-event="halloween"] .auth .wordmark::before { left: calc(50% - 128px); top: -22px; width: 50px; height: 44px; }
+@keyframes hat-tilt { 0%, 100% { transform: rotate(-20deg); } 50% { transform: rotate(-12deg) translateY(-1px); } }
+
+/* Dock'taki orta düğmeye balkabağı */
+:root[data-event="halloween"] #tabbar .center { position: relative; }
+:root[data-event="halloween"] #tabbar .center::before {
+  content: ""; position: absolute; left: -9px; top: -9px; width: 24px; height: 22px; transform: rotate(-12deg);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 60'%3E%3Cpath d='M31 12c0-5 2-9 7-11l2 3c-4 2-5 5-5 8z' fill='%233f7a2a'/%3E%3Cellipse cx='20' cy='35' rx='15' ry='21' fill='%23e8620c'/%3E%3Cellipse cx='44' cy='35' rx='15' ry='21' fill='%23e8620c'/%3E%3Cellipse cx='32' cy='35' rx='15' ry='23' fill='%23ff7a1a'/%3E%3Cg fill='%23ffd36b'%3E%3Cpath d='M17 28l8-6 3 9zM47 28l-8-6-3 9z'/%3E%3Cpath d='M15 39c6 7 28 7 34 0l-3 7-4-3-4 4-4-4-4 4-4-4-4 3z'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));
+}
+
+/* Eşleşme ekranı: mor-turuncu gece ve uçuşan yarasalar */
+:root[data-event="halloween"] .match-modal { background: radial-gradient(70% 45% at 50% 30%, rgba(255, 122, 26, .28), transparent 70%), radial-gradient(80% 50% at 50% 110%, rgba(140, 60, 255, .35), transparent 70%), rgba(10, 6, 16, .94); }
+:root[data-event="halloween"] .match-modal::before, :root[data-event="halloween"] .match-modal::after {
+  content: ""; position: absolute; left: 50%; top: 45%; width: 70px; height: 28px; pointer-events: none; opacity: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 24'%3E%3Cpath fill='%23140b1c' d='M32 10c2-4 4-5 5-5 0 2 0 3 1 4 6-6 16-8 26-4-5 2-7 6-7 11-3-3-7-3-10 0-1-3-4-4-7-3-2 3-5 6-8 8-3-2-6-5-8-8-3-1-6 0-7 3-3-3-7-3-10 0 0-5-2-9-7-11 10-4 20-2 26 4 1-1 1-2 1-4 1 0 3 1 5 5z'/%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 0 6px rgba(255, 122, 26, .7)); animation: bat-out-l 1.8s .15s ease-out forwards;
+}
+:root[data-event="halloween"] .match-modal::after { animation-name: bat-out-r; animation-delay: .35s; }
+@keyframes bat-out-l { 0% { opacity: 0; transform: translate(-50%, 0) scale(.3); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(-260px, -340px) scale(1.4) rotate(-14deg); } }
+@keyframes bat-out-r { 0% { opacity: 0; transform: translate(-50%, 0) scale(.3); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(200px, -380px) scale(1.2) rotate(12deg); } }
+
+/* Süsleme katmanı */
+#fx-layer { position: fixed; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 520px; z-index: 36; pointer-events: none; overflow: hidden; contain: strict; }
+body.dark-ui #fx-layer, body.fx-hide #fx-layer { display: none; }
+body.no-tabs #fx-layer :is(.fx-ghost, .fx-fog, .fx-embers) { display: none; }
+
+.fx-web { position: absolute; top: 0; right: 0; width: 92px; height: 92px; color: rgba(255, 255, 255, .22); }
+.fx-web svg { width: 100%; height: 100%; display: block; }
+
+.fx-spider { position: absolute; top: -150px; left: 58%; width: 22px; animation: spider-drop 11s ease-in-out infinite; }
+.fx-spider::before { content: ""; display: block; width: 1px; height: 150px; margin: 0 auto; background: linear-gradient(rgba(255,255,255,0), rgba(255,255,255,.4)); }
+.fx-spider svg { display: block; width: 22px; height: 20px; margin-top: -2px; filter: drop-shadow(0 0 4px rgba(255, 122, 26, .45)); animation: spider-sway 3s ease-in-out infinite; transform-origin: 50% 0; }
+@keyframes spider-drop { 0%, 100% { transform: translateY(40px); } 35% { transform: translateY(128px); } 50% { transform: translateY(118px); } 70% { transform: translateY(132px); } }
+@keyframes spider-sway { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
+
+.fx-bats .bat { position: absolute; left: -70px; top: 90px; width: 46px; height: 18px; opacity: 0; animation: bat-fly 16s linear infinite; }
+.fx-bats .bat svg { width: 100%; height: 100%; display: block; fill: #120a1a; filter: drop-shadow(0 0 5px rgba(255, 122, 26, .65)); animation: bat-flap .22s ease-in-out infinite alternate; transform-origin: 50% 45%; }
+.fx-bats .b2 { top: 150px; width: 32px; height: 13px; animation-delay: 1.4s; animation-duration: 18s; }
+.fx-bats .b3 { top: 60px; width: 26px; height: 10px; animation-delay: 8s; animation-duration: 14s; }
+.fx-bats .b3 svg { animation-duration: .18s; }
+@keyframes bat-flap { from { transform: scaleY(1); } to { transform: scaleY(.35) translateY(2px); } }
+@keyframes bat-fly {
+  0% { opacity: 0; transform: translate(0, 0); }
+  2% { opacity: 1; }
+  10% { transform: translate(160px, -30px); }
+  20% { transform: translate(320px, 26px); }
+  30% { opacity: 1; transform: translate(480px, -12px); }
+  32%, 100% { opacity: 0; transform: translate(640px, -40px); }
+}
+
+.fx-embers i { position: absolute; bottom: -10px; border-radius: 50%; background: #ffb257; box-shadow: 0 0 8px 2px rgba(255, 122, 26, .7); opacity: 0; animation: ember linear infinite; }
+@keyframes ember { 0% { opacity: 0; transform: translate(0, 0); } 12% { opacity: .85; } 80% { opacity: .35; } 100% { opacity: 0; transform: translate(var(--dx, 0), -92vh); } }
+
+.fx-ghost { position: absolute; left: 0; bottom: calc(var(--dock-h) + 70px + var(--safe-b)); width: 46px; animation: ghost-cross 26s ease-in-out infinite; }
+.fx-ghost span { display: block; animation: ghost-bob 2.6s ease-in-out infinite; }
+.fx-ghost svg { width: 46px; height: 55px; display: block; opacity: .82; filter: drop-shadow(0 0 12px rgba(220, 200, 255, .55)); }
+@keyframes ghost-cross { 0% { transform: translateX(-80px); opacity: 0; } 4% { opacity: 1; } 40% { opacity: 1; transform: translateX(min(100vw, 520px)); } 41%, 100% { opacity: 0; transform: translateX(min(100vw, 520px)); } }
+@keyframes ghost-bob { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-14px) rotate(4deg); } }
+
+.fx-fog { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; opacity: .55; }
+.fx-fog i { position: absolute; inset: 0; width: 200%;
+  background: radial-gradient(40% 60% at 15% 100%, rgba(190, 170, 230, .22), transparent 70%), radial-gradient(35% 50% at 45% 100%, rgba(255, 160, 90, .12), transparent 70%), radial-gradient(40% 60% at 75% 100%, rgba(190, 170, 230, .2), transparent 70%);
+  animation: fog 38s linear infinite; }
+.fx-fog i + i { animation-duration: 56s; animation-direction: reverse; opacity: .7; }
+@keyframes fog { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-bats, .fx-embers, .fx-ghost { display: none; }
+  .fx-spider, .fx-spider svg, .fx-fog i, :root[data-event] .wordmark::before { animation: none; }
+  .fx-spider { transform: translateY(70px); }
+  :root[data-event] .match-modal::before, :root[data-event] .match-modal::after { display: none; }
+}
+
+/* Akıştaki etkinlik kartı */
+.event-slot:empty { display: none; }
+.ev-card { position: relative; margin: 4px 14px 12px; padding: 14px 14px 14px 12px; border-radius: 22px; display: flex; align-items: center; gap: 12px; overflow: hidden;
+  background: radial-gradient(90% 120% at 0% 0%, rgba(255, 122, 26, .30), transparent 60%), radial-gradient(80% 120% at 100% 100%, rgba(140, 60, 255, .32), transparent 60%), var(--surface);
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 26, .28), 0 14px 30px -18px rgba(255, 122, 26, .6); animation: up .35s cubic-bezier(.2,.8,.2,1); }
+.ev-card .ev-art { width: 54px; flex: none; }
+.ev-card .ev-txt { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.ev-card .ev-txt > b { font-family: var(--display); font-size: 17px; letter-spacing: -.02em; }
+.ev-card .ev-txt span { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.ev-card .ev-txt span b { color: var(--text); }
+.ev-card .ev-txt small { font-size: 11.5px; font-weight: 700; color: var(--uv); }
+.ev-card .ev-x { position: absolute; top: 6px; right: 8px; width: 26px; height: 26px; border-radius: 50%; color: var(--muted); font-size: 12px; display: grid; place-items: center; background: transparent; border: 0; }
+.ev-card .btn { flex: none; margin-top: 14px; }
+svg.pumpkin { width: 100%; height: auto; display: block; overflow: visible; animation: pumpkin-bob 3.2s ease-in-out infinite; transform-origin: 50% 100%; }
+svg.pumpkin .face { animation: flicker 2.4s steps(1) infinite; filter: drop-shadow(0 0 3px #ffb13b); }
+@keyframes pumpkin-bob { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg) translateY(-2px); } }
+@keyframes flicker { 0%, 100% { opacity: 1; } 8% { opacity: .55; } 10% { opacity: 1; } 42% { opacity: .75; } 44% { opacity: 1; } 71% { opacity: .5; } 73% { opacity: .95; } }
+.ev-it .ev-ic { width: 24px; display: grid; place-items: center; }
+.ev-note { margin: 0 16px 12px; padding: 10px 12px; border-radius: 14px; background: var(--uv-soft); font-size: 13px; line-height: 1.4; }
+@media (prefers-reduced-motion: reduce) { svg.pumpkin, svg.pumpkin .face { animation: none; } }

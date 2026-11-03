@@ -333,11 +333,13 @@ app.get('/api/announcement', auth, (req, res) => {
   res.json({ id: p.annId, title: p.title, text: p.text, url: p.url, at: p.at });
 });
 app.get('/api/version', (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ version: APP_VERSION }); });
+const appEvent = require('./server/event');
+app.get('/api/event', (req, res) => res.json({ event: appEvent.current(store), now: Date.now() }));
 app.get('/api/config', (req, res) => {
   let uid = null;
   try { uid = jwt.verify((req.headers.authorization || '').slice(7), JWT_SECRET).id; } catch {}
   const { id, ...legal } = store.get('settings', 'legal') || {};
-  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION });
+  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now() });
 });
 
 // ---------- Kimlik ----------
@@ -721,7 +723,7 @@ app.post('/api/posts/:id/comments', auth, (req, res) => {
 
 // ---------- Hikayeler (24 saat) ----------
 const storyAlive = (s) => now() - s.at < DAY;
-const FILTERS = ['canli', 'siyahbeyaz', 'noir', 'sicak', 'soguk', 'altin', 'vintage', 'retro', 'soluk', 'pastel', 'pembe', 'dram', 'sinema', 'gece', 'neon'];
+const FILTERS = ['canli', 'siyahbeyaz', 'noir', 'sicak', 'soguk', 'altin', 'vintage', 'retro', 'soluk', 'pastel', 'pembe', 'dram', 'sinema', 'gece', 'neon', 'cadi', 'hayalet'];
 function cleanSticker(st) {
   if (!st || typeof st !== 'object') return null;
   const y = Math.max(5, Math.min(90, +st.y || 60));

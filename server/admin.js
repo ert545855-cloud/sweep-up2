@@ -587,6 +587,25 @@ module.exports = function mountAdmin(app, ctx) {
     res.json(doc);
   });
 
+  // ================= Etkinlik teması =================
+  const appEvent = require('./event');
+  app.get('/api/admin/event', adminAuth, (req, res) => {
+    const e = appEvent.settings(store);
+    res.json({ ...e, kinds: Object.entries(appEvent.EVENTS).map(([id, v]) => ({ id, name: v.name })), active: appEvent.current(store), now: now() });
+  });
+  app.put('/api/admin/event', adminAuth, owner, (req, res) => {
+    const b = req.body || {};
+    const kind = b.kind === 'none' ? 'none' : String(b.kind || '');
+    if (kind !== 'none' && !appEvent.EVENTS[kind]) return res.status(400).json({ error: 'Etkinlik bulunamadı.' });
+    const start = +b.start; const end = +b.end;
+    if (kind !== 'none' && (!start || !end || end <= start)) return res.status(400).json({ error: 'Bitiş, başlangıçtan sonra olmalı.' });
+    store.put('settings', { id: 'event', kind, start: start || null, end: end || null });
+    const ev = appEvent.current(store);
+    io.emit('event', { event: ev, now: now() });
+    audit(req.admin, kind === 'none' ? 'etkinlik temasını kapattı' : 'etkinlik temasını ayarladı', null, ev ? `${ev.name}: ${new Date(ev.start).toISOString()} → ${new Date(ev.end).toISOString()}` : '');
+    res.json({ ok: true, active: ev });
+  });
+
   // ================= Profil doğrulama =================
   app.get('/api/admin/verifications', adminAuth, (req, res) => {
     const st = String(req.query.status || 'pending');
