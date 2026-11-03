@@ -230,6 +230,15 @@ function msgOut(m) {
   return o;
 }
 
+// Falcı Teyze kuralı: ona sadece fal isteğiyle yazılır; o da sadece fal isteyenlere yazar
+function falLock(chat, fromId) {
+  if (!chat || chat.isGroup) return null;
+  const me = store.get('users', fromId);
+  const other = store.get('users', chat.members.find((m) => m !== fromId));
+  if (other?.role === 'falci' && me?.role !== 'falci') return 'Falcı Teyze’ye sadece fal isteğiyle yazabilirsin.';
+  if (me?.role === 'falci' && other?.role !== 'falci' && !store.find('messages', (m) => m.chatId === chat.id && m.fal)) return 'Sadece fal isteyenlere yazabilirsin.';
+  return null;
+}
 function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal, location, quote, game, plan, superMsg, viewOnce }) {
   text = String(text || '').slice(0, 4000).trim();
   let loc = null;
@@ -237,6 +246,7 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
     loc = { lat: Math.round(+location.lat * 1e5) / 1e5, lng: Math.round(+location.lng * 1e5) / 1e5, label: String(location.label || '').slice(0, 80) };
   }
   if (!text && !media && !fal && !loc && !game && !plan) return null;
+  if (!system && !fal && falLock(chat, fromId)) return null;
   if (!chat.isGroup) {
     const other = chat.members.find((m) => m !== fromId);
     if (isBlocked(fromId, other)) return null;
@@ -849,6 +859,8 @@ app.post('/api/stories/:id/reply', auth, (req, res) => {
   const s = store.get('stories', req.params.id);
   const text = String(req.body?.text || '').trim();
   if (!s || !text || s.userId === req.user.id) return res.status(400).json({ error: 'Yanıt gönderilemedi.' });
+  const owner = store.get('users', s.userId);
+  if (owner?.role === 'falci' || req.user.role === 'falci') return res.status(403).json({ error: 'Falcı Teyze’ye sadece fal isteğiyle yazabilirsin.' });
   const chat = chatBetween(req.user.id, s.userId);
   const msg = sendMessage(chat, req.user.id, { text, story: { id: s.id, media: s.mediaType === 'image' ? s.media : null } });
   if (!msg) return res.status(403).json({ error: 'Bu kişiye mesaj gönderemezsin.' });
@@ -1121,12 +1133,13 @@ app.get('/api/chats/:id', auth, (req, res) => {
   const t = now();
   const msgs = store.filter('messages', (m) => m.chatId === c.id && !(m.hiddenFor || []).includes(req.user.id) && !(m.expiresAt && m.expiresAt < t)).sort((a, b) => a.at - b.at);
   const noReceipts = priv(req.user).hideRead;
-  res.json({ ...chatOut(c, req.user.id), messages: msgs.slice(-400).map((m) => (noReceipts ? { ...msgOut(m), readBy: [m.from] } : msgOut(m))) });
+  res.json({ ...chatOut(c, req.user.id), falLock: falLock(c, req.user.id), messages: msgs.slice(-400).map((m) => (noReceipts ? { ...msgOut(m), readBy: [m.from] } : msgOut(m))) });
 });
 
 app.post('/api/chats/:id/messages', auth, (req, res) => {
   const c = store.get('chats', req.params.id);
   if (!c || !c.members.includes(req.user.id)) return res.status(404).json({ error: 'Sohbet bulunamadı.' });
+  const lock = falLock(c, req.user.id); if (lock) return res.status(403).json({ error: lock, falLock: true });
   const msg = sendMessage(c, req.user.id, { ...(req.body || {}), system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false });
   if (!msg) return res.status(400).json({ error: 'Mesaj gönderilemedi.' });
   res.json(msgOut(msg));
@@ -1146,7 +1159,8 @@ app.delete('/api/chats/:id', auth, (req, res) => {
 function systemMsg(chat, text) { return sendMessage(chat, chat.members[0], { text, system: true }); }
 app.post('/api/groups', auth, (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 50);
-  const ids = [...new Set((req.body?.memberIds || []).map(String))].filter((id) => id !== req.user.id && store.get('users', id) && !isBlocked(req.user.id, id));
+  if (req.user.role === 'falci') return res.status(403).json({ error: 'Falcı Teyze grup kuramaz.' });
+  const ids = [...new Set((req.body?.memberIds || []).map(String))].filter((id) => id !== req.user.id && store.get('users', id) && store.get('users', id).role !== 'falci' && !isBlocked(req.user.id, id));
   if (!name) return res.status(400).json({ error: 'Gruba bir ad ver.' });
   if (!ids.length) return res.status(400).json({ error: 'En az bir kişi seç.' });
   const chat = store.put('chats', {
@@ -1171,7 +1185,7 @@ app.patch('/api/groups/:id', auth, (req, res) => {
 app.post('/api/groups/:id/members', auth, (req, res) => {
   const c = store.get('chats', req.params.id);
   if (!c?.isGroup || !c.members.includes(req.user.id)) return res.status(404).json({ error: 'Grup bulunamadı.' });
-  const add = (req.body?.userIds || []).map(String).filter((id) => !c.members.includes(id) && store.get('users', id) && !isBlocked(req.user.id, id));
+  const add = (req.body?.userIds || []).map(String).filter((id) => !c.members.includes(id) && store.get('users', id) && store.get('users', id).role !== 'falci' && !isBlocked(req.user.id, id));
   if (!add.length) return res.status(400).json({ error: 'Eklenecek kişi seç.' });
   c.members.push(...add); store.update('chats', c.id, {});
   systemMsg(c, `${req.user.name}, ${add.map((id) => store.get('users', id).name.split(' ')[0]).join(', ')} kişisini ekledi`);
@@ -1296,7 +1310,7 @@ app.get('/api/music/featured', auth, wrap(async (req, res) => res.json({ items: 
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
   isBlocked, limited, isMedia, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
-  online, appEvent, falci, msgOut, dropMediaCache: (id) => dropMediaCache(id),
+  online, appEvent, falci, msgOut, falLock, dropMediaCache: (id) => dropMediaCache(id),
 };
 require('./server/features')(app, featureCtx);
 require('./server/genel')(app, featureCtx);
@@ -1395,6 +1409,7 @@ io.on('connection', (socket) => {
     const c = store.get('chats', data?.chatId);
     if (!c || !c.members.includes(uid)) return ack?.({ error: 'Sohbet bulunamadı.' });
     if (limited('msg:' + uid, 60, 60000)) return ack?.({ error: 'Çok hızlı mesaj gönderiyorsun.' });
+    const lock = falLock(c, uid); if (lock) return ack?.({ error: lock, falLock: true });
     const msg = sendMessage(c, uid, { ...data, system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false });
     ack?.(msg ? { ok: true, msg: msgOut(msg) } : { error: 'Mesaj gönderilemedi.' });
   });
@@ -1456,6 +1471,7 @@ io.on('connection', (socket) => {
     if (!c || c.isGroup || !c.members.includes(uid)) return ack?.({ error: 'Arama başlatılamadı.' });
     const to = c.members.find((m) => m !== uid);
     if (isBlocked(uid, to)) return ack?.({ error: 'Bu kişiyi arayamazsın.' });
+    if (store.get('users', to)?.role === 'falci' || store.get('users', uid)?.role === 'falci') return ack?.({ error: 'Falcı Teyze ile arama yapılamaz.' });
     if ([...calls.values()].some((x) => [x.from, x.to].includes(to))) return ack?.({ error: 'Kişi şu an başka bir görüşmede.' });
     const call = { id: nanoid(10), chatId, from: uid, to, video: !!video, state: 'ringing', at: now(), callerSocket: socket.id };
     calls.set(call.id, call);

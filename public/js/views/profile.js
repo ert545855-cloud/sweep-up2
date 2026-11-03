@@ -107,7 +107,7 @@ export default async function profile(view, username) {
       ? '<button class="btn primary unb">Engeli kaldır</button>'
       : u.role === 'falci'
         ? `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : 'Takip et'}</button><a class="btn" href="#/fal">🔮 Fal baktır</a><button class="btn sq msg" aria-label="Mesaj gönder">${icon('send', '', 'style="width:18px;height:18px"')}</button>`
-        : `<button class="btn ${u.isFollowing || u.requested ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : u.requested ? 'İstek gönderildi' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button><button class="btn msg">${icon('send')} Mesaj</button>${u.matched ? '' : '<button class="btn sq smsg" aria-label="Süper mesaj" title="Süper mesaj">💌</button>'}`}
+        : `<button class="btn ${u.isFollowing || u.requested ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : u.requested ? 'İstek gönderildi' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button>${u.role === 'falci' && state.me.role !== 'falci' ? '<a class="btn fal-go" href="#/fal">🔮 Fal baktır</a>' : `<button class="btn msg">${icon('send')} Mesaj</button>`}${u.matched || u.role === 'falci' || state.me.role === 'falci' ? '' : '<button class="btn sq smsg" aria-label="Süper mesaj" title="Süper mesaj">💌</button>'}`}
     </div>
     ${self ? `<div class="me-links">
       <a href="#/ziyaretciler">${icon('eye')}<span>Ziyaretçiler</span><b class="vc"></b></a>

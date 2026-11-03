@@ -1912,3 +1912,8 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .form .vo-it { display: flex; align-items: center; gap: 12px; padding: 4px 0; }
 .form .vo-it .grow { display: grid; gap: 2px; }
 .genel .empty .big { font-size: 40px; line-height: 1; }
+.fal-lock { display: flex; align-items: center; gap: 12px; margin: 8px 12px calc(var(--safe-b) + 8px); padding: 12px 14px; border-radius: var(--r-lg); background: linear-gradient(130deg, color-mix(in srgb, var(--uv) 16%, var(--bg)), color-mix(in srgb, var(--hot) 12%, var(--bg))); border: 1px solid var(--line); }
+.fal-lock > span { font-size: 26px; } .fal-lock b { display: block; font-size: 14px; } .fal-lock small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.35; margin-top: 2px; }
+.fal-lock .btn { flex: none; }
+.rp-fal { flex: 1; display: flex; align-items: center; justify-content: center; height: 44px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,.5); color: #fff; font-weight: 700; font-size: 14.5px; }
+.profile-btns .fal-go { flex: 1; }

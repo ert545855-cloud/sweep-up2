@@ -45,6 +45,8 @@ export default async function chat(view, chatId) {
   let replyTo = null;
   let blocked = !!data.blocked;
   let ttl = data.ttl || 0;
+  let falLock = data.falLock || null;
+  const falChat = !isGroup && (other?.role === 'falci' || state.me.role === 'falci');
 
   view.innerHTML = `<div class="chat">
     <header class="topbar bordered">
@@ -52,7 +54,7 @@ export default async function chat(view, chatId) {
       <a class="who" href="#/chat/${esc(chatId)}/info">${avatar(other, 40, { ring: true, dot: !isGroup })}
         <div class="grow"><div class="n ellipsis">${nm(other)}</div><div class="s ellipsis"></div></div></a>
       <button class="ib ttl-ind" aria-label="Kaybolan mesajlar" ${ttl ? '' : 'hidden'}>${icon('timer')}</button>
-      ${isGroup ? '' : `<button class="ib vc" aria-label="Sesli ara">${icon('phone')}</button><button class="ib vv" aria-label="Görüntülü ara">${icon('video')}</button>`}
+      ${isGroup || falChat ? '' : `<button class="ib vc" aria-label="Sesli ara">${icon('phone')}</button><button class="ib vv" aria-label="Görüntülü ara">${icon('video')}</button>`}
     </header>
     <div class="msgs" role="log" aria-live="polite"></div>
     <div class="composer"></div></div>`;
@@ -372,6 +374,7 @@ export default async function chat(view, chatId) {
   const offs = [
     on('message', (m) => {
       if (m.chatId !== chatId || msgs.some((x) => x.id === m.id)) return;
+      if (m.fal && falLock && state.me.role === 'falci') { falLock = null; paintComposer(); }
       const stick = nearBottom() || m.from === state.me.id;
       if (!msgs.length) box.innerHTML = '';
       box.querySelector('.typing-b')?.remove();
@@ -447,6 +450,11 @@ export default async function chat(view, chatId) {
   }
 
   function paintComposer() {
+    if (falLock && !blocked) {
+      const toFalci = other?.role === 'falci';
+      comp.innerHTML = `<div class="fal-lock"><span>🔮</span><div class="grow"><b>${toFalci ? 'Falcı Teyze’ye sadece fal isteğiyle yazılır' : 'Bu kişi henüz fal istemedi'}</b><small>${toFalci ? 'Fal isteğini gönder, cevabı buraya gelsin. Sonraki sorularını da yeni bir fal isteğiyle sorabilirsin.' : 'Sadece fal isteyenlere yazabilirsin.'}</small></div>${toFalci ? '<a class="btn primary sm" href="#/fal">Fal baktır</a>' : ''}</div>`;
+      return;
+    }
     if (blocked) {
       comp.innerHTML = `<div class="blocked-bar">Bu kişiyle artık mesajlaşamazsın.</div>`;
       view.querySelector('.vc')?.remove(); view.querySelector('.vv')?.remove();
@@ -499,7 +507,7 @@ export default async function chat(view, chatId) {
     comp.querySelector('.more-b').onclick = () => sheet(null, `<div class="menu">
       <button data-a="cam">${icon('camera')}Fotoğraf çek</button>
       <button data-a="once">${icon('eye')}<span class="grow">Tek seferlik fotoğraf<div class="sub muted" style="font-size:12.5px">Bir kez açılır, sonra silinir</div></span></button>
-      ${isGroup ? '' : `<button data-a="game">🎲<span class="grow">Oyun başlat<div class="sub muted" style="font-size:12.5px">İki doğru bir yalan, Bu mu şu mu</div></span></button>
+      ${isGroup || falChat ? '' : `<button data-a="game">🎲<span class="grow">Oyun başlat<div class="sub muted" style="font-size:12.5px">İki doğru bir yalan, Bu mu şu mu</div></span></button>
       <button data-a="plan">📅<span class="grow">Buluşma planla<div class="sub muted" style="font-size:12.5px">Tarih, yer ve arkadaşınla güvenlik paylaşımı</div></span></button>`}
       <button data-a="loc">${icon('mapPin')}Konum gönder</button>
       <button data-a="ttl">${icon('timer')}<span class="grow">Kaybolan mesajlar</span><span class="muted">${ttlLabel(ttl)}</span></button></div>`, {

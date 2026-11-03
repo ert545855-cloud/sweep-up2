@@ -56,6 +56,7 @@ export default async function stories(view, userId) {
       <div class="stk-layer">${stickersHtml(it, mine)}</div>
       <div class="foot">${mine
     ? `<button class="vw">${icon('eye')} ${it.viewerCount || 0} görüntüleme</button>`
+    : g.user.role === 'falci' || state.me.role === 'falci' ? `<a class="rp-fal" href="#/fal">🔮 ${state.me.role === 'falci' ? 'Hikayelere yanıt kapalı' : 'Falcı Teyze’ye fal baktır'}</a>`
     : `<form class="rp" style="display:flex;gap:10px;flex:1"><input placeholder="${esc(g.user.name.split(' ')[0])} kişisine yanıt ver..." maxlength="500"><button aria-label="Gönder">${icon('send')}</button></form>`}</div>
     </div>`;
     if (!mine && !it.seen) { it.seen = true; api(`/stories/${it.id}/view`, { body: {} }).catch(() => {}); }
