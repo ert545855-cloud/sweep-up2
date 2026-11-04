@@ -57,12 +57,36 @@ export default async function chat(view, chatId) {
       ${isGroup || falChat ? '' : `<button class="ib vc" aria-label="Sesli ara">${icon('phone')}</button><button class="ib vv" aria-label="Görüntülü ara">${icon('video')}</button>`}
     </header>
     <div class="msgs" role="log" aria-live="polite"></div>
+    <div class="holdbar" hidden></div>
     <div class="composer"></div></div>`;
 
   const box = view.querySelector('.msgs');
   const st = view.querySelector('.s');
   const comp = view.querySelector('.composer');
   const typingNow = new Map();
+
+  // ---- Falcı Teyze: cevap zamanı gelmeden yazılanlar bekletilir ----
+  const isFalci = state.me.role === 'falci';
+  let holds = data.falHolds || []; let falDue = data.falDue || null;
+  const hhmm = (t) => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const holdbar = view.querySelector('.holdbar');
+  const paintHolds = () => {
+    if (!isFalci || (!holds.length && !(falDue > Date.now()))) { holdbar.hidden = true; return; }
+    holdbar.hidden = false;
+    holdbar.innerHTML = `${holds.length ? '' : `<div class="hb-info">⏳ Bu fala cevabın en erken <b>${hhmm(falDue)}</b>’de iletilir. Şimdi yazdıkların o saatte gider.</div>`}${holds.map((h) => `<div class="hb-it" data-hold="${esc(h.id)}"><div class="grow"><div class="hb-t">${esc(h.text ? h.text.slice(0, 140) : h.mediaType === 'audio' ? '🎤 Sesli mesaj' : h.mediaType === 'video' ? '🎥 Video' : '📷 Fotoğraf')}</div><small>⏳ ${hhmm(h.dueAt)}’de iletilecek</small></div><button class="btn sm hb-now">Şimdi gönder</button><button class="ib hb-x" aria-label="Geri al">${icon('close')}</button></div>`).join('')}`;
+  };
+  const reloadHolds = async () => { if (!isFalci) return; const d = await api(`/chats/${chatId}`).catch(() => null); if (d) { holds = d.falHolds || []; falDue = d.falDue || null; paintHolds(); } };
+  holdbar.addEventListener('click', async (e) => {
+    const it = e.target.closest('[data-hold]'); if (!it) return;
+    const id = it.dataset.hold;
+    try {
+      if (e.target.closest('.hb-now')) { e.target.closest('button').disabled = true; await api(`/fal/holds/${id}/now`, { body: {} }); }
+      if (e.target.closest('.hb-x')) { const r = await api(`/fal/holds/${id}`, { method: 'DELETE' }); const ta = comp.querySelector('textarea, input[type="text"]'); if (ta && r.text && !ta.value) { ta.value = r.text; ta.dispatchEvent(new Event('input')); } toast('Geri alındı.'); }
+      await reloadHolds();
+    } catch (er) { toast(er.message); }
+  });
+  const onHeld = (r) => { if (r?.held) { toast(`⏳ Cevabın ${hhmm(r.hold?.dueAt || r.dueAt)}’de iletilecek`); reloadHolds(); return true; } return false; };
+  paintHolds();
 
   view.querySelector('.vc')?.addEventListener('click', () => startCall(chatId, other, false));
   view.querySelector('.vv')?.addEventListener('click', () => startCall(chatId, other, true));
@@ -379,8 +403,10 @@ export default async function chat(view, chatId) {
   const nearBottom = () => box.scrollHeight - box.scrollTop - box.clientHeight < 160;
 
   const offs = [
+    on('falhold', (d) => { if (d?.chatId === chatId) reloadHolds(); }),
     on('message', (m) => {
       if (m.chatId !== chatId || msgs.some((x) => x.id === m.id)) return;
+      if (m.fal && isFalci) reloadHolds();
       if (m.fal && falLock && state.me.role === 'falci') { falLock = null; paintComposer(); }
       const stick = nearBottom() || m.from === state.me.id;
       if (!msgs.length) box.innerHTML = '';
@@ -432,6 +458,7 @@ export default async function chat(view, chatId) {
       if (d) { msgs.splice(0, msgs.length, ...d.messages); paintAll(); markRead(); }
     }),
   ];
+  if (isFalci) { const holdTick = setInterval(paintHolds, 30000); offs.push(() => clearInterval(holdTick)); }
   const vis = () => { if (document.visibilityState === 'visible') markRead(); };
   document.addEventListener('visibilitychange', vis);
 
@@ -441,8 +468,8 @@ export default async function chat(view, chatId) {
   const send = (payload) => new Promise((resolve) => {
     const body = { ...payload, replyTo: replyTo?.id };
     setReply(null);
-    if (s?.connected) s.emit('message:send', { chatId, ...body }, (r) => { if (r?.error) toast(r.error); resolve(); });
-    else api(`/chats/${chatId}/messages`, { body }).then((m) => { if (!msgs.some((x) => x.id === m.id)) { msgs.push(m); paintAll(); } resolve(); }).catch((e) => { toast(e.message); resolve(); });
+    if (s?.connected) s.emit('message:send', { chatId, ...body }, (r) => { if (r?.error) toast(r.error); else onHeld(r); resolve(); });
+    else api(`/chats/${chatId}/messages`, { body }).then((m) => { if (onHeld(m)) return resolve(); if (!msgs.some((x) => x.id === m.id)) { msgs.push(m); paintAll(); } resolve(); }).catch((e) => { toast(e.message); resolve(); });
   });
 
   function setReply(m) {

@@ -2085,3 +2085,12 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .rq-av { display: flex; } .rq-av img { width: 40px; height: 40px; border-radius: 30%; object-fit: cover; border: 2px solid var(--bg); } .rq-av img + img { margin-left: -16px; }
 .rq-n { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--hot); color: #fff; font-size: 12.5px; font-weight: 800; display: grid; place-items: center; }
 .req-row.empty-r { opacity: .7; }
+.holdbar { display: grid; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line, rgba(255,255,255,.08)); background: var(--surface); }
+.holdbar[hidden] { display: none; }
+.hb-info { font-size: 12.5px; color: var(--muted); }
+.hb-it { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 14px; background: rgba(124,58,237,.14); }
+.hb-it .grow { min-width: 0; } .hb-t { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .hb-it small { color: var(--muted); font-size: 12px; }
+.hb-it .ib { width: 32px; height: 32px; flex: none; }
+.fq-due { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.ai-box.hold { border-color: rgba(124,58,237,.5); }
+.holdbar { grid-template-columns: minmax(0, 1fr); } .hb-it .grow { flex: 1; } .hb-it .btn { flex: none; white-space: nowrap; }

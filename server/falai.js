@@ -4,16 +4,26 @@ const API = process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapi
 const ZODIAC = { koc: 'Koç', boga: 'Boğa', ikizler: 'İkizler', yengec: 'Yengeç', aslan: 'Aslan', basak: 'Başak', terazi: 'Terazi', akrep: 'Akrep', yay: 'Yay', oglak: 'Oğlak', kova: 'Kova', balik: 'Balık' };
 const TYPE = { kahve: 'Kahve falı', tarot: 'Tarot falı', burc: 'Burç yorumu', uyum: 'Aşk uyumu' };
 
-const SYSTEM = `Sen SwipeUp uygulamasındaki "Falcı Teyze"sin. Türkçe, sıcak, samimi, biraz esprili ve şefkatli bir mahalle falcısı gibi yazarsın; "kuzum", "güzelim", "bak şimdi" gibi sözler kullanırsın ama abartmazsın.
-Kurallar:
-- Yorum eğlence amaçlıdır; kesin hüküm vermezsin, umut veren ve pozitif bir dil kullanırsın.
+const SYSTEM = `Sen SwipeUp uygulamasının resmi fal ve spiritüel eğlence hesabı "Falcı Teyze"sin. Sevecen, gizemli, anaç, hafif muzip ve sezgileri güçlü bir falcı teyzesin. SwipeUp'ın sıcak, eğlenceli ve gizemli atmosferini korursun.
+Üslup:
+- Doğal, samimi, merak uyandırıcı ve etkileyici yazarsın. "kuzum", "güzelim", "bak evladım" gibi hitapları yerinde kullanırsın ama abartmazsın.
+- Her yorum birbirinden farklı olsun: aynı açılış cümlesini, aynı kalıpları ve aynı kapanışı tekrarlamazsın; her seferinde başka bir sahneyle, duyguyla ya da imgeyle başlarsın.
+- Yorum doğrudan kullanıcıya gönderilecek: açıklama, not, başlık, madde işareti, markdown kullanmazsın. Birkaç emoji (en fazla 3) kullanabilirsin.
+- Uzunluk: burç yorumu ve aşk uyumunda 100–170 kelime; kahve falı ve tarotta 170–260 kelime, 3–5 kısa paragraf.
+Çerçeve ve güvenlik:
+- Fal ve tarotu eğlence ve sembolik yorum olarak sunarsın; kesin gelecek bilgisi vermez, doğaüstü güç iddia etmezsin. "Fincan bana şunu fısıldıyor", "kartlar bunu işaret ediyor" gibi sembolik bir dil kullanırsın; umut veren, pozitif bir ton tutarsın.
 - Ölüm, ağır hastalık, hamilelik, kaza, ihanet kesinliği gibi korkutucu ya da zarar verebilecek kehanetlerde bulunmazsın.
 - Sağlık, hukuk, para yatırımı konularında tavsiye vermezsin; böyle bir soru gelirse nazikçe bir uzmana yönlendirirsin.
-- Kişinin adını, kullanıcı adını uydurmazsın; "kuzum" diye hitap edersin.
+- Kişinin adını, kullanıcı adını uydurmazsın.
+Fal türleri:
 - Kahve falında fincan fotoğraflarında gördüğün şekilleri (kuş, yol, yürek, balık, dağ, göz, harf vb.) somutça anarak yorumlarsın. Fotoğraf fincan değilse ya da çok karanlıksa bunu tatlı bir dille söyleyip yine kısa bir yorum yaparsın.
 - Tarotta her kartı pozisyonuyla (geçmiş, şimdi, gelecek) ve ters/düz durumuyla yorumlarsın.
+- Aşk uyumunda iki burcun elementlerini, güçlü yanlarını ve dikkat etmeleri gereken noktaları sevimli ve muzip bir dille anlatırsın.
+- Burç yorumunda günün/ayın enerjisini, gezegen hareketlerini ve aşk temasını sembolik bir dille işlersin.
 - Kişinin notunda bir sorusu varsa mutlaka ona değinirsin.
-- 140–230 kelime, 3–5 kısa paragraf. Başlık, madde işareti, markdown kullanmazsın. Sona kısa ve tatlı bir dilek cümlesi eklersin.`;
+- Sona kısa ve tatlı bir dilek ya da tavsiye cümlesi eklersin; ara sıra (her seferinde değil) "Kalbinin soramadıklarını, Falcı Teyze’ye sor! 🔮💜" sloganıyla bitirirsin.`;
+// Cevap bekleme süresi (dakika): Falcı Teyze fala hemen cevap vermez
+const DELAY_DEF = { kahve: [17, 20], tarot: [16, 19], uyum: [15, 18], burc: [15, 17] };
 
 module.exports = function falai(app, ctx) {
   const { store, auth, emitTo, sendMessage, falci, notify } = ctx;
@@ -21,6 +31,41 @@ module.exports = function falai(app, ctx) {
   const key = () => process.env.GEMINI_API_KEY || '';
   const settings = () => ({ mode: 'draft', ...(store.get('settings', 'falai') || {}) });
   const mode = () => (key() ? settings().mode : 'off');
+  // ---- Cevap bekleme süresi ----
+  const delayCfg = () => { const d = store.get('settings', 'fal_delay') || {}; return { enabled: d.enabled ?? true, ranges: { ...DELAY_DEF, ...(d.ranges || {}) } }; };
+  ctx.falDueAt = (type, at = now()) => {
+    const c = delayCfg(); if (!c.enabled) return null;
+    const [a, b] = c.ranges[type] || [15, 20];
+    return at + Math.round((a + Math.random() * Math.max(0, b - a)) * 60000);
+  };
+  // Sohbetteki bekleyen falların en geç cevap zamanı (geçmediyse)
+  const holdUntil = (chat) => {
+    if (!delayCfg().enabled) return 0;
+    const t = Math.max(0, ...store.filter('messages', (m) => m.chatId === chat.id && m.fal?.status === 'pending' && m.fal.dueAt).map((m) => m.fal.dueAt));
+    return t > now() ? t : 0;
+  };
+  const PICK = ['text', 'media', 'mediaType', 'replyTo', 'duration', 'location', 'viewOnce'];
+  const holdOut = (h) => ({ id: h.id, chatId: h.chatId, text: h.body.text || '', media: h.body.media || null, mediaType: h.body.mediaType || null, dueAt: h.dueAt, at: h.at, source: h.source, falMsgId: h.falMsgId || null });
+  function hold(chat, fromId, body, source, falMsgId = null, dueAt = holdUntil(chat)) {
+    const b = Object.fromEntries(PICK.filter((k) => body?.[k] != null && body[k] !== '').map((k) => [k, body[k]]));
+    if (typeof b.text === 'string') b.text = b.text.slice(0, 4000);
+    const prev = store.filter('fal_hold', (x) => x.chatId === chat.id).length;
+    const h = store.put('fal_hold', { id: require('nanoid').nanoid(12), chatId: chat.id, from: fromId, body: b, dueAt: dueAt + prev * 1500, at: now(), source, falMsgId });
+    emitTo(fromId, 'falhold', { chatId: chat.id });
+    return holdOut(h);
+  }
+  ctx.falHoldUntil = holdUntil;
+  ctx.falHold = (chat, fromId, body) => hold(chat, fromId, body, 'chat');
+  function release(h) {
+    store.del('fal_hold', h.id);
+    const chat = store.get('chats', h.chatId);
+    const msg = chat && sendMessage(chat, h.from, { ...h.body, system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false, share: null });
+    if (h.falMsgId) { const d = draftOf(h.falMsgId); if (d) store.put('fal_ai', { ...d, status: msg ? 'sent' : 'ready', at: now(), dueAt: null }); }
+    emitTo(h.from, 'falhold', { chatId: h.chatId, released: !!msg });
+    return msg;
+  }
+  setInterval(() => { store.filter('fal_hold', (h) => h.dueAt <= now()).sort((a, b) => a.dueAt - b.dueAt).forEach((h) => { try { release(h); } catch (e) { console.error('[falhold]', e.message); } }); }, 15000).unref();
+
   const stats = { ok: 0, fail: 0, lastError: null, lastModel: null, lastAt: null, models: [] };
 
   const cool = new Map(); // kotası dolan model bir süre atlanır
@@ -67,7 +112,7 @@ module.exports = function falai(app, ctx) {
     lines.push('Şimdi Falcı Teyze olarak yorumunu yaz.');
     const parts = [{ text: lines.join('\n') }];
     if (f.type === 'kahve') for (const u of (f.images || []).slice(0, 3)) { const p = await imagePart(u); if (p) parts.push(p); }
-    return { systemInstruction: { parts: [{ text: SYSTEM }] }, contents: [{ role: 'user', parts }], generationConfig: { temperature: 0.95, maxOutputTokens: 4096 } };
+    return { systemInstruction: { parts: [{ text: SYSTEM }] }, contents: [{ role: 'user', parts }], generationConfig: { temperature: 1, maxOutputTokens: 4096 } };
   }
 
   async function generate(body) {
@@ -110,8 +155,14 @@ module.exports = function falai(app, ctx) {
         const cur = store.get('messages', msgId);
         if (mode() === 'auto' && cur?.fal?.status === 'pending') {
           const chat = store.get('chats', m.chatId);
-          const sent = chat && sendMessage(chat, f.id, { text: out.text });
-          store.put('fal_ai', { id: msgId, chatId: m.chatId, status: sent ? 'sent' : 'ready', text: out.text, model: out.model, at: now(), auto: !!sent });
+          const due = chat ? holdUntil(chat) : 0;
+          if (chat && due) {
+            store.put('fal_ai', { id: msgId, chatId: m.chatId, status: 'scheduled', text: out.text, model: out.model, at: now(), auto: true, dueAt: due });
+            hold(chat, f.id, { text: out.text }, 'auto', msgId, due);
+          } else {
+            const sent = chat && sendMessage(chat, f.id, { text: out.text });
+            store.put('fal_ai', { id: msgId, chatId: m.chatId, status: sent ? 'sent' : 'ready', text: out.text, model: out.model, at: now(), auto: !!sent });
+          }
         } else {
           store.put('fal_ai', { id: msgId, chatId: m.chatId, status: 'ready', text: out.text, model: out.model, at: now() });
         }
@@ -124,7 +175,8 @@ module.exports = function falai(app, ctx) {
   }
   ctx.onFalRequest = (msg) => { if (mode() === 'off' || !msg?.fal) return; queue.push(msg.id); run().catch(() => { busy = false; }); };
   ctx.falAiMode = mode;
-  ctx.falDraft = (msgId) => { const d = draftOf(msgId); return d ? { status: d.status, text: d.text || '', model: d.model || null, error: d.error || null, auto: !!d.auto, edited: d.edited ?? null } : null; };
+  ctx.falDraft = (msgId) => { const d = draftOf(msgId); return d ? { status: d.status, text: d.text || '', model: d.model || null, error: d.error || null, auto: !!d.auto, edited: d.edited ?? null, dueAt: d.dueAt || null } : null; };
+  ctx.falHolds = (chatId) => store.filter('fal_hold', (h) => h.chatId === chatId).sort((a, b) => a.dueAt - b.dueAt).map(holdOut);
 
   // ---- Falcı Teyze uç noktaları ----
   const onlyFalci = (req, res, next) => (req.user.role === 'falci' ? next() : res.status(403).json({ error: 'Sadece Falcı Teyze.' }));
@@ -147,11 +199,40 @@ module.exports = function falai(app, ctx) {
     const text = String(req.body?.text || '').trim().slice(0, 4000);
     if (text.length < 5) return res.status(400).json({ error: 'Cevap boş olamaz.' });
     const chat = store.get('chats', m.chatId);
+    const d = draftOf(m.id);
+    const due = req.body?.now ? 0 : holdUntil(chat);
+    if (due) {
+      store.put('fal_ai', { ...(d || {}), id: m.id, chatId: m.chatId, status: 'scheduled', text, at: now(), dueAt: due, edited: d?.text ? d.text !== text : true });
+      const h = hold(chat, req.user.id, { text }, 'draft', m.id, due);
+      return res.json({ ok: true, chatId: chat.id, held: true, dueAt: h.dueAt });
+    }
     const sent = sendMessage(chat, req.user.id, { text });
     if (!sent) return res.status(400).json({ error: 'Gönderilemedi.' });
-    const d = draftOf(m.id);
     store.put('fal_ai', { ...(d || {}), id: m.id, chatId: m.chatId, status: 'sent', text, at: now(), edited: d?.text ? d.text !== text : true });
     res.json({ ok: true, chatId: chat.id });
+  });
+  // Bekleyen (zamanı gelince iletilecek) cevaplar
+  const holdOf = (req, res) => {
+    const h = store.get('fal_hold', req.params.id);
+    if (!h || h.from !== req.user.id) { res.status(404).json({ error: 'Bekleyen cevap bulunamadı.' }); return null; }
+    return h;
+  };
+  app.get('/api/fal/holds', auth, onlyFalci, (req, res) => {
+    const chatId = String(req.query.chatId || '');
+    res.json(store.filter('fal_hold', (h) => h.from === req.user.id && (!chatId || h.chatId === chatId)).sort((a, b) => a.dueAt - b.dueAt).map(holdOut));
+  });
+  app.post('/api/fal/holds/:id/now', auth, onlyFalci, (req, res) => {
+    const h = holdOf(req, res); if (!h) return;
+    const msg = release(h);
+    if (!msg) return res.status(400).json({ error: 'Gönderilemedi.' });
+    res.json({ ok: true });
+  });
+  app.delete('/api/fal/holds/:id', auth, onlyFalci, (req, res) => {
+    const h = holdOf(req, res); if (!h) return;
+    store.del('fal_hold', h.id);
+    if (h.falMsgId) { const d = draftOf(h.falMsgId); if (d) store.put('fal_ai', { ...d, status: 'ready', dueAt: null, auto: false }); }
+    emitTo(h.from, 'falhold', { chatId: h.chatId });
+    res.json({ ok: true, text: h.body.text || '' });
   });
 
   // ---- Yönetim ----
@@ -159,13 +240,27 @@ module.exports = function falai(app, ctx) {
   if (A?.adminAuth) {
     app.get('/api/admin/falai', A.adminAuth, async (req, res) => {
       const all = store.all('fal_ai');
-      res.json({ hasKey: !!key(), mode: mode(), saved: settings().mode, stats: { ...stats, models: stats.models.length ? stats.models : (key() ? await models() : []) }, counts: { total: all.length, sent: all.filter((d) => d.status === 'sent').length, auto: all.filter((d) => d.auto).length, edited: all.filter((d) => d.edited).length, error: all.filter((d) => d.status === 'error').length } });
+      res.json({ delay: delayCfg(), holds: store.all('fal_hold').length, hasKey: !!key(), mode: mode(), saved: settings().mode, stats: { ...stats, models: stats.models.length ? stats.models : (key() ? await models() : []) }, counts: { total: all.length, sent: all.filter((d) => d.status === 'sent').length, auto: all.filter((d) => d.auto).length, edited: all.filter((d) => d.edited).length, error: all.filter((d) => d.status === 'error').length } });
     });
     app.put('/api/admin/falai', A.adminAuth, A.owner, (req, res) => {
       const m = ['off', 'draft', 'auto'].includes(req.body?.mode) ? req.body.mode : 'draft';
       store.put('settings', { id: 'falai', mode: m });
       A.audit(req.admin, 'fal yapay zeka modunu değiştirdi', null, m);
       res.json({ mode: mode() });
+    });
+    app.put('/api/admin/falai/delay', A.adminAuth, A.owner, (req, res) => {
+      const b = req.body || {}; const cur = delayCfg();
+      const ranges = {};
+      for (const k of Object.keys(DELAY_DEF)) {
+        const r = b.ranges?.[k] || cur.ranges[k];
+        let lo = Math.max(0, Math.min(240, Math.round(+r[0] || 0))); let hi = Math.max(0, Math.min(240, Math.round(+r[1] || 0)));
+        if (hi < lo) [lo, hi] = [hi, lo];
+        ranges[k] = [lo, hi];
+      }
+      const doc = { id: 'fal_delay', enabled: b.enabled !== undefined ? !!b.enabled : cur.enabled, ranges };
+      store.put('settings', doc);
+      A.audit(req.admin, 'fal cevap süresini güncelledi', null, `${doc.enabled ? 'açık' : 'kapalı'} · ${Object.entries(ranges).map(([k, [lo, hi]]) => `${k} ${lo}-${hi} dk`).join(', ')}`);
+      res.json({ delay: delayCfg() });
     });
     app.post('/api/admin/falai/test', A.adminAuth, async (req, res) => {
       if (!key()) return res.status(400).json({ error: 'GEMINI_API_KEY tanımlı değil.' });

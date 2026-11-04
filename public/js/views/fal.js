@@ -111,14 +111,17 @@ async function queue(view) {
         ${x.images?.length ? `<div class="fq-imgs">${x.images.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="" loading="lazy"></a>`).join('')}</div>` : ''}
         ${x.cards?.length ? `<div class="fq-cards">${x.cards.map((c) => `<span class="chip"><small>${esc(c.pos || '')}</small> ${c.em} ${esc(c.name)}${c.rev ? ' (ters)' : ''}</span>`).join('')}</div>` : ''}
         ${x.note ? `<p class="fq-note">${esc(x.note)}</p>` : ''}
-        ${x.status === 'pending' ? aiBox(x) : x.ai?.status === 'sent' ? `<div class="ai-done">${x.ai.auto ? '✨ Yapay zeka cevabı otomatik gönderildi' : x.ai.edited === false ? '✨ Taslak olduğu gibi gönderildi' : ''}</div>` : ''}
+        ${x.status === 'pending' ? (x.holds?.length ? holdBox(x) : `${x.dueAt && x.dueAt > Date.now() ? `<div class="fq-due">⏳ Cevap en erken <b>${hhmm(x.dueAt)}</b>’de iletilir</div>` : ''}${aiBox(x)}`) : x.ai?.status === 'sent' ? `<div class="ai-done">${x.ai.auto ? '✨ Yapay zeka cevabı otomatik gönderildi' : x.ai.edited === false ? '✨ Taslak olduğu gibi gönderildi' : ''}</div>` : ''}
       </div>`).join('')
       : `<div class="empty"><div class="big">${icon('check')}</div><h2>${filter === 'pending' ? 'Bekleyen fal yok' : 'Henüz yok'}</h2>${filter === 'pending' ? 'Yeni istek gelince bildirim alırsın.' : ''}</div>`;
   };
+  const hhmm = (t) => new Date(t).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const holdBox = (x) => x.holds.map((h) => `<div class="ai-box hold" data-hold="${esc(h.id)}"><div class="ai-h">⏳ Cevap hazır <small>${hhmm(h.dueAt)}’de iletilecek${h.source === 'auto' ? ' · yapay zeka' : ''}</small></div>${h.text ? `<p class="fq-note" style="margin:0">${esc(h.text.slice(0, 220))}${h.text.length > 220 ? '…' : ''}</p>` : ''}<div class="ai-btns"><button class="btn sm hb-x">Geri al</button><button class="btn primary sm hb-now">${icon('send')} Şimdi gönder</button></div></div>`).join('');
   const aiOn = () => state.config?.falAi && state.config.falAi !== 'off';
   function aiBox(x) {
     const a = x.ai;
     if (!a || a.status === 'none') return aiOn() ? '<div class="ai-box"><button class="btn sm ai-regen">✨ Yapay zeka taslağı hazırla</button></div>' : '';
+    if (a.status === 'scheduled' || a.status === 'sent') return '';
     if (a.status === 'working') return '<div class="ai-box wait"><span class="spinner sm"></span> ✨ Taslak hazırlanıyor…</div>';
     if (a.status === 'error') return `<div class="ai-box err"><b>Taslak hazırlanamadı</b><small>${esc(a.error || '')}</small><button class="btn sm ai-regen">Tekrar dene</button></div>`;
     if (a.status === 'ready') {
@@ -132,12 +135,15 @@ async function queue(view) {
     const card = e.target.closest('[data-mid]'); if (!card) return;
     const mid = card.dataset.mid;
     try {
+      const hb = e.target.closest('[data-hold]');
+      if (hb && e.target.closest('.hb-now')) { e.target.closest('button').disabled = true; await api(`/fal/holds/${hb.dataset.hold}/now`, { body: {} }); toast('Fal cevabı gönderildi 🔮'); load(); return; }
+      if (hb && e.target.closest('.hb-x')) { await api(`/fal/holds/${hb.dataset.hold}`, { method: 'DELETE' }); toast('Geri alındı; taslağı düzenleyebilirsin.'); load(); return; }
       if (e.target.closest('.ai-regen')) { e.preventDefault(); await api(`/fal/ai/${mid}/regen`, { body: {} }); const it = list.find((x) => x.messageId === mid); if (it) { it.ai = { status: 'working' }; paint(); } }
       if (e.target.closest('.ai-send')) {
         e.preventDefault();
         const btn = e.target.closest('.ai-send'); btn.disabled = true;
-        await api(`/fal/ai/${mid}/send`, { body: { text: card.querySelector('.ai-t').value } });
-        toast('Fal cevabı gönderildi 🔮'); load();
+        const r = await api(`/fal/ai/${mid}/send`, { body: { text: card.querySelector('.ai-t').value } });
+        toast(r.held ? `⏳ Cevap ${hhmm(r.dueAt)}’de iletilecek 🔮` : 'Fal cevabı gönderildi 🔮'); load();
       }
     } catch (er) { toast(er.message); e.target.closest('button') && (e.target.closest('button').disabled = false); }
   });
@@ -153,7 +159,7 @@ async function queue(view) {
     const b = e.target.closest('[data-f]'); if (!b) return;
     filter = b.dataset.f; view.querySelectorAll('.seg button').forEach((x) => x.classList.toggle('on', x === b)); paint();
   };
-  const offs = [on('message', (m) => { if (m.fal) load(); }), on('message:update', (m) => { if (m.fal) load(); }), on('falai', () => load())];
+  const offs = [on('message', (m) => { if (m.fal) load(); }), on('message:update', (m) => { if (m.fal) load(); }), on('falai', () => load()), on('falhold', () => load())];
   return () => offs.forEach((f) => f());
 }
 

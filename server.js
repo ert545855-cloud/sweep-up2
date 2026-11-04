@@ -1194,13 +1194,15 @@ app.get('/api/chats/:id', auth, (req, res) => {
   const t = now();
   const msgs = store.filter('messages', (m) => m.chatId === c.id && !(m.hiddenFor || []).includes(req.user.id) && !(m.expiresAt && m.expiresAt < t)).sort((a, b) => a.at - b.at);
   const noReceipts = priv(req.user).hideRead;
-  res.json({ ...chatOut(c, req.user.id), falLock: falLock(c, req.user.id), messages: msgs.slice(-400).map((m) => (noReceipts ? { ...msgOut(m), readBy: [m.from] } : msgOut(m))) });
+  res.json({ ...chatOut(c, req.user.id), falLock: falLock(c, req.user.id), falHolds: req.user.role === 'falci' ? (featureCtx.falHolds?.(c.id) || []) : undefined, falDue: req.user.role === 'falci' ? (featureCtx.falHoldUntil?.(c) || null) : undefined, messages: msgs.slice(-400).map((m) => (noReceipts ? { ...msgOut(m), readBy: [m.from] } : msgOut(m))) });
 });
 
 app.post('/api/chats/:id/messages', auth, (req, res) => {
   const c = store.get('chats', req.params.id);
   if (!c || !c.members.includes(req.user.id)) return res.status(404).json({ error: 'Sohbet bulunamadı.' });
   const lock = falLock(c, req.user.id); if (lock) return res.status(403).json({ error: lock, falLock: true });
+  // Falcı Teyze bekleyen fala süresi dolmadan cevap verirse cevap zamanı gelince iletilir
+  if (req.user.role === 'falci' && !req.body?.now && featureCtx.falHoldUntil?.(c)) return res.json({ held: true, hold: featureCtx.falHold(c, req.user.id, req.body || {}) });
   const msg = sendMessage(c, req.user.id, { ...(req.body || {}), system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false, share: null });
   if (!msg) return res.status(400).json({ error: 'Mesaj gönderilemedi.' });
   res.json(msgOut(msg));
@@ -1306,7 +1308,7 @@ app.post('/api/fal', auth, (req, res) => {
   const zodiac = zodiacs.includes(b.zodiac) ? b.zodiac : (req.user.zodiac || null);
   const payload = {
     id: nanoid(8), type: b.type, note: String(b.note || '').trim().slice(0, 1000), images, cards, partner, zodiac,
-    name: req.user.name, status: 'pending', at: now(), price,
+    name: req.user.name, status: 'pending', at: now(), price, dueAt: featureCtx.falDueAt?.(b.type) || null,
   };
   const chat = chatBetween(req.user.id, f.id);
   const msg = sendMessage(chat, req.user.id, { text: payload.note, fal: payload });
@@ -1333,7 +1335,7 @@ app.get('/api/fal/queue', auth, (req, res) => {
   const list = store.filter('messages', (m) => m.fal && store.get('chats', m.chatId)?.members.includes(req.user.id))
     .sort((a, b) => (a.fal.status === 'pending') === (b.fal.status === 'pending') ? b.at - a.at : (a.fal.status === 'pending' ? -1 : 1))
     .slice(0, 200)
-    .map((m) => ({ ...m.fal, chatId: m.chatId, messageId: m.id, user: brief(store.get('users', m.from)), ai: featureCtx.falDraft?.(m.id) || null }));
+    .map((m) => ({ ...m.fal, chatId: m.chatId, messageId: m.id, user: brief(store.get('users', m.from)), ai: featureCtx.falDraft?.(m.id) || null, holds: m.fal.status === 'pending' ? (featureCtx.falHolds?.(m.chatId) || []) : [] }));
   res.json(list);
 });
 
@@ -1569,6 +1571,7 @@ io.on('connection', (socket) => {
     if (!c || !c.members.includes(uid)) return ack?.({ error: 'Sohbet bulunamadı.' });
     if (limited('msg:' + uid, 60, 60000)) return ack?.({ error: 'Çok hızlı mesaj gönderiyorsun.' });
     const lock = falLock(c, uid); if (lock) return ack?.({ error: lock, falLock: true });
+    if (store.get('users', uid)?.role === 'falci' && !data?.now && featureCtx.falHoldUntil?.(c)) return ack?.({ ok: true, held: true, hold: featureCtx.falHold(c, uid, data || {}) });
     const msg = sendMessage(c, uid, { ...data, system: false, fal: null, story: null, quote: null, game: null, plan: null, superMsg: false, share: null });
     ack?.(msg ? { ok: true, msg: msgOut(msg) } : { error: 'Mesaj gönderilemedi.' });
   });

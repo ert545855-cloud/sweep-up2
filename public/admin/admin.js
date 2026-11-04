@@ -413,12 +413,16 @@ VIEWS.fal = async (main) => {
       <div class="stat"><b>${r.avgMin == null ? '—' : r.avgMin < 60 ? `${r.avgMin} dk` : `${(r.avgMin / 60).toFixed(1)} sa`}</b><span>Ortalama cevap süresi</span></div>
       ${Object.entries(FAL).map(([k, l]) => `<div class="stat"><b>${r.byType[k] || 0}</b><span>${l} · ${r.prices[k] || 0} jeton</span></div>`).join('')}</div>
     ${ai ? `<div class="panel aip" style="margin-bottom:14px"><div class="ph"><h3>✨ Yapay zeka (Google Gemini)</h3>${ai.hasKey ? '<span class="chip ok">Anahtar tanımlı</span>' : '<span class="chip bad">GEMINI_API_KEY yok</span>'}</div><div class="pb" style="display:grid;gap:12px">
-      <div class="seg3">${[['off', 'Kapalı', 'Falcı Teyze kendisi yazar'], ['draft', 'Taslak', 'Yapay zeka yazar, Falcı Teyze kontrol edip gönderir'], ['auto', 'Otomatik', 'Cevap birkaç saniyede kendiliğinden gider']].map(([k, t, d]) => `<button data-mode="${k}" class="${ai.saved === k ? 'on' : ''}" ${can('fal') && ai.hasKey ? '' : 'disabled'}><b>${t}</b><small>${d}</small></button>`).join('')}</div>
+      <div class="seg3">${[['off', 'Kapalı', 'Falcı Teyze kendisi yazar'], ['draft', 'Taslak', 'Yapay zeka yazar, Falcı Teyze kontrol edip gönderir'], ['auto', 'Otomatik', 'Cevap, bekleme süresi dolunca kendiliğinden gider']].map(([k, t, d]) => `<button data-mode="${k}" class="${ai.saved === k ? 'on' : ''}" ${can('fal') && ai.hasKey ? '' : 'disabled'}><b>${t}</b><small>${d}</small></button>`).join('')}</div>
       <div class="muted" style="font-size:12.5px">Modeller: ${esc((ai.stats.models || []).join(' → ') || '—')} · Başarılı: ${ai.stats.ok} · Hatalı: ${ai.stats.fail}${ai.stats.lastModel ? ` · Son kullanılan: ${esc(ai.stats.lastModel)}` : ''}<br>Toplam ${ai.counts.total} taslak · ${ai.counts.sent} gönderildi (${ai.counts.auto} otomatik, ${ai.counts.edited} düzenlenerek)${ai.stats.lastError ? `<br><span style="color:var(--bad)">Son hata: ${esc(ai.stats.lastError)}</span>` : ''}</div>
       <div class="row" style="gap:8px"><button class="btn sm aitest" ${ai.hasKey ? '' : 'disabled'}>Bağlantıyı test et</button><span class="muted ait" style="font-size:12.5px"></span></div>
       <div class="aiout" hidden></div>
       <p class="muted" style="margin:0;font-size:12px">Ücretsiz katmanda günlük istek sınırı vardır; sınır dolunca istekler Falcı Teyze'nin kuyruğunda bekler. Ücretsiz katmanda gönderilen içerik Google tarafından ürün geliştirme için kullanılabilir.</p>
     </div></div>` : ''}
+    ${ai?.delay ? `<form class="panel dlp" style="margin-bottom:14px"><div class="ph"><h3>⏳ Cevap bekleme süresi</h3><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="den" ${ai.delay.enabled ? 'checked' : ''} ${can('fal') ? '' : 'disabled'}> Açık</label></div><div class="pb" style="display:grid;gap:12px">
+      <div class="muted" style="font-size:12.5px">Falcı Teyze fala hemen cevap vermez. Her fal için aşağıdaki aralıkta rastgele bir süre seçilir; bu süre dolmadan yazılan cevaplar (yapay zeka, taslak ya da elle yazılan) bekletilir ve zamanı gelince iletilir. Falcı Teyze isterse “Şimdi gönder” diyebilir.${ai.holds ? ` Şu an bekleyen cevap: <b>${ai.holds}</b>` : ''}</div>
+      <div class="tw"><table class="tbl"><thead><tr><th>Fal türü</th><th class="num">En az (dk)</th><th class="num">En fazla (dk)</th></tr></thead><tbody>${Object.entries(FAL).map(([k, l]) => `<tr><td>${l}</td><td class="num"><input class="field" type="number" min="0" max="240" name="lo_${k}" value="${ai.delay.ranges[k]?.[0] ?? 15}" style="width:90px" ${can('fal') ? '' : 'disabled'}></td><td class="num"><input class="field" type="number" min="0" max="240" name="hi_${k}" value="${ai.delay.ranges[k]?.[1] ?? 20}" style="width:90px" ${can('fal') ? '' : 'disabled'}></td></tr>`).join('')}</tbody></table></div>
+      ${can('fal') ? `<div><button class="btn primary sm">${icon('check')} Kaydet</button></div>` : ''}</div></form>` : ''}
     ${r.falci ? `<div class="panel" style="margin-bottom:14px"><div class="ph"><h3>Falcı Teyze kazancı</h3><a class="btn sm" href="#/settings">Fiyatlar</a></div><div class="pb"><div class="stats sm" style="margin:0">
       <div class="stat"><b>${r.paidCount}</b><span>Ücretli fal</span></div>
       <div class="stat"><b>${r.coinsSpent}</b><span>Harcanan jeton</span></div>
@@ -431,6 +435,11 @@ VIEWS.fal = async (main) => {
     const b = e.target.closest('[data-mode]'); if (!b || b.disabled) return;
     if (b.dataset.mode === 'auto' && !confirm('Otomatik modda fal cevapları Falcı Teyze kontrol etmeden gönderilir. Açılsın mı?')) return;
     try { await api('/falai', { method: 'PUT', body: { mode: b.dataset.mode } }); toast('Kaydedildi.'); VIEWS.fal(main); } catch (er) { toast(er.message); }
+  });
+  main.querySelector('.dlp')?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const f = e.target;
+    const ranges = Object.fromEntries(Object.keys(FAL).map((k) => [k, [+f[`lo_${k}`].value, +f[`hi_${k}`].value]]));
+    try { await api('/falai/delay', { method: 'PUT', body: { enabled: f.den.checked, ranges } }); toast('Cevap süreleri kaydedildi.'); VIEWS.fal(main); } catch (er) { toast(er.message); }
   });
   main.querySelector('.aitest')?.addEventListener('click', async (e) => {
     const t = main.querySelector('.ait'); const out = main.querySelector('.aiout');
