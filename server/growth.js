@@ -94,7 +94,7 @@ module.exports = function growth(app, ctx) {
     const days = Array.from({ length: N }, (_, i) => trDay(now() - (N - 1 - i) * DAY));
     const actDoc = (d) => store.get('activity', d);
     const activeSet = (d) => new Set(actDoc(d)?.users || []);
-    const users = store.all('users').filter((u) => u.role !== 'falci');
+    const users = store.all('users').filter((u) => !['falci', 'official'].includes(u.role));
     const unionOf = (from, to) => { const s = new Set(); for (let t = from; t <= to; t += DAY) (actDoc(trDay(t))?.users || []).forEach((x) => s.add(x)); return s; };
     const dau = days.map((d) => ({ day: d, n: actDoc(d)?.users?.length || 0 }));
     const newU = days.map((d) => ({ day: d, n: users.filter((u) => trDay(u.createdAt) === d).length }));

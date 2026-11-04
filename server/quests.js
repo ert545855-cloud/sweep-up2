@@ -22,7 +22,7 @@ module.exports = function quests(app, ctx) {
   ctx.quest = (uid, key, n = 1, uniq = null) => {
     const c = cfg(); if (!c.enabled || !uid) return;
     const q = c.list.find((x) => x.id === key); if (!q) return;
-    const u = store.get('users', uid); if (!u || u.role === 'falci') return;
+    const u = store.get('users', uid); if (!u || ['falci', 'official'].includes(u.role)) return;
     const d = docOf(uid);
     if (uniq) { d.seen = d.seen || {}; const k = `${key}:${uniq}`; if (d.seen[k]) return; d.seen[k] = 1; }
     const before = d.c[key] || 0;

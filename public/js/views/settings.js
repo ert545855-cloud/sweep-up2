@@ -41,7 +41,6 @@ export default function settings(view) {
     <div class="group-t">Gizlilik</div>
     <div class="group">
       ${PRIV.map(([k, ic, t, sub]) => `<label class="it">${icon(ic)}<span class="grow">${t}<div class="sub">${sub}</div></span><input type="checkbox" class="sw" data-k="${k}" ${me.privacy?.[k] ? 'checked' : ''}></label>`).join('')}
-      <a class="it" href="#/requests">${icon('userPlus')}<span class="grow">Takip istekleri</span>${state.badges.requests ? `<span class="num-badge static">${state.badges.requests}</span>` : ''}</a>
       <button class="it bl">${icon('block')}<span class="grow">Engellenenler</span></button>
     </div>
     <div class="group-t">Hesap</div>

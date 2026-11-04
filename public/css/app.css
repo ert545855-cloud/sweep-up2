@@ -2048,3 +2048,9 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .wh-big { font-size: 72px; line-height: 1; } .wh-card h2 { font-family: var(--display); margin: 10px 0 4px; font-size: 28px; } .wh-card p { color: var(--muted); margin: 0 0 16px; }
 .wh-res.win .wh-big { animation: pulse 1s infinite; }
 .sr-bar { gap: 0; overflow: hidden; } .sr-bar button { flex: 1 1 0; min-width: 0; padding: 0; font-size: 26px; height: 40px; }
+.chip.official { background: linear-gradient(120deg, #7c3aed, #ff4f8b); color: #fff; font-weight: 800; }
+.req-row { display: flex; align-items: center; gap: 12px; margin: 6px 14px 10px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--surface); }
+.req-row b { display: block; font-size: 15px; } .req-row small { color: var(--muted); font-size: 13px; }
+.rq-av { display: flex; } .rq-av img { width: 40px; height: 40px; border-radius: 30%; object-fit: cover; border: 2px solid var(--bg); } .rq-av img + img { margin-left: -16px; }
+.rq-n { min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--hot); color: #fff; font-size: 12.5px; font-weight: 800; display: grid; place-items: center; }
+.req-row.empty-r { opacity: .7; }

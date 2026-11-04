@@ -53,6 +53,8 @@ const emitTo = (userId, ev, data) => online.get(userId)?.forEach((s) => s.emit(e
 const followOk = (a, b) => { const f = store.get('follows', `${a}_${b}`); return !!f && f.status !== 'pending'; };
 const isPlus = (u) => !!u && (u.plusUntil || 0) > Date.now();
 const priv = (u) => (u && u.privacy) || {};
+// Özel hesaplar: Falcı Teyze ve SwipeUp yönetim hesabı (kaydırmada/önerilerde çıkmaz)
+const SPECIAL = new Set(['falci', 'official']);
 // Gizli hesabın içeriğini kim görebilir
 const canSee = (viewerId, owner) => !!owner && (owner.id === viewerId || !priv(owner).private || followOk(viewerId, owner.id));
 const hasRead = (m, uid) => m.readBy.includes(uid) || (m.seenBy || []).includes(uid);
@@ -240,6 +242,8 @@ function falLock(chat, fromId) {
   if (!chat || chat.isGroup) return null;
   const me = store.get('users', fromId);
   const other = store.get('users', chat.members.find((m) => m !== fromId));
+  if (other?.role === 'official' && me?.role !== 'official') return 'SwipeUp yönetim hesabına mesaj gönderilemez. Destek için Ayarlar → Yardım ve destek.';
+  if (me?.role === 'official') return null;
   if (other?.role === 'falci' && me?.role !== 'falci') return 'Falcı Teyze’ye sadece fal isteğiyle yazabilirsin.';
   if (me?.role === 'falci' && other?.role !== 'falci' && !store.find('messages', (m) => m.chatId === chat.id && m.fal)) return 'Sadece fal isteyenlere yazabilirsin.';
   return null;
@@ -644,7 +648,7 @@ function rankPeople(list) {
 }
 app.get('/api/people', auth, (req, res) => {
   const me = req.user.id;
-  const list = rankPeople(store.filter('users', (u) => u.id !== me && u.role !== 'falci' && isActive(u) && !isBlocked(me, u.id)));
+  const list = rankPeople(store.filter('users', (u) => u.id !== me && !SPECIAL.has(u.role) && isActive(u) && !isBlocked(me, u.id)));
   res.json(list.slice(0, 60).map(brief));
 });
 
@@ -653,6 +657,7 @@ app.get('/api/feed', auth, (req, res) => {
   const me = req.user.id;
   const following = new Set(store.filter('follows', (f) => f.from === me).map((f) => f.to));
   following.add(me);
+  const off = official(); if (off) following.add(off.id); // yönetim hesabının paylaşımları herkeste öne çıkar
   // Herkesin gönderileri; takip ettiklerin biraz öne çıkar
   const posts = store.filter('posts', (p) => p.type === 'image' && !isBlocked(me, p.userId) && canSee(me, store.get('users', p.userId)));
   posts.sort((a, b) => (b.createdAt + (following.has(b.userId) ? 6 * 3600000 : 0)) - (a.createdAt + (following.has(a.userId) ? 6 * 3600000 : 0)));
@@ -879,6 +884,7 @@ app.post('/api/stories/:id/reply', auth, (req, res) => {
   const text = String(req.body?.text || '').trim();
   if (!s || !text || s.userId === req.user.id) return res.status(400).json({ error: 'Yanıt gönderilemedi.' });
   const owner = store.get('users', s.userId);
+  if (owner?.role === 'official') return res.status(403).json({ error: 'Yönetim hesabına yanıt gönderilemez.' });
   if (owner?.role === 'falci' || req.user.role === 'falci') return res.status(403).json({ error: 'Falcı Teyze’ye sadece fal isteğiyle yazabilirsin.' });
   const chat = chatBetween(req.user.id, s.userId);
   const msg = sendMessage(chat, req.user.id, { text, story: { id: s.id, media: s.mediaType === 'image' ? s.media : null } });
@@ -899,7 +905,7 @@ app.post('/api/stories/:id/react', auth, (req, res) => {
   store.update('stories', s.id, {});
   // Falcı Teyze'ye mesaj gitmez; sadece tepki kaydedilir ve bildirim gider
   let chatId = null;
-  if (owner.role !== 'falci' && req.user.role !== 'falci') {
+  if (!SPECIAL.has(owner.role) && req.user.role !== 'falci') {
     const chat = chatBetween(req.user.id, s.userId);
     const msg = sendMessage(chat, req.user.id, { text: emoji, story: { id: s.id, media: s.mediaType === 'image' ? s.media : null, reaction: true } });
     chatId = msg ? chat.id : null;
@@ -920,11 +926,12 @@ app.get('/api/users/search', auth, (req, res) => {
       .forEach((c) => { const o = c.members.find((m) => m !== me); if (o) seen.set(o, (seen.get(o) || 0) + 3); });
     store.filter('follows', (f) => f.from === me && f.status !== 'pending').forEach((f) => seen.set(f.to, (seen.get(f.to) || 0) + 2));
     store.filter('follows', (f) => f.to === me && f.status !== 'pending').forEach((f) => seen.set(f.from, (seen.get(f.from) || 0) + 1));
-    let list = [...seen.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => store.get('users', id)).filter((u) => u && isActive(u) && u.role !== 'falci' && !isBlocked(me, u.id));
-    if (list.length < 8) list = [...list, ...rankPeople(store.filter('users', (u) => u.id !== me && isActive(u) && u.role !== 'falci' && !isBlocked(me, u.id) && !seen.has(u.id))).slice(0, 8 - list.length)];
+    let list = [...seen.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => store.get('users', id)).filter((u) => u && isActive(u) && !SPECIAL.has(u.role) && !isBlocked(me, u.id));
+    if (list.length < 8) list = [...list, ...rankPeople(store.filter('users', (u) => u.id !== me && isActive(u) && !SPECIAL.has(u.role) && !isBlocked(me, u.id) && !seen.has(u.id))).slice(0, 8 - list.length)];
     return res.json(list.slice(0, 12).map(brief));
   }
-  const list = rankPeople(store.filter('users', (u) => isActive(u) && !isBlocked(req.user.id, u.id) && (u.username.includes(q) || u.name.toLowerCase().includes(q))));
+  // Yönetim hesabı sadece kullanıcı adıyla aranınca çıkar
+  const list = rankPeople(store.filter('users', (u) => isActive(u) && !isBlocked(req.user.id, u.id) && (u.role === 'official' ? u.username.includes(q) : (u.username.includes(q) || u.name.toLowerCase().includes(q)))));
   res.json(list.slice(0, 30).map(brief));
 });
 
@@ -1075,7 +1082,7 @@ app.get('/api/swipe/deck', auth, (req, res) => {
   const me = req.user;
   const prefs = me.prefs || { ageMin: 18, ageMax: 99, maxKm: null };
   const swiped = new Set(store.filter('swipes', (s) => s.from === me.id).map((s) => s.to));
-  let deck = store.filter('users', (u) => u.id !== me.id && u.role !== 'falci' && isActive(u) && !priv(u).hideFromDeck && !swiped.has(u.id) && !isBlocked(me.id, u.id));
+  let deck = store.filter('users', (u) => u.id !== me.id && !SPECIAL.has(u.role) && isActive(u) && !priv(u).hideFromDeck && !swiped.has(u.id) && !isBlocked(me.id, u.id));
   if (me.lookingFor && me.lookingFor !== 'all') deck = deck.filter((u) => u.gender === me.lookingFor || !u.gender);
   deck = deck.filter((u) => !u.age || (u.age >= prefs.ageMin && u.age <= prefs.ageMax));
   if (prefs.maxKm && me.lat != null) deck = deck.filter((u) => { const d = distance(me, u); return d == null || d <= prefs.maxKm; });
@@ -1214,7 +1221,7 @@ function systemMsg(chat, text) { return sendMessage(chat, chat.members[0], { tex
 app.post('/api/groups', auth, (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 50);
   if (req.user.role === 'falci') return res.status(403).json({ error: 'Falcı Teyze grup kuramaz.' });
-  const ids = [...new Set((req.body?.memberIds || []).map(String))].filter((id) => id !== req.user.id && store.get('users', id) && store.get('users', id).role !== 'falci' && !isBlocked(req.user.id, id));
+  const ids = [...new Set((req.body?.memberIds || []).map(String))].filter((id) => id !== req.user.id && store.get('users', id) && !SPECIAL.has(store.get('users', id).role) && !isBlocked(req.user.id, id));
   if (!name) return res.status(400).json({ error: 'Gruba bir ad ver.' });
   if (!ids.length) return res.status(400).json({ error: 'En az bir kişi seç.' });
   const chat = store.put('chats', {
@@ -1239,7 +1246,7 @@ app.patch('/api/groups/:id', auth, (req, res) => {
 app.post('/api/groups/:id/members', auth, (req, res) => {
   const c = store.get('chats', req.params.id);
   if (!c?.isGroup || !c.members.includes(req.user.id)) return res.status(404).json({ error: 'Grup bulunamadı.' });
-  const add = (req.body?.userIds || []).map(String).filter((id) => !c.members.includes(id) && store.get('users', id) && store.get('users', id).role !== 'falci' && !isBlocked(req.user.id, id));
+  const add = (req.body?.userIds || []).map(String).filter((id) => !c.members.includes(id) && store.get('users', id) && !SPECIAL.has(store.get('users', id).role) && !isBlocked(req.user.id, id));
   if (!add.length) return res.status(400).json({ error: 'Eklenecek kişi seç.' });
   c.members.push(...add); store.update('chats', c.id, {});
   systemMsg(c, `${req.user.name}, ${add.map((id) => store.get('users', id).name.split(' ')[0]).join(', ')} kişisini ekledi`);
@@ -1266,6 +1273,7 @@ app.delete('/api/groups/:id/members/:uid', auth, (req, res) => {
 // ---------- Fal (Falcı Teyze'ye istek) ----------
 const FAL_TYPES = { kahve: 'kahve falı', tarot: 'tarot falı', burc: 'burç yorumu', uyum: 'aşk uyumu' };
 const falci = () => store.find('users', (u) => u.role === 'falci');
+const official = () => store.find('users', (u) => u.role === 'official');
 const isMedia = (u) => typeof u === 'string' && /^\/media\/[\w-]+$/.test(u);
 
 app.get('/api/fal/falci', auth, (req, res) => {
@@ -1390,7 +1398,7 @@ function shareRef(viewer, ref) {
 app.get('/api/share/targets', auth, (req, res) => {
   const me = req.user.id; const q = String(req.query.q || '').toLocaleLowerCase('tr-TR').trim().replace(/^@/, '');
   const out = []; const seen = new Set();
-  const addUser = (u, sub) => { if (!u || seen.has(u.id) || u.id === me || !isActive(u) || isBlocked(me, u.id) || u.role === 'falci') return; seen.add(u.id); out.push({ kind: 'user', id: u.id, name: u.name, username: u.username, avatar: u.avatar, verified: !!u.verified, sub: sub || `@${u.username}` }); };
+  const addUser = (u, sub) => { if (!u || seen.has(u.id) || u.id === me || !isActive(u) || isBlocked(me, u.id) || SPECIAL.has(u.role)) return; seen.add(u.id); out.push({ kind: 'user', id: u.id, name: u.name, username: u.username, avatar: u.avatar, verified: !!u.verified, sub: sub || `@${u.username}` }); };
   const match = (s) => !q || String(s || '').toLocaleLowerCase('tr-TR').includes(q);
   store.filter('chats', (c) => c.members.includes(me)).sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0)).slice(0, 40).forEach((c) => {
     if (c.isGroup) { if (match(c.name) && !seen.has(c.id)) { seen.add(c.id); out.push({ kind: 'chat', id: c.id, name: c.name, avatar: c.avatar, sub: `${c.members.length} üye · grup`, group: true }); } return; }
@@ -1622,7 +1630,7 @@ io.on('connection', (socket) => {
     if (!c || c.isGroup || !c.members.includes(uid)) return ack?.({ error: 'Arama başlatılamadı.' });
     const to = c.members.find((m) => m !== uid);
     if (isBlocked(uid, to)) return ack?.({ error: 'Bu kişiyi arayamazsın.' });
-    if (store.get('users', to)?.role === 'falci' || store.get('users', uid)?.role === 'falci') return ack?.({ error: 'Falcı Teyze ile arama yapılamaz.' });
+    if (SPECIAL.has(store.get('users', to)?.role) || SPECIAL.has(store.get('users', uid)?.role)) return ack?.({ error: 'Bu hesapla arama yapılamaz.' });
     if ([...calls.values()].some((x) => [x.from, x.to].includes(to))) return ack?.({ error: 'Kişi şu an başka bir görüşmede.' });
     const call = { id: nanoid(10), chatId, from: uid, to, video: !!video, state: 'ringing', at: now(), callerSocket: socket.id };
     calls.set(call.id, call);
@@ -1791,6 +1799,21 @@ async function ensureFalci() {
   }
 }
 
+// SwipeUp yönetim (resmi) hesabı: takip edilebilir, paylaşımları herkese görünür; mesaj alınmaz, önerilerde çıkmaz
+async function ensureOfficial() {
+  if (official()) return;
+  if (store.find('users', (u) => u.username === 'swipeup')) { store.update('users', store.find('users', (u) => u.username === 'swipeup').id, { role: 'official' }); return; }
+  const initial = process.env.OFFICIAL_PASSWORD || crypto.randomBytes(9).toString('base64url');
+  store.put('users', {
+    id: nanoid(10), username: 'swipeup', name: 'SwipeUp', email: null, role: 'official', verified: true,
+    bio: 'SwipeUp’ın resmi hesabı 💜 Duyurular, etkinlikler ve yenilikler burada. Destek için: Ayarlar → Yardım ve destek.',
+    age: null, gender: null, lookingFor: 'all', city: '', interests: [], prefs: { ageMin: 18, ageMax: 99, maxKm: null },
+    avatar: '/icons/icon-192.png', photos: [], passHash: await bcrypt.hash(initial, 10), isBot: false, createdAt: now(), lastSeen: now(),
+    privacy: { hideFromDeck: true },
+  });
+  console.log(`[official] SwipeUp yönetim hesabı oluşturuldu (kullanıcı adı: swipeup)${process.env.OFFICIAL_PASSWORD ? '' : `, geçici şifre: ${initial}`}`);
+}
+
 // ================= Başlat =================
 (async () => {
   await store.init();
@@ -1807,6 +1830,7 @@ async function ensureFalci() {
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:admin@swipeup.app', VAPID.publicKey, VAPID.privateKey);
   purgeDemo();
   await ensureFalci();
+  await ensureOfficial();
   await adminApi.ensureAdmin?.();
   music.selfTest().catch(() => {});
   server.listen(PORT, () => console.log(`SwipeUp http://localhost:${PORT} · sürüm ${APP_VERSION}`));

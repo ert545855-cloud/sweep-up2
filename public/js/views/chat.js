@@ -46,7 +46,7 @@ export default async function chat(view, chatId) {
   let blocked = !!data.blocked;
   let ttl = data.ttl || 0;
   let falLock = data.falLock || null;
-  const falChat = !isGroup && (other?.role === 'falci' || state.me.role === 'falci');
+  const falChat = !isGroup && ['falci', 'official'].includes(other?.role) || ['falci', 'official'].includes(state.me.role);
 
   view.innerHTML = `<div class="chat">
     <header class="topbar bordered">
@@ -457,6 +457,10 @@ export default async function chat(view, chatId) {
   }
 
   function paintComposer() {
+    if (falLock && !blocked && other?.role === 'official') {
+      comp.innerHTML = `<div class="fal-lock"><span>🛡️</span><div class="grow"><b>Bu, SwipeUp’ın resmi hesabı</b><small>Bu hesaba mesaj gönderilemez. Bir sorunun varsa destek ekibimize yaz.</small></div><a class="btn primary sm" href="#/destek">Destek</a></div>`;
+      return;
+    }
     if (falLock && !blocked) {
       const toFalci = other?.role === 'falci';
       comp.innerHTML = `<div class="fal-lock"><span>🔮</span><div class="grow"><b>${toFalci ? 'Falcı Teyze’ye sadece fal isteğiyle yazılır' : 'Bu kişi henüz fal istemedi'}</b><small>${toFalci ? 'Fal isteğini gönder, cevabı buraya gelsin. Sonraki sorularını da yeni bir fal isteğiyle sorabilirsin.' : 'Sadece fal isteyenlere yazabilirsin.'}</small></div>${toFalci ? '<a class="btn primary sm" href="#/fal">Fal baktır</a>' : ''}</div>`;

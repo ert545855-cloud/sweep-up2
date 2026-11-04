@@ -85,7 +85,7 @@ export default async function profile(view, username) {
       </${avHref ? 'a' : 'div'}>
       <h2>${nm(u)}${u.plus ? `<span class="plus-chip">${icon('crown')}+</span>` : ''}</h2>
       ${(u.badges || []).length ? `<div class="badges">${u.badges.map((b) => `<span class="badge" title="${esc(b.name)} #${b.no}">${b.em} ${esc(b.name)}<small>#${b.no}</small></span>`).join('')}</div>` : ''}
-      ${u.role === 'falci' ? '<span class="chip uv" style="margin-top:8px">🔮 Falcı</span>' : ''}
+      ${u.role === 'falci' ? '<span class="chip uv" style="margin-top:8px">🔮 Falcı</span>' : ''}${u.role === 'official' ? '<span class="chip official" style="margin-top:8px">🛡️ SwipeUp resmi hesabı</span>' : ''}
       ${(u.tags || []).length ? `<div class="utags">${u.tags.map((t) => `<span class="utag t-${esc(t.color)}">${t.em} ${esc(t.name)}</span>`).join('')}</div>` : ''}
       <div class="handle">${u.privacy?.private ? `${icon('lock', '', 'style="width:13px;height:13px;vertical-align:-1px"')} ` : ''}@${esc(u.username)}${!self && lastSeen(u) ? ` · ${esc(lastSeen(u))}` : ''}</div>
       ${u.bio ? `<p class="bio">${richText(u.bio)}</p>` : (self ? '<a class="link" href="#/edit" style="margin-top:6px">Biyografi ekle</a>' : '')}
@@ -109,7 +109,7 @@ export default async function profile(view, username) {
       ? '<button class="btn primary unb">Engeli kaldır</button>'
       : u.role === 'falci'
         ? `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : 'Takip et'}</button><a class="btn" href="#/fal">🔮 Fal baktır</a><button class="btn sq msg" aria-label="Mesaj gönder">${icon('send', '', 'style="width:18px;height:18px"')}</button>`
-        : `<button class="btn ${u.isFollowing || u.requested ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : u.requested ? 'İstek gönderildi' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button>${u.role === 'falci' && state.me.role !== 'falci' ? '<a class="btn fal-go" href="#/fal">🔮 Fal baktır</a>' : `<button class="btn msg">${icon('send')} Mesaj</button>`}${u.matched || u.role === 'falci' || state.me.role === 'falci' ? '' : '<button class="btn sq smsg" aria-label="Süper mesaj" title="Süper mesaj">💌</button>'}`}
+        : `<button class="btn ${u.isFollowing || u.requested ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : u.requested ? 'İstek gönderildi' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button>${u.role === 'official' ? '<a class="btn fal-go" href="#/destek">🎧 Destek</a>' : u.role === 'falci' && state.me.role !== 'falci' ? '<a class="btn fal-go" href="#/fal">🔮 Fal baktır</a>' : `<button class="btn msg">${icon('send')} Mesaj</button>`}${u.matched || ['falci', 'official'].includes(u.role) || ['falci', 'official'].includes(state.me.role) ? '' : '<button class="btn sq smsg" aria-label="Süper mesaj" title="Süper mesaj">💌</button>'}`}
     </div>
     ${self ? `<div class="me-links">
       <a href="#/ziyaretciler">${icon('eye')}<span>Ziyaretçiler</span><b class="vc"></b></a>
@@ -180,7 +180,7 @@ export default async function profile(view, username) {
 
   view.querySelector('.menu-btn')?.addEventListener('click', () => {
     const items = [['share', 'share', 'Profili paylaş']];
-    if (!u.matched && !u.blockedByMe && u.role !== 'falci') items.push(['send', 'smsg', 'Süper mesaj gönder']);
+    if (!u.matched && !u.blockedByMe && !['falci', 'official'].includes(u.role)) items.push(['send', 'smsg', 'Süper mesaj gönder']);
     if (u.matched) items.push(['x', 'unmatch', 'Eşleşmeyi kaldır']);
     if (!u.blockedByMe) items.push(['block', 'block', 'Engelle'], ['flag', 'report', 'Şikayet et']);
     sheet(null, `<div class="menu">${items.map(([ic, a, l]) => `<button data-a="${a}" class="${['block', 'report', 'unmatch'].includes(a) ? 'danger' : ''}">${icon(ic)}${l}</button>`).join('')}</div>`, {

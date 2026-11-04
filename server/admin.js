@@ -241,7 +241,7 @@ module.exports = function mountAdmin(app, ctx) {
     const u = store.get('users', req.params.id);
     if (!u) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
     const temp = crypto.randomBytes(6).toString('base64url');
-    store.update('users', u.id, { passHash: await bcrypt.hash(temp, 10), ...(u.role === 'falci' ? { passChangedByUser: true } : {}) });
+    store.update('users', u.id, { passHash: await bcrypt.hash(temp, 10), ...(['falci', 'official'].includes(u.role) ? { passChangedByUser: true } : {}) });
     audit(req.admin, 'şifre sıfırladı', u.id);
     res.json({ password: temp });
   });
@@ -249,6 +249,7 @@ module.exports = function mountAdmin(app, ctx) {
     const u = store.get('users', req.params.id);
     if (!u) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
     if (u.role === 'falci') return res.status(400).json({ error: 'Falcı Teyze hesabı silinemez.' });
+    if (u.role === 'official') return res.status(400).json({ error: 'SwipeUp yönetim hesabı silinemez.' });
     kickSockets(u.id, { reason: 'Hesap silindi' });
     const id = u.id;
     ctx.purgeUser(id);

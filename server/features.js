@@ -226,7 +226,7 @@ module.exports = function features(app, ctx) {
 
   // ---------- Hesap silme ve veri indirme ----------
   app.delete('/api/me', auth, wrap(async (req, res) => {
-    if (req.user.role === 'falci') return res.status(400).json({ error: 'Falcı Teyze hesabı silinemez.' });
+    if (['falci', 'official'].includes(req.user.role)) return res.status(400).json({ error: 'Bu hesap silinemez.' });
     if (!(await bcrypt.compare(String(req.body?.password || ''), req.user.passHash))) return res.status(400).json({ error: 'Şifre hatalı.' });
     store.put('deleted_accounts', { id: req.user.id, username: req.user.username, reason: String(req.body?.reason || '').slice(0, 300), at: now() });
     purgeUser(req.user.id);

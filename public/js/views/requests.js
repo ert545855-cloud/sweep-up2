@@ -4,7 +4,7 @@ import {
 } from '../core.js';
 
 export default async function requests(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button><div class="center">Takip istekleri</div><span class="ib"></span></header>
+  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/notifications')" aria-label="Geri">${icon('back')}</button><div class="center">Takip istekleri</div><span class="ib"></span></header>
     <div class="rq"><div class="spinner"></div></div>`;
   const box = view.querySelector('.rq');
   const load = async () => {

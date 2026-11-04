@@ -35,13 +35,13 @@ module.exports = function wheel(app, ctx) {
   };
   const view = (u) => {
     const c = cfg(); const s = spinOf(u.id);
-    return { enabled: c.enabled, slices: visual(c), winChance: winChance(c), canSpin: c.enabled && !s && u.role !== 'falci', last: s || null, nextAt: weekStart() + 7 * 86400000 };
+    return { enabled: c.enabled, slices: visual(c), winChance: winChance(c), canSpin: c.enabled && !s && !['falci', 'official'].includes(u.role), last: s || null, nextAt: weekStart() + 7 * 86400000 };
   };
   app.get('/api/wheel', auth, (req, res) => res.json(view(req.user)));
   app.post('/api/wheel/spin', auth, (req, res) => {
     const c = cfg();
     if (!c.enabled) return res.status(503).json({ error: 'Çark şu an kapalı.' });
-    if (req.user.role === 'falci') return res.status(400).json({ error: 'Falcı Teyze çark çeviremez 🔮' });
+    if (['falci', 'official'].includes(req.user.role)) return res.status(400).json({ error: 'Bu hesap çark çeviremez.' });
     if (spinOf(req.user.id)) return res.status(409).json({ error: 'Bu haftaki hakkını kullandın. Cuma yenilenir!' });
     let r = Math.random() * 100; let prize = null;
     for (const s of c.slices) { r -= +s.chance || 0; if (r < 0) { prize = s; break; } }
@@ -66,7 +66,7 @@ module.exports = function wheel(app, ctx) {
     const d = new Date(now() + 3 * 3600000);
     if (d.getUTCDay() !== 5 || d.getUTCHours() < 12 || lastAnn === weekId()) return;
     lastAnn = weekId(); store.put('settings', { id: 'wheel_ann', week: lastAnn });
-    store.filter('users', (u) => u.role !== 'falci' && u.status !== 'banned' && (u.lastSeen || 0) > now() - 30 * 86400000)
+    store.filter('users', (u) => !['falci', 'official'].includes(u.role) && u.status !== 'banned' && (u.lastSeen || 0) > now() - 30 * 86400000)
       .forEach((u) => notify(u.id, { type: 'announce', title: 'SwipeUp', text: '🎡 Hediye çarkı yenilendi! Bu haftaki şansını dene.', url: '/#/cark', tag: 'wheel' }));
   }, 10 * 60000).unref();
   // 8 haftadan eski kayıtları temizle

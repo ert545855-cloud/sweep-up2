@@ -15,7 +15,7 @@ export default async function notifications(view) {
     </header><div class="nl"><div class="spinner"></div></div>`;
   view.querySelector('.st').onclick = notifSettings;
 
-  const list = await api('/notifications');
+  const [list, reqs] = await Promise.all([api('/notifications'), api('/follow-requests').catch(() => [])]);
   const nl = view.querySelector('.nl');
   const following = new Set((await api(`/users/${state.me.id}/following`)).map((u) => u.id));
 
@@ -28,15 +28,22 @@ export default async function notifications(view) {
       ${n.type === 'live' ? `<span style="color:var(--hot)">${icon('live')}</span>` : ''}
       ${n.type === 'missed' ? `<span style="color:var(--hot)">${icon('phone')}</span>` : ''}
     </a>`;
+  const reqRow = () => (reqs.length ? `<a class="req-row" href="#/requests"><span class="rq-av">${reqs.slice(0, 2).map((u) => `<img src="${esc((u.user || u).avatar)}" alt="">`).join('')}</span>
+      <span class="grow"><b>Takip istekleri</b><small>${esc((reqs[0].user || reqs[0]).username || '')}${reqs.length > 1 ? ` ve ${reqs.length - 1} kişi daha` : ''}</small></span><span class="rq-n">${reqs.length}</span>${icon('back', '', 'style="transform:rotate(180deg);width:18px;height:18px"')}</a>`
+    : (state.me.privacy?.private ? '<a class="req-row empty-r" href="#/requests"><span class="grow"><b>Takip istekleri</b><small>Bekleyen istek yok</small></span></a>' : ''));
   const paint = () => {
     if (!list.length) {
+      nl.innerHTML = `${reqRow()}<div class="empty"><div class="big">${icon('bell')}</div><h2>Henüz bildirim yok</h2>Biri seni beğendiğinde, takip ettiğinde ya da eşleştiğinde burada görürsün.</div>`;
+      return;
+    }
+    if (false) {
       nl.innerHTML = `<div class="empty"><div class="big">${icon('bell')}</div><h2>Henüz bildirim yok</h2>Biri seni beğendiğinde, takip ettiğinde ya da eşleştiğinde burada görürsün.</div>`;
       return;
     }
     const day = Date.now() - 86400000;
     const fresh = list.filter((n) => n.at > day);
     const old = list.filter((n) => n.at <= day);
-    nl.innerHTML = (fresh.length ? `<div class="section-t">Bugün</div>${fresh.map(row).join('')}` : '')
+    nl.innerHTML = reqRow() + (fresh.length ? `<div class="section-t">Bugün</div>${fresh.map(row).join('')}` : '')
       + (old.length ? `<div class="section-t">Önceki</div>${old.map(row).join('')}` : '');
   };
   paint();

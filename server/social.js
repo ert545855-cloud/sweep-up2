@@ -59,6 +59,7 @@ module.exports = function social(app, ctx) {
     const text = moderation.mask(String(req.body?.text || '').trim().slice(0, 500));
     const p = t?.prompts?.find((x) => x.id === req.body?.promptId);
     if (!t || !p || t.id === req.user.id) return res.status(404).json({ error: 'Soru bulunamadı.' });
+    if (t.role === 'official') return res.status(403).json({ error: 'Yönetim hesabına mesaj gönderilemez.' });
     if (t.role === 'falci' || req.user.role === 'falci') return res.status(403).json({ error: 'Falcı Teyze’ye sadece fal isteğiyle yazabilirsin.' });
     if (!text) return res.status(400).json({ error: 'Bir şey yaz.' });
     if (isBlocked(req.user.id, t.id)) return res.status(403).json({ error: 'Bu kişiye yazamazsın.' });
@@ -143,7 +144,7 @@ module.exports = function social(app, ctx) {
     const t = user(req.params.id);
     const text = moderation.mask(String(req.body?.text || '').trim().slice(0, 500));
     const cost = eco.get().superMsgCoins;
-    if (!t || t.id === req.user.id || t.role === 'falci' || req.user.role === 'falci') return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    if (!t || t.id === req.user.id || ['falci', 'official'].includes(t.role) || ['falci', 'official'].includes(req.user.role)) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
     if (isBlocked(req.user.id, t.id)) return res.status(403).json({ error: 'Bu kişiye yazamazsın.' });
     if (text.length < 2) return res.status(400).json({ error: 'Mesajını yaz.' });
     if (limited('sm:' + req.user.id, 10, DAY)) return res.status(429).json({ error: 'Bugün çok fazla süper mesaj gönderdin.' });
@@ -164,7 +165,7 @@ module.exports = function social(app, ctx) {
     const c = store.get('chats', req.params.id);
     if (!c || !c.members.includes(req.user.id)) { res.status(404).json({ error: 'Sohbet bulunamadı.' }); return null; }
     if (c.isGroup) { res.status(400).json({ error: 'Oyunlar birebir sohbetlerde oynanır.' }); return null; }
-    if (c.members.some((m) => user(m)?.role === 'falci')) { res.status(403).json({ error: 'Falcı Teyze ile sadece fal üzerinden yazışılır.' }); return null; }
+    if (c.members.some((m) => ['falci', 'official'].includes(user(m)?.role))) { res.status(403).json({ error: 'Falcı Teyze ile sadece fal üzerinden yazışılır.' }); return null; }
     return c;
   };
   app.post('/api/chats/:id/game', auth, (req, res) => {
@@ -464,7 +465,7 @@ module.exports = function social(app, ctx) {
     socket.on('speed:watch', () => { socket.join('speed'); socket.emit('speed:count', { waiting: queue.size, live: inRound.size }); });
     socket.on('speed:join', (_, ack) => {
       const u = user(uid);
-      if (!u || u.role === 'falci') return ack?.({ error: 'Katılamazsın.' });
+      if (!u || ['falci', 'official'].includes(u.role)) return ack?.({ error: 'Katılamazsın.' });
       if (inRound.has(uid)) return ack?.({ error: 'Zaten bir turdasın.' });
       queue.set(uid, { uid, socketId: socket.id, at: now() });
       ack?.({ ok: true, waiting: queue.size });
