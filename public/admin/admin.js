@@ -1216,20 +1216,21 @@ VIEWS.quests = async (main) => {
   const w = await api('/wheel');
   const wbox = document.createElement('div'); main.append(wbox);
   const TYPES = { coins: 'Jeton', plus: 'SwipeUp+ (gün)', boost: 'Boost (dakika)' };
-  const wrow = (s) => `<tr class="wr"><td><input class="field" data-k="em" value="${esc(s.em)}" style="width:56px" ${owner ? '' : 'disabled'}></td><td><input class="field" data-k="label" value="${esc(s.label)}" style="width:150px" ${owner ? '' : 'disabled'}></td>
+  const wimg = (type, amount) => `/img/wheel/${type === 'plus' ? (amount >= 7 ? 'diamond.svg' : 'crown.svg') : type === 'boost' ? 'boost.png' : amount >= 75 ? 'coins-l.png' : amount >= 20 ? 'coins-m.png' : 'coins-s.png'}`;
+  const wrow = (s) => `<tr class="wr"><td><img class="wimg" src="${wimg(s.type, +s.amount)}" alt="" style="width:40px;height:40px;object-fit:contain;display:block"></td><td><input class="field" data-k="label" value="${esc(s.label)}" style="width:150px" ${owner ? '' : 'disabled'}></td>
     <td><select class="field" data-k="type" ${owner ? '' : 'disabled'}>${Object.entries(TYPES).map(([k, l]) => `<option value="${k}" ${s.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
     <td class="num"><input class="field" type="number" data-k="amount" value="${s.amount}" style="width:80px" ${owner ? '' : 'disabled'}></td><td class="num"><input class="field" type="number" step="0.1" data-k="chance" value="${s.chance}" style="width:80px" ${owner ? '' : 'disabled'}></td>
     <td class="num">${w.stats.by[s.id] || 0}</td><td>${owner ? `<button type="button" class="btn sm danger wrm">${icon('trash')}</button>` : ''}<input type="hidden" data-k="id" value="${esc(s.id || '')}"></td></tr>`;
   wbox.innerHTML = `<form class="panel wform" style="margin-top:16px"><div class="ph"><h3>🎡 Hediye çarkı</h3><div class="row" style="gap:12px;font-size:13px"><label class="row" style="gap:6px"><input type="checkbox" name="en" ${w.enabled ? 'checked' : ''} ${owner ? '' : 'disabled'}> Çark açık</label><label class="row" style="gap:6px"><input type="checkbox" name="an" ${w.announce ? 'checked' : ''} ${owner ? '' : 'disabled'}> Cuma 12:00 “çark yenilendi” bildirimi</label></div></div>
-    <div class="pb muted" style="font-size:12.5px">Herkes her hafta (cumadan cumaya) bir kez çevirir. Aşağıdaki ihtimallerin toplamı hediye çıkma şansıdır; kalanı “PAS”. Bu hafta: <b>${w.stats.spins}</b> çevirme, <b>${w.stats.wins}</b> hediye, <b>${w.stats.coins}</b> jeton dağıtıldı.</div>
+    <div class="pb muted" style="font-size:12.5px">Herkes her hafta (cumadan cumaya) bir kez çevirir. Aşağıdaki ihtimallerin toplamı hediye çıkma şansıdır; kalanı “PAS” (çarkta 4 PAS dilimi görünür). Ödül görseli türe ve miktara göre otomatik seçilir; kazanma oranı kullanıcıya gösterilmez. Bu hafta: <b>${w.stats.spins}</b> çevirme, <b>${w.stats.wins}</b> hediye, <b>${w.stats.coins}</b> jeton dağıtıldı.</div>
     <div class="tw"><table class="tbl"><thead><tr><th></th><th>Hediye</th><th>Tür</th><th class="num">Miktar</th><th class="num">İhtimal %</th><th class="num">Bu hafta</th><th></th></tr></thead><tbody class="wl">${w.slices.map(wrow).join('')}</tbody></table></div>
     <div class="pb row" style="gap:10px;justify-content:space-between;flex-wrap:wrap"><span class="wsum"></span>${owner ? `<span class="row" style="gap:8px"><button type="button" class="btn sm wadd">${icon('plus')} Hediye</button><button class="btn primary">${icon('check')} Kaydet</button></span>` : ''}</div></form>
-    ${w.recent.length ? `<div class="panel" style="margin-top:14px"><div class="ph"><h3>Bu hafta kazananlar</h3></div><div class="pb row" style="gap:8px;flex-wrap:wrap">${w.recent.map((s) => `<span class="chip">${esc(s.prize.em)} ${esc(s.prize.label)} · @${esc(s.user?.username || '?')}</span>`).join('')}</div></div>` : ''}`;
+    ${w.recent.length ? `<div class="panel" style="margin-top:14px"><div class="ph"><h3>Bu hafta kazananlar</h3></div><div class="pb row" style="gap:8px;flex-wrap:wrap">${w.recent.map((s) => `<span class="chip"><img src="${esc(s.prize.img)}" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:-4px"> ${esc(s.prize.label)} · @${esc(s.user?.username || '?')}</span>`).join('')}</div></div>` : ''}`;
   const wf = wbox.querySelector('.wform');
   const sum = () => { const t = [...wf.querySelectorAll('[data-k="chance"]')].reduce((a, x) => a + (+x.value || 0), 0); wf.querySelector('.wsum').innerHTML = `Hediye çıkma şansı: <b style="color:${t > 100 ? 'var(--bad)' : 'inherit'}">%${Math.round(t * 10) / 10}</b> · PAS: %${Math.max(0, Math.round((100 - t) * 10) / 10)}`; };
-  sum(); wf.oninput = sum;
+  sum(); wf.oninput = (e) => { sum(); const tr = e.target.closest('.wr'); if (tr) tr.querySelector('.wimg').src = wimg(tr.querySelector('[data-k="type"]').value, +tr.querySelector('[data-k="amount"]').value); };
   wf.onclick = (e) => {
-    if (e.target.closest('.wadd')) { wf.querySelector('.wl').insertAdjacentHTML('beforeend', wrow({ em: '🎁', label: '', type: 'coins', amount: 10, chance: 1 })); sum(); }
+    if (e.target.closest('.wadd')) { wf.querySelector('.wl').insertAdjacentHTML('beforeend', wrow({ label: '', type: 'coins', amount: 10, chance: 1 })); sum(); }
     if (e.target.closest('.wrm')) { e.target.closest('tr').remove(); sum(); }
   };
   wf.onsubmit = async (e) => {

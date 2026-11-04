@@ -16,6 +16,15 @@ const PAS = [
   'Pas! Hediye kargoya verilemedi, kargocu kaydırmaya daldı 📦', 'Çark dedi ki: “Haftaya gel, konuşuruz” ☕',
 ];
 const DEFAULTS = { enabled: true, announce: true, slices: DEFAULT_SLICES };
+const PAS_COUNT = 4;
+// Ödül görseli (Canva tasarımı) türe ve miktara göre seçilir
+const IMG = '/img/wheel/';
+const imgOf = (s) => {
+  if (!s) return `${IMG}pas.svg`;
+  if (s.type === 'plus') return `${IMG}${s.amount >= 7 ? 'diamond' : 'crown'}.svg`;
+  if (s.type === 'boost') return `${IMG}boost.png`;
+  return `${IMG}${s.amount >= 75 ? 'coins-l' : s.amount >= 20 ? 'coins-m' : 'coins-s'}.png`;
+};
 
 module.exports = function wheel(app, ctx) {
   const { store, auth, eco, notify, emitTo } = ctx;
@@ -26,16 +35,22 @@ module.exports = function wheel(app, ctx) {
   const weekId = (t = now()) => new Date(weekStart(t) + 3 * 3600000).toISOString().slice(0, 10);
   const spinOf = (uid) => store.get('wheel_spins', `${uid}_${weekId()}`);
   const winChance = (c) => Math.min(100, c.slices.reduce((a, s) => a + (+s.chance || 0), 0));
-  // Çarkta görünen dilimler: hediyeler + aralara "PAS"
+  // Çarkta görünen dilimler: hediyeler + aralara eşit dağılmış 4 "PAS"
   const visual = (c) => {
     const out = [];
     const short = (s) => (s.type === 'coins' ? `${s.amount} jeton` : s.type === 'plus' ? `${s.amount} gün +` : s.type === 'boost' ? `${s.amount} dk` : s.label).slice(0, 10);
-    c.slices.forEach((s) => { out.push({ id: s.id, em: s.em, label: s.label, short: short(s), win: true }); out.push({ id: 'pas', em: '😂', label: 'PAS', short: 'PAS', win: false }); });
+    const n = c.slices.length; const pas = () => out.push({ id: 'pas', img: imgOf(null), label: 'PAS', short: 'PAS', win: false });
+    if (!n) { for (let i = 0; i < PAS_COUNT; i++) pas(); return out; }
+    c.slices.forEach((s, k) => {
+      out.push({ id: s.id, img: imgOf(s), label: s.label, short: short(s), type: s.type, win: true });
+      const add = Math.floor(((k + 1) * PAS_COUNT) / n) - Math.floor((k * PAS_COUNT) / n);
+      for (let i = 0; i < add; i++) pas();
+    });
     return out;
   };
   const view = (u) => {
     const c = cfg(); const s = spinOf(u.id);
-    return { enabled: c.enabled, slices: visual(c), winChance: winChance(c), canSpin: c.enabled && !s && !['falci', 'official'].includes(u.role), last: s || null, nextAt: weekStart() + 7 * 86400000 };
+    return { enabled: c.enabled, slices: visual(c), canSpin: c.enabled && !s && !['falci', 'official'].includes(u.role), last: s ? { ...s, prize: s.prize ? { ...s.prize, img: imgOf(s.prize) } : null } : null, nextAt: weekStart() + 7 * 86400000 };
   };
   app.get('/api/wheel', auth, (req, res) => res.json(view(req.user)));
   app.post('/api/wheel/spin', auth, (req, res) => {
@@ -53,11 +68,11 @@ module.exports = function wheel(app, ctx) {
       if (prize.type === 'coins') eco.addCoins(req.user.id, prize.amount, 'wheel', { ref: prize.id });
       if (prize.type === 'plus') eco.grantPlus(req.user.id, prize.amount);
       if (prize.type === 'boost') { const u = store.get('users', req.user.id); store.update('users', u.id, { boostUntil: Math.max(now(), u.boostUntil || 0) + prize.amount * 60000 }); }
-      text = `🎉 Tebrikler! ${prize.em} ${prize.label} kazandın!`;
+      text = `Tebrikler! ${prize.label} kazandın!`;
       emitTo(req.user.id, 'wallet', {});
     } else text = PAS[Math.floor(Math.random() * PAS.length)];
     const spin = store.put('wheel_spins', { id: `${req.user.id}_${weekId()}`, uid: req.user.id, week: weekId(), at: now(), prizeId: prize?.id || null, prize: prize ? { em: prize.em, label: prize.label, type: prize.type, amount: prize.amount } : null, text });
-    res.json({ index, prize: spin.prize, text, ...view(store.get('users', req.user.id)) });
+    res.json({ index, prize: spin.prize ? { ...spin.prize, img: imgOf(spin.prize) } : null, text, ...view(store.get('users', req.user.id)) });
   });
   // Cuma öğlen: "çark yenilendi" bildirimi
   let lastAnn = store.get('settings', 'wheel_ann')?.week || null;
@@ -78,7 +93,7 @@ module.exports = function wheel(app, ctx) {
   app.get('/api/admin/wheel', A.adminAuth, (req, res) => {
     const c = cfg(); const w = store.filter('wheel_spins', (s) => s.week === weekId());
     const by = {}; w.forEach((s) => { if (s.prizeId) by[s.prizeId] = (by[s.prizeId] || 0) + 1; });
-    res.json({ ...c, winChance: winChance(c), week: weekId(), stats: { spins: w.length, wins: w.filter((s) => s.prizeId).length, by, coins: w.filter((s) => s.prize?.type === 'coins').reduce((a, s) => a + s.prize.amount, 0) }, recent: w.filter((s) => s.prizeId).sort((a, b) => b.at - a.at).slice(0, 30).map((s) => ({ ...s, user: ctx.brief(store.get('users', s.uid)) })) });
+    res.json({ ...c, slices: c.slices.map((x) => ({ ...x, img: imgOf(x) })), winChance: winChance(c), week: weekId(), stats: { spins: w.length, wins: w.filter((s) => s.prizeId).length, by, coins: w.filter((s) => s.prize?.type === 'coins').reduce((a, s) => a + s.prize.amount, 0) }, recent: w.filter((s) => s.prizeId).sort((a, b) => b.at - a.at).slice(0, 30).map((s) => ({ ...s, prize: { ...s.prize, img: imgOf(s.prize) }, user: ctx.brief(store.get('users', s.uid)) })) });
   });
   app.put('/api/admin/wheel', A.adminAuth, A.owner, (req, res) => {
     const b = req.body || {}; const c = cfg();
