@@ -477,7 +477,7 @@ app.post('/api/me/password', auth, wrap(async (req, res) => {
   const { current, password } = req.body || {};
   if (!(await bcrypt.compare(String(current || ''), req.user.passHash))) return res.status(400).json({ error: 'Mevcut şifre hatalı.' });
   if (String(password || '').length < 6) return res.status(400).json({ error: 'Yeni şifre en az 6 karakter olmalı.' });
-  store.update('users', req.user.id, { passHash: await bcrypt.hash(password, 10), ...(req.user.role === 'falci' ? { passChangedByUser: true } : {}) });
+  store.update('users', req.user.id, { passHash: await bcrypt.hash(password, 10), ...(['falci', 'official'].includes(req.user.role) ? { passChangedByUser: true } : {}) });
   res.json({ ok: true });
 }));
 
@@ -1801,7 +1801,8 @@ async function ensureFalci() {
 
 // SwipeUp yönetim (resmi) hesabı: takip edilebilir, paylaşımları herkese görünür; mesaj alınmaz, önerilerde çıkmaz
 async function ensureOfficial() {
-  if (official()) return;
+  const cur = official();
+  if (cur) { const pass = process.env.OFFICIAL_PASSWORD; if (pass && !cur.passChangedByUser && !(await bcrypt.compare(pass, cur.passHash))) store.update('users', cur.id, { passHash: await bcrypt.hash(pass, 10) }); return; }
   if (store.find('users', (u) => u.username === 'swipeup')) { store.update('users', store.find('users', (u) => u.username === 'swipeup').id, { role: 'official' }); return; }
   const initial = process.env.OFFICIAL_PASSWORD || crypto.randomBytes(9).toString('base64url');
   store.put('users', {
