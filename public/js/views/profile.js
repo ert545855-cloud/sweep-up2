@@ -86,6 +86,7 @@ export default async function profile(view, username) {
       <h2>${nm(u)}${u.plus ? `<span class="plus-chip">${icon('crown')}+</span>` : ''}</h2>
       ${(u.badges || []).length ? `<div class="badges">${u.badges.map((b) => `<span class="badge" title="${esc(b.name)} #${b.no}">${b.em} ${esc(b.name)}<small>#${b.no}</small></span>`).join('')}</div>` : ''}
       ${u.role === 'falci' ? '<span class="chip uv" style="margin-top:8px">🔮 Falcı</span>' : ''}
+      ${(u.tags || []).length ? `<div class="utags">${u.tags.map((t) => `<span class="utag t-${esc(t.color)}">${t.em} ${esc(t.name)}</span>`).join('')}</div>` : ''}
       <div class="handle">${u.privacy?.private ? `${icon('lock', '', 'style="width:13px;height:13px;vertical-align:-1px"')} ` : ''}@${esc(u.username)}${!self && lastSeen(u) ? ` · ${esc(lastSeen(u))}` : ''}</div>
       ${u.bio ? `<p class="bio">${richText(u.bio)}</p>` : (self ? '<a class="link" href="#/edit" style="margin-top:6px">Biyografi ekle</a>' : '')}
       ${u.voice ? `<div style="margin-top:10px">${voiceChip(u.voice)}</div>` : ''}

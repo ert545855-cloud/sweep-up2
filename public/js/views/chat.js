@@ -108,7 +108,7 @@ export default async function chat(view, chatId) {
     const meta = `<span class="meta">${m.expiresAt ? icon('timer', 'ttl-i') : ''}${clock(m.at)}<span class="tk">${tick(m)}</span></span>`;
     if (m.deleted) return `<div class="msg deleted">${icon('block', '', 'style="width:14px;height:14px;vertical-align:-2px"')} Bu mesaj silindi${meta}</div>`;
     const reply = m.reply ? `<span class="reply"><b>${esc(m.reply.from === state.me.id ? 'Sen' : (m.reply.fromName || ''))}</b>${esc(m.reply.text || { audio: '🎤 Sesli mesaj', video: '🎥 Video', image: '📷 Fotoğraf' }[m.reply.mediaType] || '')}</span>` : '';
-    const story = m.story ? `<span class="story-ref">${m.story.media ? `<img src="${esc(m.story.media)}" alt="">` : ''}<span>Hikayeye yanıt</span></span>` : '';
+    const story = m.story ? `<span class="story-ref">${m.story.media ? `<img src="${esc(m.story.media)}" alt="">` : ''}<span>${m.story.reaction ? (m.from === state.me.id ? 'Hikayesine tepki verdin' : 'Hikayene tepki verdi') : 'Hikayeye yanıt'}</span></span>` : '';
     if (m.fal) {
       const f = m.fal; const t = FAL_TYPES[f.type] || { em: '🔮', name: 'Fal' };
       const z = zodiacOf(f.zodiac);

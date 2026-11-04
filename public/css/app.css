@@ -2018,3 +2018,33 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .qs-r { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 700; font-size: 13px; } .qs-r svg, .qs-it .btn svg { width: 15px; height: 15px; }
 .qs-ok { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--mint) 25%, transparent); color: color-mix(in srgb, var(--mint) 70%, var(--text)); } .qs-ok svg { width: 16px; height: 16px; }
 .qs-it.claimed { opacity: .6; } .qs-it.bonus { background: linear-gradient(120deg, color-mix(in srgb, var(--sun) 18%, var(--bg)), color-mix(in srgb, var(--hot) 12%, var(--bg))); }
+/* Hikayeye emoji */
+.sr-bar { position: absolute; left: 12px; right: 12px; bottom: calc(70px + var(--safe-b)); display: flex; justify-content: space-around; padding: 8px 6px; border-radius: 22px; background: rgba(0,0,0,.45); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 3; }
+.sr-bar[hidden] { display: none; } .sr-bar button { font-size: 28px; transition: transform .12s; } .sr-bar button:active { transform: scale(1.35); }
+.story-v .foot .sr-heart { color: #fff; } .story-v .foot .sr-heart.on { color: #ff2d55; } .story-v .foot .sr-heart svg, .story-v .foot button svg { width: 26px; height: 26px; }
+.sr-fly { position: absolute; left: 50%; top: 50%; z-index: 5; font-size: 90px; transform: translate(-50%, -50%); animation: srfly 1.3s ease-out forwards; pointer-events: none; }
+@keyframes srfly { 0% { transform: translate(-50%, -30%) scale(.3); opacity: 0; } 25% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(-50%, -120%) scale(1); opacity: 0; } }
+.sr-em { font-size: 22px; }
+/* Özel etiketler */
+.utags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; } .utags.sm { justify-content: flex-start; margin: 0; }
+.utag { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 11px; border-radius: 999px; font-size: 12.5px; font-weight: 800; color: #fff; box-shadow: 0 4px 12px -6px rgba(0,0,0,.4); }
+.t-gold { background: linear-gradient(120deg, #c9962e, #ffd56a, #c9962e); color: #3a2600; } .t-pink { background: linear-gradient(120deg, #ff4f8b, #ff8ab3); } .t-purple { background: linear-gradient(120deg, #7c3aed, #b16cff); }
+.t-blue { background: linear-gradient(120deg, #2563eb, #4fa3ff); } .t-green { background: linear-gradient(120deg, #0f9f6e, #34d399); } .t-orange { background: linear-gradient(120deg, #f97316, #ffb15e); }
+.t-red { background: linear-gradient(120deg, #dc2626, #ff6b6b); } .t-gray { background: linear-gradient(120deg, #4b5563, #9ca3af); }
+/* Hediye çarkı */
+.wh-card-f { display: flex; align-items: center; gap: 12px; margin: 4px 14px 10px; padding: 12px 14px; border-radius: var(--r-lg); color: #fff; background: radial-gradient(120% 140% at 0% 0%, #ff9f43, #ff4f8b 50%, #7c3aed); }
+.wh-card-f[hidden] { display: none; } .wh-card-f .wf-ic { font-size: 28px; } .wh-card-f b { display: block; font-size: 15px; } .wh-card-f small { opacity: .9; font-size: 12.5px; }
+.wh-card-f .go-chip { padding: 6px 12px; border-radius: 999px; background: #fff; color: #7c3aed; font-weight: 800; font-size: 13px; }
+.wh { padding: 0 16px 30px; display: grid; gap: 14px; justify-items: center; }
+.wh-sub { margin: 4px 0 0; text-align: center; color: var(--muted); font-size: 14px; }
+.wh-wrap { position: relative; width: min(330px, 86vw); aspect-ratio: 1; border-radius: 50%; padding: 10px; background: conic-gradient(#ffd56a, #ff9f43, #ff4f8b, #7c3aed, #4f8bff, #22c3a6, #ffd56a); box-shadow: 0 20px 50px -20px rgba(124,58,237,.8); }
+.wh-rot { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; } .wh-svg { width: 100%; height: 100%; display: block; }
+.wh-pin { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 16px solid transparent; border-right: 16px solid transparent; border-top: 30px solid #fff; z-index: 2; filter: drop-shadow(0 3px 4px rgba(0,0,0,.4)); }
+.wh-go { max-width: 330px; font-size: 18px; height: 54px; }
+.wh-last { text-align: center; display: grid; gap: 4px; padding: 14px; border-radius: var(--r-lg); background: var(--surface); width: 100%; max-width: 360px; } .wh-last small { color: var(--muted); }
+.wh-list { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; } .wh-list .shop-h { width: 100%; margin-bottom: 4px; }
+.wh-res { position: fixed; inset: 0; z-index: 500; display: grid; place-items: center; background: rgba(0,0,0,.6); animation: fade .2s; padding: 20px; }
+.wh-card { width: min(340px, 100%); padding: 26px 20px 20px; border-radius: 26px; background: var(--bg); text-align: center; animation: up2 .3s; }
+.wh-big { font-size: 72px; line-height: 1; } .wh-card h2 { font-family: var(--display); margin: 10px 0 4px; font-size: 28px; } .wh-card p { color: var(--muted); margin: 0 0 16px; }
+.wh-res.win .wh-big { animation: pulse 1s infinite; }
+.sr-bar { gap: 0; overflow: hidden; } .sr-bar button { flex: 1 1 0; min-width: 0; padding: 0; font-size: 26px; height: 40px; }

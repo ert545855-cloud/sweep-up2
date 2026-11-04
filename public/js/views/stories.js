@@ -57,7 +57,7 @@ export default async function stories(view, userId) {
       <div class="foot">${mine
     ? `<button class="vw">${icon('eye')} ${it.viewerCount || 0} görüntüleme</button>`
     : g.user.role === 'falci' || state.me.role === 'falci' ? `<a class="rp-fal" href="#/fal">🔮 ${state.me.role === 'falci' ? 'Hikayelere yanıt kapalı' : 'Falcı Teyze’ye fal baktır'}</a>`
-    : `<form class="rp" style="display:flex;gap:10px;flex:1"><input placeholder="${esc(g.user.name.split(' ')[0])} kişisine yanıt ver..." maxlength="500"><button aria-label="Gönder">${icon('send')}</button></form>`}</div>
+    : `<div class="sr-bar" hidden>${['😂', '😮', '😍', '😢', '👏', '🔥', '🎉', '💯'].map((e) => `<button type="button" data-e="${e}">${e}</button>`).join('')}</div><form class="rp" style="display:flex;gap:10px;flex:1"><input placeholder="${esc(g.user.name.split(' ')[0])} kişisine yanıt ver..." maxlength="500"><button type="button" class="sr-heart ${it.myReaction === '❤️' ? 'on' : ''}" aria-label="Beğen">${icon('heart', '', it.myReaction === '❤️' ? 'fill="currentColor"' : '')}</button><button aria-label="Gönder">${icon('send')}</button></form>`}</div>
     </div>`;
     if (!mine && !it.seen) { it.seen = true; api(`/stories/${it.id}/view`, { body: {} }).catch(() => {}); }
     const v = view.querySelector('video');
@@ -164,7 +164,7 @@ export default async function stories(view, userId) {
           sh.querySelector('.vl').innerHTML = `${polls.map((p) => `<div class="sv-poll"><b>${esc(p.q || 'Anket')}</b>${p.options.map((o, i) => `<div class="row"><span class="grow">${esc(o)}</span><b>${p.counts[i]}</b></div>`).join('')}</div>`).join('')}
             ${d.answers.length ? `<div class="sh-sec">Soru yanıtları</div>${d.answers.slice().reverse().map((a) => `<div class="list-item">${avatar(a.user, 40, { dot: false })}<div class="grow"><div class="b">${nm(a.user, 'username')}</div><div>${esc(a.text)}</div></div><span class="muted" style="font-size:12px">${ago(a.at)}</span></div>`).join('')}` : ''}
             ${d.answers.length || polls.length ? '<div class="sh-sec">Görüntüleyenler</div>' : ''}
-            ${us.length ? us.map((u) => `<a class="list-item" href="#/u/${esc(u.username)}">${avatar(u, 44)}<div class="grow"><div class="b">${nm(u)}</div><div class="sub">@${esc(u.username)}</div></div>${u.vote ? `<span class="chip">${esc(u.vote)}</span>` : ''}</a>`).join('') : '<div class="empty">Henüz kimse görmedi.</div>'}`;
+            ${us.length ? us.map((u) => `<a class="list-item" href="#/u/${esc(u.username)}">${avatar(u, 44)}<div class="grow"><div class="b">${nm(u)}</div><div class="sub">@${esc(u.username)}</div></div>${u.vote ? `<span class="chip">${esc(u.vote)}</span>` : ''}${u.reaction ? `<span class="sr-em">${u.reaction}</span>` : ''}</a>`).join('') : '<div class="empty">Henüz kimse görmedi.</div>'}`;
         },
       });
       document.querySelector('.sheet-bg')?.addEventListener('click', () => pause(false));
@@ -177,8 +177,19 @@ export default async function stories(view, userId) {
     const rp = view.querySelector('.rp');
     if (rp) {
       const inp = rp.querySelector('input');
-      inp.addEventListener('focus', () => pause(true));
-      inp.addEventListener('blur', () => { if (!inp.value) pause(false); });
+      const bar = view.querySelector('.sr-bar');
+      const react = async (emoji, btn) => {
+        try {
+          await api(`/stories/${it.id}/react`, { body: { emoji } }); it.myReaction = emoji;
+          const fly = document.createElement('div'); fly.className = 'sr-fly'; fly.textContent = emoji; (view.querySelector('.story-v') || view).append(fly); setTimeout(() => fly.remove(), 1300);
+          navigator.vibrate?.(12);
+          if (btn?.classList.contains('sr-heart')) { btn.classList.add('on'); btn.innerHTML = icon('heart', '', 'fill="currentColor"'); }
+        } catch (er) { toast(er.message); }
+      };
+      inp.addEventListener('focus', () => { pause(true); bar.hidden = false; });
+      inp.addEventListener('blur', () => { setTimeout(() => { bar.hidden = true; }, 150); if (!inp.value) pause(false); });
+      bar.addEventListener('pointerdown', (e) => { const b = e.target.closest('[data-e]'); if (!b) return; e.preventDefault(); inp.blur(); react(b.dataset.e); });
+      rp.querySelector('.sr-heart').onclick = (e) => react('❤️', e.currentTarget);
       rp.onsubmit = async (e) => {
         e.preventDefault();
         const text = inp.value.trim(); if (!text) return;

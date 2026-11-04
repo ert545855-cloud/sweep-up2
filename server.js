@@ -78,6 +78,8 @@ function notifyMentions(text, from, url, what) {
   });
 }
 
+// Yönetimin verdiği özel etiketler (ör. "Yarışma 1.si")
+const tagsOf = (u) => { const ids = u?.tags || []; if (!ids.length) return []; const list = store.get('settings', 'tags')?.list || []; return ids.map((id) => list.find((t) => t.id === id)).filter(Boolean).map(({ id, em, name, color }) => ({ id, em, name, color })); };
 const shownAge = (u) => (priv(u).hideAge ? null : u.age ?? null);
 function pub(u, viewerId) {
   if (!u) return null;
@@ -92,7 +94,7 @@ function pub(u, viewerId) {
     lastSeen: hidden ? null : u.lastSeen,
     live: lives.has(u.id),
     plus: isPlus(u), verified: !!u.verified,
-    age: self ? u.age ?? null : shownAge(u), ageHidden: !!priv(u).hideAge,
+    age: self ? u.age ?? null : shownAge(u), ageHidden: !!priv(u).hideAge, tags: tagsOf(u),
     prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
     ...(self ? { email: email || '', hasLocation: lat != null, birthdate: birthdate || null, coins: coins || 0, earnings: earnings || 0, needsBirthdate: !birthdate, refCode: refCode || null, falSub: falSub || null, frames: frames || [] } : {}),
     ...(viewerId && !self ? { isFollowing: !!fdoc && fdoc.status !== 'pending', requested: fdoc?.status === 'pending', distanceKm: distance(store.get('users', viewerId), u) } : {}),
@@ -825,7 +827,7 @@ app.get('/api/stories', auth, (req, res) => {
     .forEach((s) => {
       if (!byUser.has(s.userId)) byUser.set(s.userId, []);
       byUser.get(s.userId).push({
-        id: s.id, media: s.media, mediaType: s.mediaType, filter: s.filter || null, at: s.at, seen: s.viewers.includes(me), viewerCount: s.userId === me ? s.viewers.length : undefined,
+        id: s.id, media: s.media, mediaType: s.mediaType, filter: s.filter || null, at: s.at, seen: s.viewers.includes(me), myReaction: (s.reactions || {})[me]?.emoji || null, viewerCount: s.userId === me ? s.viewers.length : undefined,
         stickers: stickersOut(s, me),
       });
     });
@@ -860,7 +862,7 @@ app.get('/api/stories/:id/viewers', auth, (req, res) => {
     if (!u) return null;
     const v = (s.votes || {})[id];
     const st = v && (s.stickers || []).find((x) => x.id === v.sticker);
-    return { ...u, vote: st ? st.options[v.option] : null };
+    return { ...u, vote: st ? st.options[v.option] : null, reaction: (s.reactions || {})[id]?.emoji || null };
   }).filter(Boolean);
   if (req.query.full) return res.json({ viewers, answers: (s.answers || []).map((a) => ({ ...a, user: brief(store.get('users', a.userId)) })).filter((a) => a.user), stickers: stickersOut(s, req.user.id) });
   res.json(viewers);
@@ -882,6 +884,29 @@ app.post('/api/stories/:id/reply', auth, (req, res) => {
   const msg = sendMessage(chat, req.user.id, { text, story: { id: s.id, media: s.mediaType === 'image' ? s.media : null } });
   if (!msg) return res.status(403).json({ error: 'Bu kişiye mesaj gönderemezsin.' });
   res.json({ ok: true, chatId: chat.id });
+});
+const STORY_EMOJI = ['😂', '😮', '😍', '😢', '👏', '🔥', '🎉', '💯', '❤️'];
+app.post('/api/stories/:id/react', auth, (req, res) => {
+  const s = store.get('stories', req.params.id);
+  const emoji = STORY_EMOJI.includes(req.body?.emoji) ? req.body.emoji : null;
+  if (!s || !emoji || s.userId === req.user.id) return res.status(400).json({ error: 'Tepki gönderilemedi.' });
+  const owner = store.get('users', s.userId);
+  if (!owner || isBlocked(req.user.id, owner.id)) return res.status(403).json({ error: 'Tepki gönderilemedi.' });
+  if (limited('sr:' + req.user.id, 40, 600000)) return res.status(429).json({ error: 'Biraz yavaş 🙂' });
+  s.reactions = s.reactions || {};
+  const first = !s.reactions[req.user.id];
+  s.reactions[req.user.id] = { emoji, at: now() };
+  store.update('stories', s.id, {});
+  // Falcı Teyze'ye mesaj gitmez; sadece tepki kaydedilir ve bildirim gider
+  let chatId = null;
+  if (owner.role !== 'falci' && req.user.role !== 'falci') {
+    const chat = chatBetween(req.user.id, s.userId);
+    const msg = sendMessage(chat, req.user.id, { text: emoji, story: { id: s.id, media: s.mediaType === 'image' ? s.media : null, reaction: true } });
+    chatId = msg ? chat.id : null;
+  } else if (first) {
+    notify(owner.id, { type: 'story_answer', fromId: req.user.id, text: `${req.user.username} hikayene ${emoji} tepki verdi.`, url: '/#/stories/me', tag: 'sr-' + s.id });
+  }
+  res.json({ ok: true, chatId });
 });
 setInterval(() => store.filter('stories', (s) => now() - s.at > DAY * 2).forEach((s) => store.del('stories', s.id)), 3600000).unref();
 
@@ -1065,7 +1090,7 @@ function cardOut(me, u, likedYou) {
   const posts = store.filter('posts', (p) => p.userId === u.id && p.type === 'image' && canSee(me.id, u)).slice(0, 3).map((p) => p.media);
   const photos = [...(u.photos || []), ...posts].filter(Boolean);
   return {
-    ...brief(u), age: shownAge(u), city: u.city, bio: u.bio, interests: u.interests || [],
+    ...brief(u), age: shownAge(u), city: u.city, bio: u.bio, interests: u.interests || [], tags: tagsOf(u),
     distanceKm: distance(me, u), likedYou: eco.isPlus(me) ? likedYou : false,
     boosted: (u.boostUntil || 0) > now(),
     photos: photos.length ? photos : [u.avatar],
@@ -1428,7 +1453,7 @@ app.post('/api/admin/push/test', adminApi.adminAuth, wrap(async (req, res) => {
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
   isBlocked, limited, isMedia, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
-  online, appEvent, falci, msgOut, falLock, shownAge, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id), pushAdmins,
+  online, appEvent, falci, msgOut, falLock, shownAge, tagsOf, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id), pushAdmins,
 };
 require('./server/features')(app, featureCtx);
 require('./server/genel')(app, featureCtx);
@@ -1437,6 +1462,9 @@ require('./server/social')(app, featureCtx);
 require('./server/falai')(app, featureCtx);
 require('./server/support')(app, featureCtx);
 require('./server/promo')(app, featureCtx);
+require('./server/tags')(app, featureCtx);
+require('./server/wheel')(app, featureCtx);
+require('./server/erp')(app, featureCtx);
 require('./server/quests')(app, featureCtx);
 require('./server/growth')(app, featureCtx);
 gameOut = featureCtx.gameOut;

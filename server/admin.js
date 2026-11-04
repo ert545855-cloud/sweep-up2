@@ -21,9 +21,10 @@ module.exports = function mountAdmin(app, ctx) {
   const audit = (admin, action, target, detail) => store.put('adm_audit', {
     id: nanoid(12), adminId: admin.id, admin: admin.username, action, target: target || null, detail: detail || '', at: now(),
   });
-  const adminOut = (a) => ({ id: a.id, username: a.username, name: a.name, role: a.role, createdAt: a.createdAt, lastLogin: a.lastLogin || null });
+  const PERM = require('./perms');
+  const adminOut = (a) => ({ id: a.id, username: a.username, name: a.name, role: a.role === 'owner' ? 'owner' : 'moderator', perms: PERM.permsOf(a), disabled: !!a.disabled, createdAt: a.createdAt, lastLogin: a.lastLogin || null });
   const userRow = (u) => ({
-    ...brief(u), email: u.email || null, age: u.age, city: u.city, status: statusOf(u), coins: u.coins || 0, earnings: u.earnings || 0, plusUntil: u.plusUntil || null, birthdate: u.birthdate || null, banReason: u.banReason || null, bannedUntil: u.bannedUntil || null,
+    ...brief(u), tags: u.tags || [], email: u.email || null, age: u.age, city: u.city, status: statusOf(u), coins: u.coins || 0, earnings: u.earnings || 0, plusUntil: u.plusUntil || null, birthdate: u.birthdate || null, banReason: u.banReason || null, bannedUntil: u.bannedUntil || null,
     posts: store.filter('posts', (p) => p.userId === u.id).length,
     reports: store.filter('reports', (r) => r.to === u.id).length,
     matches: store.filter('matches', (m) => m.users.includes(u.id)).length,
@@ -83,10 +84,16 @@ module.exports = function mountAdmin(app, ctx) {
       const a = store.get('adm_admins', aid);
       if (!a || a.disabled) throw new Error('x');
       req.admin = a;
-      next();
-    } catch { res.status(401).json({ error: 'Oturum süresi doldu, tekrar giriş yap.' }); }
+    } catch { return res.status(401).json({ error: 'Oturum süresi doldu, tekrar giriş yap.' }); }
+    // Yetki kontrolü
+    const need = PERM.needPerm(req.method, req.originalUrl);
+    req.adminPerms = PERM.permsOf(req.admin);
+    req.permNeed = need;
+    if (need && !req.adminPerms.includes(need)) return res.status(403).json({ error: need === 'owner' ? 'Bu işlem sadece sahip yöneticiye açık.' : 'Bu bölüm için yetkin yok. Sahip yöneticiden yetki iste.', perm: need });
+    next();
   }
-  const owner = (req, res, next) => (req.admin.role === 'owner' ? next() : res.status(403).json({ error: 'Bu işlem sadece sahip yöneticiye açık.' }));
+  // Önceden sahibe özel işlemler: sahip ya da o bölümün yetkisi verilmiş moderatör
+  const owner = (req, res, next) => (req.admin.role === 'owner' || (req.permNeed && req.permNeed !== 'owner' && req.adminPerms?.includes(req.permNeed)) ? next() : res.status(403).json({ error: 'Bu işlem sadece sahip yöneticiye açık.' }));
 
   // ---------- İlk yönetici ----------
   ctx.ensureAdmin = async () => {
@@ -316,7 +323,7 @@ module.exports = function mountAdmin(app, ctx) {
     const amount = Math.round(Math.abs(parseFloat(String(b.amount).replace(',', '.'))) * 100) / 100;
     if (!amount) throw new Error('Tutar gir.');
     const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date) ? b.date : new Date().toISOString().slice(0, 10);
-    return { type, amount, date, category: String(b.category || 'Diğer').slice(0, 40), note: String(b.note || '').slice(0, 300), currency: 'TRY' };
+    return { type, amount, date, category: String(b.category || 'Diğer').slice(0, 40), note: String(b.note || '').slice(0, 300), currency: 'TRY', ...(b.accountId !== undefined ? { accountId: b.accountId ? String(b.accountId).slice(0, 20) : null } : {}) };
   };
   app.post('/api/admin/ledger', adminAuth, (req, res) => {
     try {
@@ -444,14 +451,45 @@ module.exports = function mountAdmin(app, ctx) {
     res.json(store.all('adm_audit').sort((a, b) => b.at - a.at).slice(0, 300)
       .map((x) => ({ ...x, targetUser: x.target ? brief(store.get('users', x.target)) : null })));
   });
-  app.get('/api/admin/admins', adminAuth, (req, res) => res.json(store.all('adm_admins').map(adminOut)));
+  app.get('/api/admin/admins', adminAuth, (req, res) => res.json({ items: store.all('adm_admins').map(adminOut), perms: PERM.PERMS, modDefault: PERM.MOD_DEFAULT }));
+  app.put('/api/admin/admins/:id', adminAuth, owner, (req, res) => {
+    const a = store.get('adm_admins', req.params.id);
+    if (!a) return res.status(404).json({ error: 'Yönetici bulunamadı.' });
+    const b = req.body || {};
+    const patch = {};
+    if (b.name !== undefined) patch.name = String(b.name || a.username).slice(0, 40);
+    if (b.role !== undefined) {
+      const role = b.role === 'owner' ? 'owner' : 'moderator';
+      if (a.role === 'owner' && role !== 'owner' && store.filter('adm_admins', (x) => x.role === 'owner' && !x.disabled).length <= 1) return res.status(400).json({ error: 'En az bir sahip yönetici kalmalı.' });
+      patch.role = role;
+    }
+    if (Array.isArray(b.perms)) patch.perms = b.perms.filter((p) => PERM.ALL.includes(p));
+    if (b.disabled !== undefined) {
+      if (a.id === req.admin.id) return res.status(400).json({ error: 'Kendi hesabını kapatamazsın.' });
+      patch.disabled = !!b.disabled;
+    }
+    store.update('adm_admins', a.id, patch);
+    audit(req.admin, 'yönetici yetkilerini değiştirdi', null, `${a.username}: ${patch.role || a.role} · ${(patch.perms || PERM.permsOf(a)).length} yetki${patch.disabled ? ' · kapatıldı' : ''}`);
+    res.json(adminOut(store.get('adm_admins', a.id)));
+  });
+  app.post('/api/admin/admins/:id/password', adminAuth, owner, async (req, res) => {
+    const a = store.get('adm_admins', req.params.id);
+    if (!a) return res.status(404).json({ error: 'Yönetici bulunamadı.' });
+    const password = String(req.body?.password || '');
+    if (password.length < 8) return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı.' });
+    store.update('adm_admins', a.id, { passHash: await bcrypt.hash(password, 10), passChanged: true });
+    audit(req.admin, 'yönetici şifresini sıfırladı', null, a.username);
+    res.json({ ok: true });
+  });
   app.post('/api/admin/admins', adminAuth, owner, async (req, res) => {
     const username = String(req.body?.username || '').toLowerCase().trim();
     const password = String(req.body?.password || '');
     if (!/^[a-z0-9._]{3,24}$/.test(username)) return res.status(400).json({ error: 'Kullanıcı adı geçersiz.' });
     if (password.length < 8) return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı.' });
     if (store.find('adm_admins', (a) => a.username === username)) return res.status(409).json({ error: 'Bu kullanıcı adı alınmış.' });
-    const a = store.put('adm_admins', { id: nanoid(10), username, name: String(req.body?.name || username).slice(0, 40), role: 'admin', passHash: await bcrypt.hash(password, 10), createdAt: now() });
+    const role = req.body?.role === 'owner' ? 'owner' : 'moderator';
+    const perms = Array.isArray(req.body?.perms) ? req.body.perms.filter((p) => PERM.ALL.includes(p)) : PERM.MOD_DEFAULT;
+    const a = store.put('adm_admins', { id: nanoid(10), username, name: String(req.body?.name || username).slice(0, 40), role, perms, passHash: await bcrypt.hash(password, 10), createdAt: now() });
     audit(req.admin, 'yönetici ekledi', null, username);
     res.json(adminOut(a));
   });
@@ -529,11 +567,22 @@ module.exports = function mountAdmin(app, ctx) {
     const days = parseInt(req.body?.plusDays, 10) || 0;
     const note = String(req.body?.note || '').slice(0, 200);
     if (!coins && !days) return res.status(400).json({ error: 'Jeton ya da gün gir.' });
-    if (coins) eco.addCoins(u.id, coins, 'admin', { note, by: req.admin.username });
+    const pay = req.body?.kind !== 'gift'; // varsayılan: ödeme karşılığı tanımlama
+    const amount = Math.max(0, Math.round((+req.body?.amount || 0) * 100) / 100);
+    if (coins) eco.addCoins(u.id, coins, pay && coins > 0 ? 'purchase' : 'admin', { note, by: req.admin.username });
     if (days > 0) eco.grantPlus(u.id, days);
     if (days < 0) store.update('users', u.id, { plusUntil: null });
     const parts = [coins && `${coins > 0 ? '+' : ''}${coins} jeton`, days > 0 && `${days} gün SwipeUp+`].filter(Boolean).join(', ');
-    if (coins > 0 || days > 0) notify(u.id, { type: 'order', text: `🎁 SwipeUp ekibinden hediye: ${parts}${note ? ' · ' + note : ''}`, title: 'SwipeUp', url: '/#/store' });
+    if (coins > 0 || days > 0) {
+      const text = pay
+        ? `✅ Ödemen alındı: ${[coins > 0 && `${coins} jeton`, days > 0 && `${days} günlük SwipeUp+ üyeliği`].filter(Boolean).join(' ve ')} hesabına tanımlandı.${note ? ' ' + note : ''}`
+        : `🎁 SwipeUp ekibinden hediye: ${parts}${note ? ' · ' + note : ''}`;
+      notify(u.id, { type: 'order', text, title: 'SwipeUp', url: '/#/store' });
+    }
+    if (pay && amount > 0) {
+      const d = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
+      store.put('adm_ledger', { id: nanoid(10), type: 'gelir', amount, date: d, category: days > 0 ? 'Abonelik' : 'Uygulama içi satış', note: `Elle tanımlama · ${parts} · @${u.username}${note ? ` · ${note}` : ''}`, currency: 'TRY', by: req.admin.username, auto: true, createdAt: now() });
+    }
     emitTo(u.id, 'wallet', {});
     audit(req.admin, 'jeton/üyelik verdi', u.id, `${parts || 'üyelik kaldırıldı'} ${note}`);
     res.json(userRow(store.get('users', u.id)));

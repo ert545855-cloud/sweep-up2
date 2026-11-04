@@ -277,3 +277,29 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .suprep { display: grid; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--line); } .suprep .quick { display: flex; gap: 6px; flex-wrap: wrap; }
 .tr { font-size: 12px; font-weight: 700; } .tr.up { color: var(--ok); } .tr.down { color: var(--bad); }
 .tbl.feat .fx td { background: var(--soft); }
+.adm-list { display: grid; gap: 12px; }
+.adm-av { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--soft); font-weight: 800; }
+.perms { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.pgrp { display: grid; gap: 6px; align-content: start; } .pgrp b { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.pgrp label { display: flex; gap: 8px; align-items: center; font-size: 13.5px; } .pgrp input { width: 16px; height: 16px; accent-color: var(--accent, #ff5a5f); }
+.perms[hidden] { display: none; }
+.tag-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.utag { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 800; color: #fff; }
+.t-gold { background: linear-gradient(120deg, #c9962e, #ffd56a, #c9962e); color: #3a2600; } .t-pink { background: linear-gradient(120deg, #ff4f8b, #ff8ab3); } .t-purple { background: linear-gradient(120deg, #7c3aed, #b16cff); }
+.t-blue { background: linear-gradient(120deg, #2563eb, #4fa3ff); } .t-green { background: linear-gradient(120deg, #0f9f6e, #34d399); } .t-orange { background: linear-gradient(120deg, #f97316, #ffb15e); }
+.t-red { background: linear-gradient(120deg, #dc2626, #ff6b6b); } .t-gray { background: linear-gradient(120deg, #4b5563, #9ca3af); }
+.tagpick { display: flex; flex-wrap: wrap; gap: 6px; } .tpk { height: 30px; padding: 0 12px; border-radius: 999px; font-weight: 800; font-size: 12.5px; color: #fff; opacity: .35; border: 2px solid transparent; cursor: pointer; } .tpk.on { opacity: 1; border-color: var(--text); }
+/* ERP */
+.erp-tabs a { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 9px; color: var(--muted); font-weight: 650; white-space: nowrap; }
+.erp-tabs a svg { width: 15px; height: 15px; } .erp-tabs a.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.erp-hint { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; margin-bottom: 12px; background: color-mix(in srgb, var(--warn) 14%, transparent); font-weight: 650; }
+.erp-up { padding: 6px 0; border-bottom: 1px solid var(--line); gap: 8px; } .erp-up.late .grow { color: var(--bad); }
+.acc-chip { display: grid; gap: 2px; padding: 10px 14px; border-radius: 12px; background: var(--soft); min-width: 160px; } .acc-chip small { color: var(--muted); font-size: 11px; }
+.acc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; } .acc.arch { opacity: .55; }
+.erp-dr { width: min(860px, 100%); } .erp-f.fgrid, .erp-f .fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; } .erp-f label { display: grid; gap: 4px; font-size: 12.5px; font-weight: 650; color: var(--muted); } .erp-f label .field { color: var(--text); }
+.inv-f .tbl input, .inv-f .tbl select { height: 34px; padding: 0 8px; }
+.inv-tot { display: grid; gap: 4px; width: min(300px, 100%); margin-left: auto; } .inv-tot div { display: flex; justify-content: space-between; } .inv-tot .gt { font-size: 17px; border-top: 2px solid var(--text); padding-top: 6px; }
+.kb { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; } @media (max-width: 900px) { .kb { grid-template-columns: 1fr; } }
+.kcol { background: var(--soft); border-radius: 14px; padding: 10px; display: grid; gap: 8px; min-height: 120px; } .kh { font-weight: 800; padding: 2px 4px 4px; }
+.kcard { background: var(--panel); border-radius: 12px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); } .kcard.late { box-shadow: inset 3px 0 0 var(--bad); }
+.money.in { color: var(--ok); } .money.out { color: var(--bad); }

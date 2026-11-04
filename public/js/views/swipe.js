@@ -34,6 +34,7 @@ export default async function swipe(view) {
       <div class="info">
         <h2>${esc(u.name.split(' ')[0])} ${u.age ? `<small>${u.age}</small>` : ''}${tick(u)}</h2>
         <div class="where">${u.city || u.distanceKm ? `${icon('pin', '', 'style="width:16px;height:16px"')}${[u.city, u.distanceKm ? `${u.distanceKm} km uzakta` : ''].filter(Boolean).map(esc).join(' · ')}` : ''}</div>
+        ${(u.tags || []).length ? `<div class="utags sm">${u.tags.slice(0, 2).map((t) => `<span class="utag t-${esc(t.color)}">${t.em} ${esc(t.name)}</span>`).join('')}</div>` : ''}
         ${(u.badges || []).length ? `<div class="badges sm">${u.badges.slice(0, 3).map((b) => `<span class="badge">${b.em} ${esc(b.name)}</span>`).join('')}</div>` : ''}
         ${u.bio ? `<p>${esc(u.bio)}</p>` : ''}
         ${u.prompts?.[0] ? `<div class="card-pq"><small>${esc(u.prompts[0].q)}</small>${esc(u.prompts[0].a)}</div>` : ''}

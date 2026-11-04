@@ -23,6 +23,7 @@ const routes = [
   [/^\/davet$/, 'invite', { tabs: false }],
   [/^\/reklam(?:\/([\w-]+))?$/, 'promote', { tabs: false }],
   [/^\/gorevler$/, 'quests', { tabs: false }],
+  [/^\/cark$/, 'wheel', { tabs: false }],
   [/^\/destek(?:\/([\w-]+))?$/, 'support', { tabs: false }],
   [/^\/chat\/([\w-]+)$/, 'chat', { tabs: false }],
   [/^\/chat\/([\w-]+)\/info$/, 'chatinfo', { tabs: false }],

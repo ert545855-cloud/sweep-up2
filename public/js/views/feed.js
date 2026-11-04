@@ -16,6 +16,7 @@ export default async function feed(view) {
     </header>
     <div class="stories" aria-label="Hikayeler ve canlı yayınlar"></div>
     <div class="maint-slot"></div>
+    <a class="wh-card-f" href="#/cark" hidden><span class="wf-ic">🎡</span><span class="grow"><b>Hediye çarkı hazır!</b><small>Bu haftaki çevirme hakkını kullan</small></span><span class="go-chip">Çevir</span></a>
     <a class="qs-card" href="#/gorevler" hidden></a>
     <div class="event-slot"></div>
     <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
@@ -98,6 +99,7 @@ export default async function feed(view) {
       <span class="qc-bar"><i style="width:${Math.round((q.doneCount / q.total) * 100)}%"></i></span>${q.claimable ? '<span class="go-chip">Al</span>' : ''}`;
   };
   paintQs();
+  api('/wheel').then((w) => { view.querySelector('.wh-card-f').hidden = !w.canSpin; }).catch(() => {});
   offs.push(on('quests', paintQs));
   // Planlı bakım duyurusu
   const maintSlot = view.querySelector('.maint-slot');

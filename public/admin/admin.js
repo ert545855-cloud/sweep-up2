@@ -2,6 +2,9 @@
 import { icon } from '/js/icons.js';
 
 const S = { token: localStorage.getItem('su_admin'), me: null, counts: {} };
+const can = (p) => S.me?.role === 'owner' || (S.me?.perms || []).includes(p);
+const SEC_PERM = { growth: 'growth', users: 'users', support: 'support', reports: 'reports', appeals: 'appeals', flags: 'flags', verify: 'verify', orders: 'orders', payouts: 'payouts', market: 'market', ledger: 'erp', erp: 'erp', promos: 'promos', quests: 'quests', fal: 'fal', content: 'content', media: 'content', announce: 'announce', notes: 'notes', audit: 'audit', database: 'database', maintenance: 'maintenance', settings: 'settings', tags: 'tags' };
+const canSec = (k) => !SEC_PERM[k] || can(SEC_PERM[k]);
 const root = document.getElementById('root');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const tl = (n) => `${Number(n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`;
@@ -40,6 +43,7 @@ const SECTIONS = [
   ['growth', 'Büyüme', 'gauge'],
   ['users', 'Kullanıcılar', 'users'],
   ['support', 'Destek', 'question', 'supportOpen'],
+  ['tags', 'Etiketler', 'star'],
   ['reports', 'Şikayetler', 'flag', 'reportsOpen'],
   ['appeals', 'İtirazlar', 'reply', 'appealsOpen'],
   ['flags', 'Moderasyon', 'shield', 'flagsOpen'],
@@ -47,9 +51,9 @@ const SECTIONS = [
   ['orders', 'Siparişler', 'coin', 'ordersPaid'],
   ['payouts', 'Kazançlar', 'gift', 'payoutsOpen'],
   ['market', 'Store', 'bag', 'marketOpen'],
-  ['ledger', 'Gelir ve gider', 'sliders'],
+  ['erp', 'Şirket (ERP)', 'wallet'],
   ['promos', 'Reklamlar', 'bolt'],
-  ['quests', 'Görevler', 'check'],
+  ['quests', 'Görevler ve çark', 'check'],
   ['fal', 'Fal', 'star', 'falPending'],
   ['content', 'İçerik', 'grid'],
   ['media', 'Medya', 'image'],
@@ -85,16 +89,17 @@ async function render() {
   if (!S.token) return login();
   if (!S.me) { try { S.me = await api('/me'); } catch { return; } }
   const cur = (location.hash.slice(2) || 'overview').split('/')[0];
-  const nav = (cls) => SECTIONS.map(([k, l, ic, cnt]) => `<a class="nav ${cur === k ? 'on' : ''}" href="#/${k}">${icon(ic)}<span>${l}</span>${cnt && S.counts[cnt] ? `<span class="n">${S.counts[cnt]}</span>` : ''}</a>`).join('');
+  const nav = (cls) => SECTIONS.filter(([k]) => canSec(k)).map(([k, l, ic, cnt]) => `<a class="nav ${cur === k ? 'on' : ''}" href="#/${k}">${icon(ic)}<span>${l}</span>${cnt && S.counts[cnt] ? `<span class="n">${S.counts[cnt]}</span>` : ''}</a>`).join('');
   root.innerHTML = `<div class="shell">
     <aside class="side"><div class="brand"><img class="mark" src="/icons/mark.png" alt="">swipeup <small>yönetim</small></div>${nav()}
-      <div class="who"><b>${esc(S.me.name)}</b><span class="muted">@${esc(S.me.username)} · ${S.me.role === 'owner' ? 'Sahip' : 'Yönetici'}</span>
+      <div class="who"><b>${esc(S.me.name)}</b><span class="muted">@${esc(S.me.username)} · ${S.me.role === 'owner' ? 'Sahip' : 'Moderatör'}</span>
       <div class="row"><a class="btn sm" href="/" target="_blank" rel="noopener">Uygulamayı aç</a><button class="btn sm lo">Çıkış</button></div></div></aside>
     <div><nav class="topnav">${nav()}</nav><div class="mbn"></div><main class="main"></main></div></div>`;
   root.querySelector('.lo').onclick = () => { localStorage.removeItem('su_admin'); S.token = null; S.me = null; render(); };
   const main = root.querySelector('.main');
   main.innerHTML = '<div class="spin"></div>';
   if (!S.counts.users) refreshCounts(); else paintMaintBanner();
+  if (!canSec(cur)) { main.innerHTML = `${head('Yetki yok')}<div class="empty">Bu bölüm için yetkin yok. Sahip yöneticiden yetki isteyebilirsin.</div>`; return; }
   try { await (VIEWS[cur] || VIEWS.overview)(main); } catch (e) { main.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function paintMaintBanner() {
@@ -138,7 +143,7 @@ VIEWS.overview = async (main) => {
       ${st(o.plusUsers, 'SwipeUp+ üye')}${st(o.verifiedUsers, 'Mavi tikli üye')}
       <div class="stat"><b class="money in">${tl(o.income)}</b><span>Bu ay gelir</span></div>
       <div class="stat"><b class="money out">${tl(o.expense)}</b><span>Bu ay gider</span></div>
-      <div class="stat"><b class="money ${o.income - o.expense >= 0 ? 'in' : 'out'}">${tl(o.income - o.expense)}</b><span>Bu ay net</span><a href="#/ledger">Gelir ve gider</a></div>
+      <div class="stat"><b class="money ${o.income - o.expense >= 0 ? 'in' : 'out'}">${tl(o.income - o.expense)}</b><span>Bu ay net</span><a href="#/erp/gelir">Gelir ve gider</a></div>
     </div>
     <div class="grid g3">
       <div class="panel"><div class="ph"><h3>Yeni üyeler · 14 gün</h3></div><div class="pb">${bars(o.series.users)}</div></div>
@@ -183,18 +188,21 @@ async function userDrawer(id, onChange) {
       <div class="db">
         ${u.status !== 'active' ? `<div class="case" style="padding:12px;border-radius:12px;background:color-mix(in srgb,var(--bad) 8%,transparent)"><b>${u.status === 'banned' ? 'Kalıcı yasaklı' : `Askıda · ${dt(u.bannedUntil)} tarihine kadar`}</b>${u.banReason ? `<div>${esc(u.banReason)}</div>` : ''}</div>` : ''}
         <div class="panel"><div class="ph"><h3>İşlemler</h3></div><div class="pb" style="display:grid;gap:10px">
-          <div class="row" style="flex-wrap:wrap"><input class="field wt" placeholder="Uyarı metni" style="flex:1;min-width:180px"><button class="btn warn-b">${icon('flag')} Uyar</button></div>
+          ${can('users_ban') ? `<div class="row" style="flex-wrap:wrap"><input class="field wt" placeholder="Uyarı metni" style="flex:1;min-width:180px"><button class="btn warn-b">${icon('flag')} Uyar</button></div>
           <div class="row" style="flex-wrap:wrap"><input class="field br" placeholder="Gerekçe (kullanıcı görür)" style="flex:1;min-width:180px">
             <select class="field bd" style="width:auto"><option value="1">1 gün</option><option value="3">3 gün</option><option value="7" selected>7 gün</option><option value="30">30 gün</option><option value="">Kalıcı</option></select>
-            <button class="btn solid-danger ban">${icon('block')} Uygula</button></div>
-          <div class="row" style="flex-wrap:wrap"><input class="field gc" type="number" placeholder="Jeton (+/−)" style="width:130px"><select class="field gd" style="width:auto"><option value="">Üyelik ekleme</option><option value="7">+7 gün SwipeUp+</option><option value="30">+30 gün SwipeUp+</option><option value="90">+90 gün SwipeUp+</option><option value="-1">Üyeliği kaldır</option></select>
-            <input class="field gn" placeholder="Not (kullanıcı görür)" style="flex:1;min-width:140px"><button class="btn grant">${icon('gift')} Ver</button></div>
+            <button class="btn solid-danger ban">${icon('block')} Uygula</button></div>` : ''}
+          ${can('users_edit') ? `<div class="row" style="flex-wrap:wrap"><input class="field gc" type="number" placeholder="Jeton (+/−)" style="width:130px"><select class="field gd" style="width:auto"><option value="">Üyelik ekleme</option><option value="7">+7 gün SwipeUp+</option><option value="30">+30 gün SwipeUp+</option><option value="90">+90 gün SwipeUp+</option><option value="-1">Üyeliği kaldır</option></select>
+            <select class="field gk" style="width:auto" title="Kullanıcıya giden mesaj"><option value="payment">Ödeme karşılığı (hesabına tanımlandı)</option><option value="gift">Hediye</option></select>
+            <input class="field ga" type="number" step="0.01" placeholder="Alınan ödeme ₺ (gelire yazılır)" style="width:190px">
+            <input class="field gn" placeholder="Not (kullanıcı görür)" style="flex:1;min-width:140px"><button class="btn grant">${icon('check')} Tanımla</button></div>` : ''}
           <div class="row" style="flex-wrap:wrap">
-            ${u.verified ? `<button class="btn unv">${icon('close')} Mavi tiki kaldır</button>` : ''}
-            ${u.status !== 'active' ? `<button class="btn ok unban">${icon('check')} Yasağı kaldır</button>` : ''}
-            <button class="btn pw">${icon('key')} Geçici şifre ver</button>
-            ${S.me.role === 'owner' && u.role !== 'falci' ? `<button class="btn danger del">${icon('trash')} Hesabı sil</button>` : ''}
+            ${u.verified && can('users_edit') ? `<button class="btn unv">${icon('close')} Mavi tiki kaldır</button>` : ''}
+            ${u.status !== 'active' && can('users_ban') ? `<button class="btn ok unban">${icon('check')} Yasağı kaldır</button>` : ''}
+            ${can('users_edit') ? `<button class="btn pw">${icon('key')} Geçici şifre ver</button>` : ''}
+            ${can('users_edit') && u.role !== 'falci' ? `<button class="btn danger del">${icon('trash')} Hesabı sil</button>` : ''}
           </div></div></div>
+        ${can('tags') ? '<div class="panel utags-p"><div class="ph"><h3>Özel etiketler</h3><a class="btn sm" href="#/tags">Etiketleri yönet</a></div><div class="pb"><div class="spin"></div></div></div>' : ''}
         <div class="panel"><div class="ph"><h3>Bilgiler</h3></div><div class="pb"><dl class="kv">
           <dt>E-posta</dt><dd>${esc(u.email || '—')}</dd><dt>Katılım</dt><dd>${dt(u.createdAt)}</dd><dt>Son görülme</dt><dd>${dt(u.lastSeen)}</dd>
           <dt>Yaş / şehir</dt><dd>${esc([u.age, u.city].filter(Boolean).join(' · ') || '—')}</dd><dt>Biyografi</dt><dd>${esc(u.bio || '—')}</dd>
@@ -208,20 +216,30 @@ async function userDrawer(id, onChange) {
       </div>`;
     const act = async (fn, msg) => { try { await fn(); toast(msg); await paint(); onChange?.(); refreshCounts(); } catch (e) { toast(e.message); } };
     dr.querySelector('.x').onclick = close;
-    dr.querySelector('.warn-b').onclick = () => act(() => api(`/users/${id}/warn`, { body: { text: dr.querySelector('.wt').value } }), 'Uyarı gönderildi.');
-    dr.querySelector('.ban').onclick = () => {
+    const tp = dr.querySelector('.utags-p .pb');
+    if (tp) api('/tags').then((T) => {
+      let sel = new Set(u.tags || []);
+      const draw = () => { tp.innerHTML = T.list.length ? `<div class="tagpick">${T.list.map((t) => `<button class="tpk t-${esc(t.color)} ${sel.has(t.id) ? 'on' : ''}" data-t="${esc(t.id)}">${t.em} ${esc(t.name)}</button>`).join('')}</div><button class="btn sm primary svt" style="margin-top:10px">Kaydet</button>` : '<div class="muted">Henüz etiket yok. “Etiketleri yönet”ten oluştur.</div>'; };
+      draw();
+      tp.onclick = (e) => {
+        const b = e.target.closest('[data-t]'); if (b) { const k = b.dataset.t; sel.has(k) ? sel.delete(k) : sel.add(k); draw(); return; }
+        if (e.target.closest('.svt')) act(() => api(`/users/${id}/tags`, { body: { tags: [...sel] } }), 'Etiketler kaydedildi.');
+      };
+    }).catch(() => { tp.innerHTML = ''; });
+    dr.querySelector('.warn-b') && (dr.querySelector('.warn-b').onclick = () => act(() => api(`/users/${id}/warn`, { body: { text: dr.querySelector('.wt').value } }), 'Uyarı gönderildi.'));
+    if (dr.querySelector('.ban')) dr.querySelector('.ban').onclick = () => {
       const days = dr.querySelector('.bd').value;
       if (!confirm(days ? `${days} gün askıya alınsın mı?` : 'Hesap kalıcı olarak yasaklansın mı?')) return;
       act(() => api(`/users/${id}/ban`, { body: { days: days ? +days : null, reason: dr.querySelector('.br').value } }), days ? 'Askıya alındı.' : 'Yasaklandı.');
     };
-    dr.querySelector('.grant').onclick = () => {
+    if (dr.querySelector('.grant')) dr.querySelector('.grant').onclick = () => {
       const coins = +dr.querySelector('.gc').value || 0; const plusDays = +dr.querySelector('.gd').value || 0;
       if (!coins && !plusDays) return toast('Jeton ya da üyelik seç.');
-      act(() => api(`/users/${id}/grant`, { body: { coins, plusDays, note: dr.querySelector('.gn').value } }), 'Tanımlandı.');
+      act(() => api(`/users/${id}/grant`, { body: { coins, plusDays, note: dr.querySelector('.gn').value, kind: dr.querySelector('.gk').value, amount: +dr.querySelector('.ga').value || 0 } }), 'Tanımlandı.');
     };
     dr.querySelector('.unv')?.addEventListener('click', () => { if (confirm('Mavi tik kaldırılsın mı?')) act(() => api(`/users/${id}/unverify`, { body: {} }), 'Mavi tik kaldırıldı.'); });
     dr.querySelector('.unban')?.addEventListener('click', () => act(() => api(`/users/${id}/unban`, { body: {} }), 'Yasak kaldırıldı.'));
-    dr.querySelector('.pw').onclick = async () => {
+    if (dr.querySelector('.pw')) dr.querySelector('.pw').onclick = async () => {
       if (!confirm('Kullanıcının şifresi sıfırlanıp geçici bir şifre üretilsin mi?')) return;
       try { const r = await api(`/users/${id}/password`, { body: {} }); prompt('Geçici şifre (kullanıcıya ilet):', r.password); } catch (e) { toast(e.message); }
     };
@@ -309,6 +327,7 @@ VIEWS.ledger = async (main) => {
       <select class="field ct"></select>
       <input class="field dt" type="date" value="${today()}">
       <input class="field nt" placeholder="Açıklama">
+      <select class="field acc" title="Kasa / banka hesabı" style="width:auto"><option value="">Hesap (isteğe bağlı)</option></select>
       <div class="row"><button class="btn primary sv">Ekle</button><button type="button" class="btn cancel" hidden>Vazgeç</button></div></form></div>
     <div class="grid g21">
       <div class="panel"><div class="ph"><h3>Kayıtlar</h3></div><div class="tw lst"><div class="spin"></div></div></div>
@@ -318,6 +337,8 @@ VIEWS.ledger = async (main) => {
       </div></div>`;
   let type = 'gelir'; let data = null;
   const f = main.querySelector('form');
+  let accs = [];
+  api('/erp/accounts').then((a) => { accs = a.filter((x) => !x.archived); f.querySelector('.acc').insertAdjacentHTML('beforeend', accs.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')); }).catch(() => { f.querySelector('.acc').hidden = true; });
   const setType = (t) => {
     type = t;
     main.querySelectorAll('.tp button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
@@ -351,7 +372,7 @@ VIEWS.ledger = async (main) => {
   };
   f.onsubmit = async (e) => {
     e.preventDefault();
-    const body = { type, amount: f.querySelector('.am').value, category: f.querySelector('.ct').value, date: f.querySelector('.dt').value, note: f.querySelector('.nt').value };
+    const body = { type, amount: f.querySelector('.am').value, category: f.querySelector('.ct').value, date: f.querySelector('.dt').value, note: f.querySelector('.nt').value, accountId: f.querySelector('.acc').value };
     try {
       if (editing) await api(`/ledger/${editing}`, { method: 'PUT', body }); else await api('/ledger', { body });
       toast(editing ? 'Kayıt güncellendi.' : 'Kayıt eklendi.'); resetForm(); load();
@@ -363,7 +384,7 @@ VIEWS.ledger = async (main) => {
     if (e.target.closest('.rm')) { if (!confirm('Bu kayıt silinsin mi?')) return; await api(`/ledger/${x.id}`, { method: 'DELETE' }); toast('Silindi.'); load(); }
     if (e.target.closest('.ed')) {
       editing = x.id; setType(x.type);
-      f.querySelector('.am').value = x.amount; f.querySelector('.ct').value = x.category; f.querySelector('.dt').value = x.date; f.querySelector('.nt').value = x.note || '';
+      f.querySelector('.am').value = x.amount; f.querySelector('.ct').value = x.category; f.querySelector('.dt').value = x.date; f.querySelector('.nt').value = x.note || ''; f.querySelector('.acc').value = x.accountId || '';
       main.querySelector('.ft').textContent = 'Kaydı düzenle'; f.querySelector('.sv').textContent = 'Kaydet'; f.querySelector('.cancel').hidden = false;
       f.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -377,6 +398,12 @@ VIEWS.ledger = async (main) => {
   await load();
 };
 
+// ---- Şirket yönetimi (ERP) ----
+VIEWS.erp = async (main) => {
+  const [{ default: erp }, adm] = await Promise.all([import('./erp.js'), api('/admins').catch(() => ({ items: [] }))]);
+  await erp(main, { api, esc, toast, head, tl, d, today, icon, ledgerView: (c) => VIEWS.ledger(c), admins: adm.items || [] });
+};
+
 // ---- Fal ----
 VIEWS.fal = async (main) => {
   const [r, ai] = await Promise.all([api('/fal'), api('/falai').catch(() => null)]);
@@ -386,7 +413,7 @@ VIEWS.fal = async (main) => {
       <div class="stat"><b>${r.avgMin == null ? '—' : r.avgMin < 60 ? `${r.avgMin} dk` : `${(r.avgMin / 60).toFixed(1)} sa`}</b><span>Ortalama cevap süresi</span></div>
       ${Object.entries(FAL).map(([k, l]) => `<div class="stat"><b>${r.byType[k] || 0}</b><span>${l} · ${r.prices[k] || 0} jeton</span></div>`).join('')}</div>
     ${ai ? `<div class="panel aip" style="margin-bottom:14px"><div class="ph"><h3>✨ Yapay zeka (Google Gemini)</h3>${ai.hasKey ? '<span class="chip ok">Anahtar tanımlı</span>' : '<span class="chip bad">GEMINI_API_KEY yok</span>'}</div><div class="pb" style="display:grid;gap:12px">
-      <div class="seg3">${[['off', 'Kapalı', 'Falcı Teyze kendisi yazar'], ['draft', 'Taslak', 'Yapay zeka yazar, Falcı Teyze kontrol edip gönderir'], ['auto', 'Otomatik', 'Cevap birkaç saniyede kendiliğinden gider']].map(([k, t, d]) => `<button data-mode="${k}" class="${ai.saved === k ? 'on' : ''}" ${S.me.role === 'owner' && ai.hasKey ? '' : 'disabled'}><b>${t}</b><small>${d}</small></button>`).join('')}</div>
+      <div class="seg3">${[['off', 'Kapalı', 'Falcı Teyze kendisi yazar'], ['draft', 'Taslak', 'Yapay zeka yazar, Falcı Teyze kontrol edip gönderir'], ['auto', 'Otomatik', 'Cevap birkaç saniyede kendiliğinden gider']].map(([k, t, d]) => `<button data-mode="${k}" class="${ai.saved === k ? 'on' : ''}" ${can('fal') && ai.hasKey ? '' : 'disabled'}><b>${t}</b><small>${d}</small></button>`).join('')}</div>
       <div class="muted" style="font-size:12.5px">Modeller: ${esc((ai.stats.models || []).join(' → ') || '—')} · Başarılı: ${ai.stats.ok} · Hatalı: ${ai.stats.fail}${ai.stats.lastModel ? ` · Son kullanılan: ${esc(ai.stats.lastModel)}` : ''}<br>Toplam ${ai.counts.total} taslak · ${ai.counts.sent} gönderildi (${ai.counts.auto} otomatik, ${ai.counts.edited} düzenlenerek)${ai.stats.lastError ? `<br><span style="color:var(--bad)">Son hata: ${esc(ai.stats.lastError)}</span>` : ''}</div>
       <div class="row" style="gap:8px"><button class="btn sm aitest" ${ai.hasKey ? '' : 'disabled'}>Bağlantıyı test et</button><span class="muted ait" style="font-size:12.5px"></span></div>
       <div class="aiout" hidden></div>
@@ -396,7 +423,7 @@ VIEWS.fal = async (main) => {
       <div class="stat"><b>${r.paidCount}</b><span>Ücretli fal</span></div>
       <div class="stat"><b>${r.coinsSpent}</b><span>Harcanan jeton</span></div>
       <div class="stat"><b class="money in">${tl(r.falci.totalTL)}</b><span>Toplam kazanç (%${Math.round(r.share * 100)} pay · ${r.falci.total} jeton)</span></div>
-      <div class="stat"><b class="money">${tl(r.falci.balanceTL)}</b><span>Ödenmemiş bakiye (${r.falci.balance} jeton)</span>${r.falci.balance > 0 && S.me.role === 'owner' ? `<button class="btn sm settle" data-id="${esc(r.falci.id)}">Ödendi olarak işaretle</button>` : ''}</div>
+      <div class="stat"><b class="money">${tl(r.falci.balanceTL)}</b><span>Ödenmemiş bakiye (${r.falci.balance} jeton)</span>${r.falci.balance > 0 && can('payouts') ? `<button class="btn sm settle" data-id="${esc(r.falci.id)}">Ödendi olarak işaretle</button>` : ''}</div>
     </div></div></div>` : ''}
     <div class="panel"><div class="tw">${r.items.length ? `<table class="tbl"><thead><tr><th>Kullanıcı</th><th>Tür</th><th>Not</th><th>Gönderildi</th><th>Durum</th></tr></thead><tbody>
       ${r.items.map((x) => `<tr><td>${userCell(x.user)}</td><td>${FAL[x.type]}${x.price ? `<div class="muted" style="font-size:11.5px">${x.price} jeton</div>` : ''}</td><td class="muted" style="max-width:320px">${esc((x.note || '').slice(0, 120)) || '—'}${x.images?.length ? ` · ${x.images.length} fotoğraf` : ''}</td><td>${dt(x.at)}</td><td>${x.status === 'answered' ? `<span class="chip ok">Cevaplandı</span><div class="muted" style="font-size:11.5px">${dt(x.answeredAt)}</div>` : '<span class="chip warn">Bekliyor</span>'}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Henüz fal isteği yok.</div>'}</div></div>`;
@@ -586,29 +613,53 @@ VIEWS.audit = async (main) => {
 
 // ---- Yöneticiler ----
 VIEWS.admins = async (main) => {
-  const list = await api('/admins');
+  const r = await api('/admins');
   const owner = S.me.role === 'owner';
-  main.innerHTML = `${head('Yöneticiler')}
-    <div class="grid g2">
-      <div class="panel"><div class="ph"><h3>Yönetici hesapları</h3></div>${list.map((a) => `<div class="case" data-id="${esc(a.id)}"><div class="row"><div class="grow"><b>${esc(a.name)}</b> <span class="muted">@${esc(a.username)}</span><div class="muted">Son giriş: ${dt(a.lastLogin)}</div></div><span class="chip ${a.role === 'owner' ? 'info' : ''}">${a.role === 'owner' ? 'Sahip' : 'Yönetici'}</span>${owner && a.role !== 'owner' ? `<button class="btn sm danger rm">${icon('trash')}</button>` : ''}</div></div>`).join('')}
-        ${owner ? `<form class="pb add" style="display:grid;gap:8px;border-top:1px solid var(--line)"><b>Yönetici ekle</b><input class="field" name="u" placeholder="Kullanıcı adı" autocapitalize="none"><input class="field" name="n" placeholder="Ad"><input class="field" name="p" type="password" placeholder="Şifre (en az 8 karakter)"><button class="btn primary">Ekle</button></form>` : ''}</div>
+  const groups = [...new Set(r.perms.map((p) => p[2]))];
+  const permBoxes = (sel, dis) => groups.map((g) => `<div class="pgrp"><b>${esc(g)}</b>${r.perms.filter((p) => p[2] === g).map(([k, l]) => `<label><input type="checkbox" value="${k}" ${sel.includes(k) ? 'checked' : ''} ${dis ? 'disabled' : ''}> ${esc(l)}</label>`).join('')}</div>`).join('');
+  main.innerHTML = `${head('Yöneticiler', 'İki rol var: <b>Sahip</b> her şeyi yapar. <b>Moderatör</b> sadece seçtiğin yetkileri kullanır; yetkisi olmayan bölümler panelinde görünmez.')}
+    <div class="adm-list">${r.items.map((a) => `<div class="panel adm" data-id="${esc(a.id)}"><div class="ph"><div class="row" style="gap:10px"><span class="adm-av">${esc((a.name || a.username)[0].toUpperCase())}</span><div><b>${esc(a.name)}</b> <span class="muted">@${esc(a.username)}</span><div class="muted" style="font-size:12px">Son giriş: ${dt(a.lastLogin)}${a.disabled ? ' · <b style="color:var(--bad)">Kapalı</b>' : ''}</div></div></div>
+        <div class="row" style="gap:6px">${owner ? `<select class="field rl" style="width:auto" ${a.id === S.me.id ? 'disabled' : ''}><option value="owner" ${a.role === 'owner' ? 'selected' : ''}>👑 Sahip</option><option value="moderator" ${a.role !== 'owner' ? 'selected' : ''}>🛡️ Moderatör</option></select>` : `<span class="chip ${a.role === 'owner' ? 'info' : ''}">${a.role === 'owner' ? '👑 Sahip' : '🛡️ Moderatör'}</span>`}</div></div>
+      ${a.role === 'owner' ? '<div class="pb muted" style="font-size:13px">Sahip tüm yetkilere sahip.</div>' : `<div class="pb"><div class="perms">${permBoxes(a.perms, !owner)}</div></div>`}
+      ${owner ? `<div class="pb row adm-acts" style="gap:8px;flex-wrap:wrap;border-top:1px solid var(--line)">${a.role !== 'owner' ? '<button class="btn primary sm sv">Yetkileri kaydet</button><button class="btn sm allp">Tümünü seç</button><button class="btn sm nonep">Temizle</button>' : ''}<button class="btn sm pwr">${icon('key')} Şifre sıfırla</button>${a.id !== S.me.id ? `<button class="btn sm ${a.disabled ? '' : 'danger'} dis">${a.disabled ? 'Hesabı aç' : 'Hesabı kapat'}</button><button class="btn sm danger rm">${icon('trash')} Sil</button>` : ''}</div>` : ''}
+    </div>`).join('')}</div>
+    <div class="grid g2" style="margin-top:14px">
+      ${owner ? `<form class="panel add"><div class="ph"><h3>Yönetici ekle</h3></div><div class="pb" style="display:grid;gap:8px">
+        <input class="field" name="u" placeholder="Kullanıcı adı" autocapitalize="none"><input class="field" name="n" placeholder="Ad"><input class="field" name="p" type="password" placeholder="Şifre (en az 8 karakter)">
+        <select class="field" name="r"><option value="moderator">🛡️ Moderatör (seçtiğin yetkiler)</option><option value="owner">👑 Sahip (tam yetki)</option></select>
+        <div class="perms add-perms">${permBoxes(r.modDefault, false)}</div>
+        <button class="btn primary">Ekle</button></div></form>` : ''}
       <div class="panel"><div class="ph"><h3>Şifremi değiştir</h3></div><form class="pb pw" style="display:grid;gap:8px"><input class="field" name="c" type="password" placeholder="Mevcut şifre"><input class="field" name="p" type="password" placeholder="Yeni şifre (en az 8 karakter)"><button class="btn primary">Değiştir</button></form></div>
     </div>`;
-  main.querySelector('.add')?.addEventListener('submit', async (e) => {
-    e.preventDefault(); const f = e.target;
-    try { await api('/admins', { body: { username: f.u.value, name: f.n.value, password: f.p.value } }); toast('Yönetici eklendi.'); VIEWS.admins(main); } catch (er) { toast(er.message); }
-  });
+  const checked = (box) => [...box.querySelectorAll('.perms input:checked')].map((x) => x.value);
+  const add = main.querySelector('.add');
+  if (add) { add.r.onchange = () => { add.querySelector('.add-perms').hidden = add.r.value === 'owner'; }; add.onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api('/admins', { body: { username: add.u.value, name: add.n.value, password: add.p.value, role: add.r.value, perms: checked(add) } }); toast('Yönetici eklendi.'); VIEWS.admins(main); } catch (er) { toast(er.message); }
+  }; }
   main.querySelector('.pw').onsubmit = async (e) => {
     e.preventDefault(); const f = e.target;
     try { await api('/me/password', { body: { current: f.c.value, password: f.p.value } }); toast('Şifren değişti.'); f.reset(); } catch (er) { toast(er.message); }
   };
-  main.onclick = async (e) => {
-    const b = e.target.closest('.rm'); if (!b) return;
-    if (!confirm('Bu yönetici silinsin mi?')) return;
-    try { await api(`/admins/${b.closest('[data-id]').dataset.id}`, { method: 'DELETE' }); VIEWS.admins(main); } catch (er) { toast(er.message); }
+  main.querySelector('.adm-list').onclick = async (e) => {
+    const card = e.target.closest('.adm'); if (!card) return; const id = card.dataset.id;
+    const put = (body, msg) => api(`/admins/${id}`, { method: 'PUT', body }).then(() => { toast(msg); VIEWS.admins(main); }).catch((er) => toast(er.message));
+    if (e.target.closest('.allp')) card.querySelectorAll('.perms input').forEach((x) => { x.checked = true; });
+    if (e.target.closest('.nonep')) card.querySelectorAll('.perms input').forEach((x) => { x.checked = false; });
+    if (e.target.closest('.sv')) put({ perms: checked(card) }, 'Yetkiler kaydedildi.');
+    if (e.target.closest('.dis')) { const a = r.items.find((x) => x.id === id); if (confirm(a.disabled ? 'Hesap açılsın mı?' : 'Bu yönetici panele giremeyecek. Kapatılsın mı?')) put({ disabled: !a.disabled }, 'Kaydedildi.'); }
+    if (e.target.closest('.pwr')) {
+      const pw = prompt('Yeni şifre (en az 8 karakter):'); if (!pw) return;
+      try { await api(`/admins/${id}/password`, { body: { password: pw } }); toast('Şifre değiştirildi. Yeni şifreyi kendisine ilet.'); } catch (er) { toast(er.message); }
+    }
+    if (e.target.closest('.rm')) { if (!confirm('Bu yönetici silinsin mi?')) return; try { await api(`/admins/${id}`, { method: 'DELETE' }); VIEWS.admins(main); } catch (er) { toast(er.message); } }
   };
+  main.querySelectorAll('.rl').forEach((s) => { s.onchange = () => {
+    const id = s.closest('.adm').dataset.id;
+    if (s.value === 'owner' && !confirm('Bu kişi sahip olursa her şeye tam yetkisi olur (diğer yöneticileri de yönetebilir). Emin misin?')) { s.value = 'moderator'; return; }
+    api(`/admins/${id}`, { method: 'PUT', body: { role: s.value } }).then(() => { toast('Rol değişti.'); VIEWS.admins(main); }).catch((er) => { toast(er.message); VIEWS.admins(main); });
+  }; });
 };
-
 
 // ---- Otomatik moderasyon ----
 VIEWS.flags = async (main) => {
@@ -735,7 +786,7 @@ VIEWS.market = async (main) => {
     const vis = !!r.settings.enabled;
     main.querySelector('.mvis').innerHTML = `<div class="panel mvisp ${vis ? 'on' : ''}"><div class="pb row" style="gap:12px;flex-wrap:wrap">
       <span class="dot"></span><div class="grow"><b>${vis ? 'Store uygulamada görünüyor' : 'Store uygulamada gizli'}</b><div class="muted" style="font-size:12.5px">${vis ? 'Kullanıcılar ana sayfadaki kartla ve Ayarlar’dan Store’a girebiliyor.' : 'Ana sayfa kartı, Ayarlar bağlantısı ve Store sayfaları kullanıcılara kapalı. İlanlar, siparişler ve bakiyeler silinmedi; açınca kaldığı yerden devam eder.'}</div></div>
-      ${S.me.role === 'owner' ? `<button class="btn ${vis ? '' : 'primary'} mvt">${vis ? 'Gizle' : 'Uygulamada göster'}</button>` : ''}</div></div>`;
+      ${can('market') ? `<button class="btn ${vis ? '' : 'primary'} mvt">${vis ? 'Gizle' : 'Uygulamada göster'}</button>` : ''}</div></div>`;
     main.querySelector('.mvt')?.addEventListener('click', async () => {
       if (!confirm(vis ? 'Store uygulamadan gizlensin mi? Açık siparişler panelden yönetilmeye devam eder.' : 'Store tüm kullanıcılara açılsın mı?')) return;
       try { await api('/market/visibility', { method: 'PUT', body: { enabled: !vis } }); toast(vis ? 'Store gizlendi.' : 'Store yayında!'); load(); } catch (er) { toast(er.message); }
@@ -744,7 +795,7 @@ VIEWS.market = async (main) => {
       <div class="stat"><b class="money in">${tl(s.monthTL)}</b><span>Bu ay tamamlanan (${s.monthCount})</span></div><div class="stat"><b class="money">${tl(s.balancesTL)}</b><span>Satıcı bakiyeleri</span></div>
       <div class="stat ${s.payoutsPending ? 'alert' : ''}"><b>${s.payoutsPending}</b><span>Bekleyen satıcı ödemesi</span>${s.payoutsPending ? '<a href="#/payouts">Görüntüle</a>' : ''}</div>`;
     main.querySelector('.mtabs').innerHTML = TABS.map(([k, l]) => `<button data-t="${k}" class="${tab === k ? 'on' : ''}">${l}${k !== 'items' && s.counts[k] ? ` <span class="tc">${s.counts[k]}</span>` : ''}</button>`).join('');
-    if (S.me.role === 'owner' && !main.querySelector('.msettings form')) {
+    if (can('market') && !main.querySelector('.msettings form')) {
       main.querySelector('.msettings').innerHTML = `<form class="panel eco" style="margin-top:14px;max-width:640px"><div class="ph"><h3>Store kuralları</h3></div><div class="pb fgrid">
         <label>Satıcının kargolama süresi (gün)<input class="field" type="number" name="shipDays" value="${r.settings.shipDays}"></label>
         <label>Kargodan sonra otomatik teslim onayı (gün)<input class="field" type="number" name="autoDays" value="${r.settings.autoDays}"></label>
@@ -806,7 +857,7 @@ VIEWS.market = async (main) => {
 // ---- Bakım modu ----
 VIEWS.maintenance = async (main) => {
   const m = await api('/maintenance');
-  const owner = S.me.role === 'owner';
+  const owner = can('maintenance');
   const p = m.plan;
   const dtl2 = (ms) => { if (!ms) return ''; const x = new Date(ms); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
   const REM = [[0, 'Hatırlatma yok'], [15, '15 dakika önce'], [30, '30 dakika önce'], [60, '1 saat önce'], [120, '2 saat önce'], [1440, '1 gün önce']];
@@ -932,7 +983,7 @@ VIEWS.database = async (main) => {
   const name = d.kind === 'postgres' ? (/supabase/.test(d.host || '') ? 'Supabase (PostgreSQL)' : 'PostgreSQL') : d.kind === 'redis' ? 'Render Key Value' : 'Sunucu diski (geçici)';
   const used = d.dbMB ?? d.mediaMB;
   const pct = d.limitMB ? Math.min(100, Math.round((used / d.limitMB) * 100)) : null;
-  main.innerHTML = `${head('Veritabanı', 'Uygulama ve yönetim paneli verilerinin tutulduğu yer. Her değişiklik anında buraya yazılır.', S.me.role === 'owner' ? `<a class="btn" href="#" data-bk>${icon('download')} Yedek indir</a>` : '')}
+  main.innerHTML = `${head('Veritabanı', 'Uygulama ve yönetim paneli verilerinin tutulduğu yer. Her değişiklik anında buraya yazılır.', can('database') ? `<a class="btn" href="#" data-bk>${icon('download')} Yedek indir</a>` : '')}
     <div class="stats">
       <div class="stat"><b style="font-size:20px">${esc(name)}</b><span>${d.connected ? `<span class="chip ok">Bağlı</span>${d.pingMs != null ? ` · ${d.pingMs} ms` : ''}` : `<span class="chip bad">Bağlantı yok</span> ${esc(d.error || '')}`}</span></div>
       <div class="stat"><b>${d.docs.toLocaleString('tr-TR')}</b><span>Kayıt</span></div>
@@ -1045,6 +1096,39 @@ async function roomsPanel(box, owner) {
   };
 }
 
+// ---- Özel etiketler ----
+VIEWS.tags = async (main) => {
+  const r = await api('/tags');
+  let list = r.list.map((t) => ({ ...t }));
+  const row = (t, i) => `<div class="tag-row" data-i="${i}"><input class="field em" value="${esc(t.em)}" style="width:60px" aria-label="Emoji"><input class="field nm" value="${esc(t.name)}" placeholder="Etiket adı (ör. Yarışma 1.si)" style="flex:1;min-width:160px">
+      <select class="field cl" style="width:auto">${r.colors.map((c) => `<option value="${c}" ${t.color === c ? 'selected' : ''}>${{ gold: 'Altın', pink: 'Pembe', purple: 'Mor', blue: 'Mavi', green: 'Yeşil', orange: 'Turuncu', red: 'Kırmızı', gray: 'Gri' }[c]}</option>`).join('')}</select>
+      <span class="utag t-${esc(t.color)} pv">${esc(t.em)} ${esc(t.name || 'Önizleme')}</span><span class="muted" style="font-size:12px">${t.count || 0} kişi</span><button class="btn sm danger rmt">${icon('trash')}</button></div>`;
+  const paint = () => {
+    main.innerHTML = `${head('Özel etiketler', 'Falcı Teyze etiketi gibi, istediğin kişilere özel etiket ver: “🏆 Yarışma 1.si”, “⭐ Kurucu üye”, “🎤 Yayıncı” gibi. Etiket profilde ve kaydırma kartında görünür; verildiğinde kullanıcıya bildirim gider.')}
+      <div class="panel"><div class="ph"><h3>Etiketler</h3><button class="btn sm addt">${icon('plus')} Etiket</button></div><div class="pb tags-l">${list.map(row).join('') || '<div class="muted">Henüz etiket yok.</div>'}</div><div class="pb"><button class="btn primary svl">${icon('check')} Kaydet</button></div></div>
+      <div class="panel" style="margin-top:14px"><div class="ph"><h3>Kullanıcıya etiket ver</h3></div><div class="pb" style="display:grid;gap:10px">
+        <div class="row" style="gap:8px;flex-wrap:wrap"><input class="field uq" placeholder="Kullanıcı adı ya da isim ara" style="flex:1;min-width:200px"><button class="btn sm srch">${icon('search')} Ara</button></div><div class="uqr"></div>
+        <p class="muted" style="margin:0;font-size:12.5px">Kullanıcıya tıklayınca açılan pencerede “Özel etiketler” bölümünden etiket seçebilirsin.</p></div></div>
+      ${r.list.filter((t) => t.count).map((t) => `<div class="panel" style="margin-top:14px"><div class="ph"><h3><span class="utag t-${esc(t.color)}">${esc(t.em)} ${esc(t.name)}</span></h3><span class="muted">${t.count} kişi</span></div><div class="pb row" style="gap:10px;flex-wrap:wrap">${t.users.map((u) => `<button class="btn sm ou" data-u="${esc(u.id)}">@${esc(u.username)}</button>`).join('')}</div></div>`).join('')}`;
+  };
+  paint();
+  const collect = () => { main.querySelectorAll('.tag-row').forEach((rw) => { const t = list[+rw.dataset.i]; t.em = rw.querySelector('.em').value; t.name = rw.querySelector('.nm').value; t.color = rw.querySelector('.cl').value; }); };
+  main.oninput = (e) => { const rw = e.target.closest('.tag-row'); if (!rw) return; collect(); const t = list[+rw.dataset.i]; const pv = rw.querySelector('.pv'); pv.className = `utag t-${t.color} pv`; pv.textContent = `${t.em} ${t.name || 'Önizleme'}`; };
+  main.onchange = main.oninput;
+  main.onclick = async (e) => {
+    if (e.target.closest('.addt')) { collect(); list.push({ em: '🏆', name: '', color: 'gold' }); paint(); return; }
+    if (e.target.closest('.rmt')) { collect(); const i = +e.target.closest('.tag-row').dataset.i; if (list[i].count && !confirm(`Bu etiket ${list[i].count} kişiden de kaldırılacak. Silinsin mi?`)) return; list.splice(i, 1); paint(); return; }
+    if (e.target.closest('.svl')) { collect(); try { await api('/tags', { method: 'PUT', body: { list } }); toast('Etiketler kaydedildi.'); VIEWS.tags(main); } catch (er) { toast(er.message); } return; }
+    if (e.target.closest('.srch')) {
+      const q = main.querySelector('.uq').value.trim(); if (!q) return;
+      const us = await api(`/users?q=${encodeURIComponent(q)}`); const items = us.items || us;
+      main.querySelector('.uqr').innerHTML = items.slice(0, 12).map((u) => `<button class="btn sm ou" data-u="${esc(u.id)}" style="margin:0 6px 6px 0">@${esc(u.username)} · ${esc(u.name)}</button>`).join('') || '<span class="muted">Bulunamadı.</span>';
+      return;
+    }
+    const ou = e.target.closest('.ou'); if (ou) userDrawer(ou.dataset.u, () => VIEWS.tags(main));
+  };
+};
+
 // ---- Büyüme panosu ----
 VIEWS.growth = async (main) => {
   const days = +(sessionStorage.getItem('su_gdays') || 30);
@@ -1080,7 +1164,7 @@ const PST2 = { active: ['ok', 'Yayında'], done: ['', 'Bitti'], stopped: ['', 'K
 let promoSt = 'active';
 VIEWS.promos = async (main) => {
   const r = await api(`/promos?status=${promoSt}`);
-  const c = r.cfg; const owner = S.me.role === 'owner';
+  const c = r.cfg; const owner = can('promos');
   main.innerHTML = `${head('Reklamlar', 'Kullanıcıların jetonla öne çıkardığı gönderi ve vitrin videoları. Akışta ve Vitrin’de “Sponsorlu” etiketiyle gösterilir; bütçesi yüksek olan daha sık çıkar. Kullanılmayan jeton süre bitince iade edilir.')}
     <div class="stats"><div class="stat"><b>${r.totals.active}</b><span>Yayında</span></div><div class="stat"><b>${r.totals.count}</b><span>Toplam</span></div>
       <div class="stat"><b>${r.totals.spent.toLocaleString('tr-TR')}</b><span>Harcanan jeton (iade düşülmüş)</span></div><div class="stat"><b>${r.totals.shown.toLocaleString('tr-TR')}</b><span>Toplam gösterim</span></div></div>
@@ -1113,7 +1197,7 @@ VIEWS.promos = async (main) => {
 // ---- Günlük görevler ----
 VIEWS.quests = async (main) => {
   const q = await api('/quests');
-  const owner = S.me.role === 'owner';
+  const owner = can('quests');
   const maxDay = q.list.filter((x) => x.goal > 0).reduce((a, x) => a + x.coins, 0) + q.bonus;
   main.innerHTML = `${head('Günlük görevler', 'Kullanıcıların her gün uygulamaya dönmesi için küçük görevler. Hedef 0 yapılan görev gizlenir. Görevler her gece 00:00’da (TR) yenilenir.')}
     <div class="stats"><div class="stat"><b>${q.stats.usersToday}</b><span>Bugün görev ilerleten</span></div><div class="stat"><b>${q.stats.allDoneToday}</b><span>Bugün hepsini bitiren</span></div>
@@ -1127,6 +1211,31 @@ VIEWS.quests = async (main) => {
     e.preventDefault(); const f = e.target;
     const list = [...f.querySelectorAll('tr[data-id]')].map((r) => ({ id: r.dataset.id, goal: +r.querySelector('[data-k="goal"]').value, coins: +r.querySelector('[data-k="coins"]').value }));
     try { await api('/quests', { method: 'PUT', body: { enabled: f.en.checked, bonus: +f.bonus.value, list } }); toast('Kaydedildi.'); VIEWS.quests(main); } catch (er) { toast(er.message); }
+  };
+  // ---- Hediye çarkı ----
+  const w = await api('/wheel');
+  const wbox = document.createElement('div'); main.append(wbox);
+  const TYPES = { coins: 'Jeton', plus: 'SwipeUp+ (gün)', boost: 'Boost (dakika)' };
+  const wrow = (s) => `<tr class="wr"><td><input class="field" data-k="em" value="${esc(s.em)}" style="width:56px" ${owner ? '' : 'disabled'}></td><td><input class="field" data-k="label" value="${esc(s.label)}" style="width:150px" ${owner ? '' : 'disabled'}></td>
+    <td><select class="field" data-k="type" ${owner ? '' : 'disabled'}>${Object.entries(TYPES).map(([k, l]) => `<option value="${k}" ${s.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+    <td class="num"><input class="field" type="number" data-k="amount" value="${s.amount}" style="width:80px" ${owner ? '' : 'disabled'}></td><td class="num"><input class="field" type="number" step="0.1" data-k="chance" value="${s.chance}" style="width:80px" ${owner ? '' : 'disabled'}></td>
+    <td class="num">${w.stats.by[s.id] || 0}</td><td>${owner ? `<button type="button" class="btn sm danger wrm">${icon('trash')}</button>` : ''}<input type="hidden" data-k="id" value="${esc(s.id || '')}"></td></tr>`;
+  wbox.innerHTML = `<form class="panel wform" style="margin-top:16px"><div class="ph"><h3>🎡 Hediye çarkı</h3><div class="row" style="gap:12px;font-size:13px"><label class="row" style="gap:6px"><input type="checkbox" name="en" ${w.enabled ? 'checked' : ''} ${owner ? '' : 'disabled'}> Çark açık</label><label class="row" style="gap:6px"><input type="checkbox" name="an" ${w.announce ? 'checked' : ''} ${owner ? '' : 'disabled'}> Cuma 12:00 “çark yenilendi” bildirimi</label></div></div>
+    <div class="pb muted" style="font-size:12.5px">Herkes her hafta (cumadan cumaya) bir kez çevirir. Aşağıdaki ihtimallerin toplamı hediye çıkma şansıdır; kalanı “PAS”. Bu hafta: <b>${w.stats.spins}</b> çevirme, <b>${w.stats.wins}</b> hediye, <b>${w.stats.coins}</b> jeton dağıtıldı.</div>
+    <div class="tw"><table class="tbl"><thead><tr><th></th><th>Hediye</th><th>Tür</th><th class="num">Miktar</th><th class="num">İhtimal %</th><th class="num">Bu hafta</th><th></th></tr></thead><tbody class="wl">${w.slices.map(wrow).join('')}</tbody></table></div>
+    <div class="pb row" style="gap:10px;justify-content:space-between;flex-wrap:wrap"><span class="wsum"></span>${owner ? `<span class="row" style="gap:8px"><button type="button" class="btn sm wadd">${icon('plus')} Hediye</button><button class="btn primary">${icon('check')} Kaydet</button></span>` : ''}</div></form>
+    ${w.recent.length ? `<div class="panel" style="margin-top:14px"><div class="ph"><h3>Bu hafta kazananlar</h3></div><div class="pb row" style="gap:8px;flex-wrap:wrap">${w.recent.map((s) => `<span class="chip">${esc(s.prize.em)} ${esc(s.prize.label)} · @${esc(s.user?.username || '?')}</span>`).join('')}</div></div>` : ''}`;
+  const wf = wbox.querySelector('.wform');
+  const sum = () => { const t = [...wf.querySelectorAll('[data-k="chance"]')].reduce((a, x) => a + (+x.value || 0), 0); wf.querySelector('.wsum').innerHTML = `Hediye çıkma şansı: <b style="color:${t > 100 ? 'var(--bad)' : 'inherit'}">%${Math.round(t * 10) / 10}</b> · PAS: %${Math.max(0, Math.round((100 - t) * 10) / 10)}`; };
+  sum(); wf.oninput = sum;
+  wf.onclick = (e) => {
+    if (e.target.closest('.wadd')) { wf.querySelector('.wl').insertAdjacentHTML('beforeend', wrow({ em: '🎁', label: '', type: 'coins', amount: 10, chance: 1 })); sum(); }
+    if (e.target.closest('.wrm')) { e.target.closest('tr').remove(); sum(); }
+  };
+  wf.onsubmit = async (e) => {
+    e.preventDefault();
+    const slices = [...wf.querySelectorAll('.wr')].map((r) => Object.fromEntries([...r.querySelectorAll('[data-k]')].map((x) => [x.dataset.k, x.value])));
+    try { await api('/wheel', { method: 'PUT', body: { enabled: wf.en.checked, announce: wf.an.checked, slices } }); toast('Çark kaydedildi.'); VIEWS.quests(main); } catch (er) { toast(er.message); }
   };
 };
 
@@ -1209,7 +1318,7 @@ VIEWS.support = async (main) => {
 // ---- Ayarlar: ödeme, fiyatlar, yasal ----
 VIEWS.settings = async (main) => {
   const [e, legal, evs] = await Promise.all([api('/economy'), api('/legal'), api('/event').catch(() => null)]);
-  const owner = S.me.role === 'owner';
+  const owner = can('settings');
   const rows = (list, cols) => list.map((x, i) => `<div class="erow" data-i="${i}">${cols.map(([k, ph, w, type]) => `<input class="field" data-k="${k}" value="${esc(x[k] ?? '')}" placeholder="${ph}" style="width:${w}" ${type ? `type="${type}" step="any"` : ''}>`).join('')}<button type="button" class="btn sm danger rmr">${icon('trash')}</button></div>`).join('');
   const PACK = [['coins', 'Jeton', '100px', 'number'], ['price', 'Fiyat ₺', '110px', 'number'], ['tag', 'Etiket', '130px']];
   const PLAN = [['days', 'Gün', '90px', 'number'], ['price', 'Fiyat ₺', '110px', 'number'], ['tag', 'Etiket', '130px']];
