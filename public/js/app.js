@@ -24,6 +24,7 @@ const routes = [
   [/^\/reklam(?:\/([\w-]+))?$/, 'promote', { tabs: false }],
   [/^\/gorevler$/, 'quests', { tabs: false }],
   [/^\/cark$/, 'wheel', { tabs: false }],
+  [/^\/sarki(?:\/(yukle))?$/, 'songs', { tabs: false }],
   [/^\/destek(?:\/([\w-]+))?$/, 'support', { tabs: false }],
   [/^\/chat\/([\w-]+)$/, 'chat', { tabs: false }],
   [/^\/chat\/([\w-]+)\/info$/, 'chatinfo', { tabs: false }],

@@ -21,6 +21,8 @@ function sniff(buf) {
   }
   if (buf.slice(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return 'video/webm';
   if (buf.slice(0, 4).toString('latin1') === 'OggS') return 'audio/ogg';
+  if (buf.slice(0, 4).toString('latin1') === 'RIFF' && buf.slice(8, 12).toString('latin1') === 'WAVE') return 'audio/wav';
+  if (buf.slice(0, 4).toString('latin1') === 'fLaC') return 'audio/flac';
   if (buf.slice(0, 3).toString('latin1') === 'ID3' || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
   return null;
 }

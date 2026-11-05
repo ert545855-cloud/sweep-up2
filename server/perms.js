@@ -18,6 +18,7 @@ const PERMS = [
   ['fal', 'Fal ve yapay zeka', 'Uygulama'],
   ['announce', 'Bildirim gönder', 'Uygulama'],
   ['quests', 'Görevler ve hediye çarkı', 'Uygulama'],
+  ['songs', 'Şarkı yarışması', 'Uygulama'],
   ['growth', 'Büyüme panosu', 'Uygulama'],
   ['settings', 'Ayarlar (fiyatlar, etkinlikler, odalar)', 'Uygulama'],
   ['maintenance', 'Bakım modu', 'Uygulama'],
@@ -34,7 +35,7 @@ const PREFIX = {
   admins: 'owner', announcements: 'announce', appeals: 'appeals', audit: 'audit', content: 'content', media: 'content', database: 'database',
   economy: 'settings', event: 'settings', legal: 'settings', rooms: 'settings', fal: 'fal', falai: 'fal', flags: 'flags', growth: 'growth',
   ledger: 'erp', erp: 'erp', maintenance: 'maintenance', market: 'market', notes: 'notes', orders: 'orders', payouts: 'payouts', promos: 'promos',
-  quests: 'quests', wheel: 'quests', reports: 'reports', support: 'support', tags: 'tags', verifications: 'verify',
+  quests: 'quests', wheel: 'quests', reports: 'reports', songs: 'songs', support: 'support', tags: 'tags', verifications: 'verify',
 };
 const FREE = new Set(['login', 'me', 'overview', 'push']);
 

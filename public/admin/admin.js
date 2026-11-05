@@ -3,7 +3,7 @@ import { icon } from '/js/icons.js';
 
 const S = { token: localStorage.getItem('su_admin'), me: null, counts: {} };
 const can = (p) => S.me?.role === 'owner' || (S.me?.perms || []).includes(p);
-const SEC_PERM = { growth: 'growth', users: 'users', support: 'support', reports: 'reports', appeals: 'appeals', flags: 'flags', verify: 'verify', orders: 'orders', payouts: 'payouts', market: 'market', ledger: 'erp', erp: 'erp', promos: 'promos', quests: 'quests', fal: 'fal', content: 'content', media: 'content', announce: 'announce', notes: 'notes', audit: 'audit', database: 'database', maintenance: 'maintenance', settings: 'settings', tags: 'tags' };
+const SEC_PERM = { growth: 'growth', users: 'users', support: 'support', reports: 'reports', appeals: 'appeals', flags: 'flags', verify: 'verify', orders: 'orders', payouts: 'payouts', market: 'market', ledger: 'erp', erp: 'erp', promos: 'promos', quests: 'quests', songs: 'songs', fal: 'fal', content: 'content', media: 'content', announce: 'announce', notes: 'notes', audit: 'audit', database: 'database', maintenance: 'maintenance', settings: 'settings', tags: 'tags' };
 const canSec = (k) => !SEC_PERM[k] || can(SEC_PERM[k]);
 const root = document.getElementById('root');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -55,6 +55,7 @@ const SECTIONS = [
   ['promos', 'Reklamlar', 'bolt'],
   ['quests', 'Görevler ve çark', 'check'],
   ['fal', 'Fal', 'star', 'falPending'],
+  ['songs', 'Şarkı yarışması', 'music', 'songsPending'],
   ['content', 'İçerik', 'grid'],
   ['media', 'Medya', 'image'],
   ['announce', 'Bildirim gönder', 'bell'],
@@ -109,7 +110,7 @@ function paintMaintBanner() {
 async function refreshCounts() {
   try {
     const o = await api('/overview');
-    const changed = ['supportOpen', 'reportsOpen', 'appealsOpen', 'falPending', 'flagsOpen', 'verifyOpen', 'ordersPaid', 'payoutsOpen', 'marketOpen', 'maintenance'].some((k) => S.counts[k] !== o[k]);
+    const changed = ['songsPending', 'supportOpen', 'reportsOpen', 'appealsOpen', 'falPending', 'flagsOpen', 'verifyOpen', 'ordersPaid', 'payoutsOpen', 'marketOpen', 'maintenance'].some((k) => S.counts[k] !== o[k]);
     if (S.counts.users && (o.supportOpen || 0) > (S.counts.supportOpen || 0)) { toast('🎧 Yeni destek mesajı var.'); ding(); }
     S.counts = o;
     paintMaintBanner();
@@ -402,6 +403,12 @@ VIEWS.ledger = async (main) => {
 VIEWS.erp = async (main) => {
   const [{ default: erp }, adm] = await Promise.all([import('./erp.js'), api('/admins').catch(() => ({ items: [] }))]);
   await erp(main, { api, esc, toast, head, tl, d, today, icon, ledgerView: (c) => VIEWS.ledger(c), admins: adm.items || [] });
+};
+
+// ---- Şarkı yarışması ----
+VIEWS.songs = async (main) => {
+  const { default: songs } = await import('./songs.js');
+  await songs(main, { api, esc, toast, head, d, dt, icon, userCell, can, token: () => S.token });
 };
 
 // ---- Fal ----

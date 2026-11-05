@@ -1477,6 +1477,7 @@ require('./server/wheel')(app, featureCtx);
 require('./server/erp')(app, featureCtx);
 require('./server/quests')(app, featureCtx);
 require('./server/growth')(app, featureCtx);
+require('./server/songs')(app, featureCtx);
 gameOut = featureCtx.gameOut;
 
 // ---------- Statik ----------

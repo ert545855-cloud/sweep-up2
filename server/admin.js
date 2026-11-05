@@ -165,6 +165,7 @@ module.exports = function mountAdmin(app, ctx) {
       payoutsOpen: store.filter('payouts', (p) => p.status === 'pending').length,
       maintenance: store.get('settings', 'maintenance')?.on ? 1 : 0,
       supportOpen: store.filter('support', (s) => s.status === 'open').length,
+      songsPending: store.filter('songs', (s) => s.status === 'pending').length,
       marketOpen: store.filter('mk_orders', (o) => ['odeme_kontrol', 'sorunlu', 'iade_bekliyor'].includes(o.status)).length,
       plusUsers: users.filter((u) => (u.plusUntil || 0) > t).length,
       verifiedUsers: users.filter((u) => u.verified).length,

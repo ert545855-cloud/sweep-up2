@@ -2094,3 +2094,90 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .fq-due { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
 .ai-box.hold { border-color: rgba(124,58,237,.5); }
 .holdbar { grid-template-columns: minmax(0, 1fr); } .hb-it .grow { flex: 1; } .hb-it .btn { flex: none; white-space: nowrap; }
+
+/* ---------- Şarkı yarışması ---------- */
+.sg { padding: 0 16px 20px; display: grid; gap: 14px; }
+.sg > * { min-width: 0; }
+.sg-hero { position: relative; overflow: hidden; border-radius: 26px; color: #fff; padding: 0 18px 20px; display: grid;
+  background: radial-gradient(120% 90% at 100% 0%, #3b1f63 0%, #1a1029 55%, #0e0916 100%); box-shadow: 0 22px 44px -22px rgba(124,58,237,.9); }
+.sg-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgba(10,6,18,.6) 100%); pointer-events: none; }
+.sg-art { display: block; width: 100%; max-width: 340px; height: 180px; object-fit: contain; justify-self: center; margin: 4px 0 -6px; }
+.sg-hb { position: relative; z-index: 1; display: grid; gap: 6px; }
+.sg-hb h1 { margin: 2px 0 0; font-family: var(--display); font-size: 25px; line-height: 1.12; letter-spacing: -.3px; }
+.sg-hb p { margin: 0; color: rgba(255,255,255,.78); font-size: 13.5px; line-height: 1.45; }
+.sg-ph { justify-self: start; padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; background: rgba(255,255,255,.14); backdrop-filter: blur(6px); }
+.sg-ph.submit { background: linear-gradient(90deg, #ff9f43, #ff4f8b); } .sg-ph.vote { background: linear-gradient(90deg, #ff4f8b, #7c3aed); } .sg-ph.ended { background: linear-gradient(90deg, #ffc926, #c97a00); color: #3a2100; }
+.sg-cd { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 13px; color: rgba(255,255,255,.9); } .sg-cd svg { width: 16px; height: 16px; flex: none; }
+.sg-tl { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); position: relative; }
+.sg-tl::before { content: ''; position: absolute; top: 7px; left: 16.6%; right: 16.6%; height: 2px; background: var(--line); }
+.sg-tl li { position: relative; display: grid; justify-items: center; gap: 2px; text-align: center; }
+.sg-tl i { width: 16px; height: 16px; border-radius: 50%; background: var(--surface-2); border: 2px solid var(--line); z-index: 1; }
+.sg-tl li.done i { background: var(--uv); border-color: var(--uv); }
+.sg-tl li.now i { background: #fff; border: 4px solid var(--uv); box-shadow: 0 0 0 5px color-mix(in srgb, var(--uv) 25%, transparent); }
+.sg-tl b { font-size: 13px; margin-top: 4px; } .sg-tl small { font-size: 11.5px; color: var(--muted); }
+.sg-tl li.now b { color: var(--uv); }
+.sg-prize { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-lg); background: linear-gradient(120deg, color-mix(in srgb, #ffc926 16%, var(--surface)), var(--surface)); border: 1px solid color-mix(in srgb, #ffc926 30%, transparent); }
+.sg-prize img { width: 48px; height: 48px; flex: none; } .sg-prize .grow { display: grid; gap: 2px; min-width: 0; } .sg-prize small { color: var(--muted); font-size: 12.5px; }
+.sg-cta { height: 52px; font-size: 16px; } .sg-cta svg { width: 20px; height: 20px; }
+.sg-votes { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 16px; background: var(--surface); font-size: 13px; }
+.sg-votes i { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--uv); flex: none; } .sg-votes i.on { background: var(--uv); }
+.sg-votes span { margin-left: 4px; color: var(--muted); } .sg-votes b { color: var(--text); }
+.sg-list, .sg-mine, .sg-hall { display: grid; gap: 10px; }
+.sg-card { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 20px; background: var(--surface); border: 1px solid transparent; transition: border-color .2s, background .2s; }
+.sg-card.on { border-color: color-mix(in srgb, var(--uv) 55%, transparent); background: color-mix(in srgb, var(--uv) 8%, var(--surface)); }
+.sg-card.win { border-color: rgba(255,201,38,.55); background: linear-gradient(120deg, rgba(255,201,38,.14), var(--surface) 60%); }
+.sg-cov { position: relative; width: 66px; height: 66px; flex: none; padding: 0; border: 0; border-radius: 14px; overflow: hidden; background: #1b0f30; cursor: pointer; }
+.sg-cov img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sg-pp { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.28); color: #fff; }
+.sg-pp svg { width: 30px; height: 30px; padding: 7px; border-radius: 50%; background: rgba(255,255,255,.22); backdrop-filter: blur(6px); box-sizing: content-box; }
+.sg-card.on .sg-pp svg { background: var(--uv); }
+.sg-rank { position: absolute; left: 4px; top: 4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; font-size: 11.5px; font-weight: 800; display: grid; place-items: center; }
+.sg-rank.r1 { background: linear-gradient(#fff1a8, #ffc926); color: #3a2100; } .sg-rank.r2 { background: linear-gradient(#f4f4f8, #b9b9c6); color: #222; } .sg-rank.r3 { background: linear-gradient(#ffd0a1, #c87a3a); color: #2a1300; }
+.sg-mid { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.sg-ti { all: unset; cursor: pointer; font-weight: 800; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.sg-e { display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 6px; border-radius: 3px; background: var(--muted); color: var(--bg); font-size: 9.5px; font-weight: 900; vertical-align: 2px; }
+.sg-ar { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .sg-meta { font-size: 12px; color: var(--muted); }
+.sg-prog { height: 4px; margin-top: 5px; border-radius: 4px; background: var(--surface-2); overflow: hidden; cursor: pointer; } .sg-prog i { display: block; height: 100%; background: var(--grad); border-radius: 4px; transition: width .25s linear; }
+.sg-vote { flex: none; display: grid; justify-items: center; gap: 2px; min-width: 58px; padding: 8px 6px; border: 0; border-radius: 14px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 11.5px; font-weight: 750; cursor: pointer; }
+.sg-vote svg { width: 22px; height: 22px; } .sg-vote.on { background: var(--grad); color: var(--on-uv); }
+.sg-vote:active { transform: scale(.94); }
+.sg-crown img { width: 40px; height: 40px; }
+.sg-my, .sg-hw { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 16px; background: var(--surface); }
+.sg-my img, .sg-hw img { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex: none; background: #1b0f30; }
+.sg-my .grow, .sg-hw .grow { min-width: 0; display: grid; gap: 1px; } .sg-my small, .sg-hw small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill.bad { background: color-mix(in srgb, var(--hot) 16%, transparent); color: color-mix(in srgb, var(--hot) 75%, var(--text)); }
+.sg-empty { display: grid; justify-items: center; gap: 8px; padding: 24px 10px; text-align: center; color: var(--muted); } .sg-empty img { width: 150px; opacity: .85; } .sg-empty p { margin: 0; }
+.sg-spot { background: #1db954; color: #fff; } .sg-spot svg { width: 18px; height: 18px; }
+.sg-rel { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 16px; background: var(--surface); font-size: 13.5px; } .sg-rel svg { width: 20px; height: 20px; color: var(--uv); flex: none; }
+.sg-rules { padding: 12px 14px; border-radius: 16px; background: var(--surface); } .sg-rules summary { font-weight: 800; cursor: pointer; }
+.sg-rules ol { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13.5px; color: var(--muted); line-height: 1.45; } .sg-rules b { color: var(--text); }
+.sg-det { display: grid; gap: 12px; padding-bottom: 10px; }
+.sg-dc { width: 100%; max-width: 260px; aspect-ratio: 1; object-fit: cover; border-radius: 18px; justify-self: center; background: #1b0f30; box-shadow: 0 18px 36px -18px rgba(0,0,0,.7); }
+.sg-da { display: grid; justify-items: center; gap: 6px; text-align: center; font-size: 16px; }
+.sg-du { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; text-decoration: none; }
+.sg-cr { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 6px 14px; margin: 0; padding: 12px 14px; border-radius: 14px; background: var(--surface); font-size: 13.5px; }
+.sg-cr dt { color: var(--muted); } .sg-cr dd { margin: 0; font-weight: 650; }
+.sg-ab { margin: 0; font-size: 14px; line-height: 1.5; }
+.sg-ly h4 { margin: 4px 0 6px; } .sg-ly pre { margin: 0; white-space: pre-wrap; font: inherit; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.sg-feed { display: flex; align-items: center; gap: 12px; margin: 4px 14px 10px; padding: 12px 14px; border-radius: var(--r-lg); color: #fff; text-decoration: none; background: radial-gradient(120% 140% at 100% 0%, #7c3aed, #3b1f63 50%, #1a1029); }
+.sg-feed[hidden] { display: none; } .sg-feed .grow { display: grid; min-width: 0; } .sg-feed small { color: rgba(255,255,255,.8); font-size: 12.5px; }
+.sgf-ic { width: 42px; height: 42px; flex: none; } .sg-feed .go-chip { padding: 6px 12px; border-radius: 999px; background: #fff; color: #2b1747; font-weight: 800; font-size: 13px; }
+/* yükleme formu */
+.sg-f { padding-bottom: 40px; }
+.sg-f > * { min-width: 0; }
+.sg-fh { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 18px; color: #fff; background: radial-gradient(120% 120% at 100% 0%, #3b1f63, #140c22); }
+.sg-fh img { width: 96px; flex: none; } .sg-fh div { display: grid; gap: 2px; } .sg-fh small { color: rgba(255,255,255,.75); }
+.sg-fs { margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 18px; display: grid; gap: 12px; min-width: 0; }
+.sg-fs legend { padding: 0 6px; font-weight: 800; font-size: 14px; }
+.sg-drop { display: flex; align-items: center; gap: 12px; padding: 14px; border: 2px dashed color-mix(in srgb, var(--uv) 45%, var(--line)); border-radius: 16px; background: color-mix(in srgb, var(--uv) 6%, transparent); color: var(--text); font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.sg-drop .grow { display: grid; gap: 2px; min-width: 0; } .sg-drop b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .sg-drop small { color: var(--muted); font-size: 12px; }
+.sg-di { width: 44px; height: 44px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--grad); color: var(--on-uv); } .sg-di svg { width: 22px; height: 22px; }
+.sg-drop.ok { border-style: solid; border-color: var(--mint); } .sg-drop.ok .sg-di { background: var(--mint); }
+.sg-up { height: 6px; border-radius: 6px; background: var(--surface-2); overflow: hidden; } .sg-up[hidden] { display: none; } .sg-up i { display: block; height: 100%; width: 0; background: var(--grad); transition: width .2s; }
+.sg-cvr { display: flex; align-items: center; gap: 12px; } .sg-cvr small { font-size: 12px; line-height: 1.4; }
+.sg-cb { position: relative; width: 84px; height: 84px; flex: none; padding: 0; border: 0; border-radius: 14px; overflow: hidden; background: #1b0f30; cursor: pointer; }
+.sg-cb img { width: 100%; height: 100%; object-fit: cover; } .sg-cb span { position: absolute; inset: auto 0 0; padding: 4px; display: flex; align-items: center; justify-content: center; gap: 4px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; font-weight: 700; } .sg-cb svg { width: 13px; height: 13px; }
+.sg-2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
+.form label.sg-ck { display: flex; align-items: flex-start; gap: 10px; font-weight: 500; font-size: 13.5px; line-height: 1.45; } .sg-ck input { width: 20px; height: 20px; margin: 0; flex: none; accent-color: var(--uv); }
+.sg-rights { padding: 12px 14px; border-radius: 16px; background: var(--surface); }
+.sg-note { margin: 0; font-size: 12.5px; display: flex; gap: 6px; align-items: flex-start; } .sg-note svg { width: 15px; height: 15px; flex: none; margin-top: 1px; }

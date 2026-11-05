@@ -1,5 +1,9 @@
 // Çizgi ikonlar (24x24, stroke=currentColor)
 const P = {
+  trophy: '<path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4.5v1.5A3.5 3.5 0 0 0 8 11M17 6h2.5v1.5A3.5 3.5 0 0 1 16 11M12 14v3M8.5 21h7l-.8-4h-5.4z"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+  disc: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 5.5A6.5 6.5 0 0 1 18.5 12"/>',
+  vote: '<path d="M7 11.5 10.5 15 17 8"/><rect x="3" y="3" width="18" height="18" rx="5"/>',
   home: '<path d="M3 10.2 12 3l9 7.2V20a1 1 0 0 1-1 1h-5v-6.5H9V21H4a1 1 0 0 1-1-1z"/>',
   homeFill: '<path fill="currentColor" d="M3 10.2 12 3l9 7.2V20a1 1 0 0 1-1 1h-5v-6.5H9V21H4a1 1 0 0 1-1-1z"/>',
   search: '<circle cx="10.5" cy="10.5" r="7"/><path d="m16 16 5 5"/>',

@@ -303,3 +303,26 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 .kcol { background: var(--soft); border-radius: 14px; padding: 10px; display: grid; gap: 8px; min-height: 120px; } .kh { font-weight: 800; padding: 2px 4px 4px; }
 .kcard { background: var(--panel); border-radius: 12px; padding: 10px 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); } .kcard.late { box-shadow: inset 3px 0 0 var(--bad); }
 .money.in { color: var(--ok); } .money.out { color: var(--bad); }
+
+/* ---- Şarkı yarışması ---- */
+.sgt { margin-bottom: 14px; flex-wrap: wrap; } .sgt a { display: inline-flex; align-items: center; gap: 6px; }
+.sgsg { display: grid; gap: 10px; font-size: 13.5px; } .sgsg label.row { gap: 8px; }
+.sg4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; } .sg4 label, .sg2 label, .sg3 label, .sgform > label { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; }
+.sg2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .sg3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.sgform { display: grid; gap: 12px; } .sgform label.row { display: flex; gap: 8px; font-weight: 500; }
+.sgup { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .sgcv { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: #1b0f30; }
+.sgbar { flex-basis: 100%; height: 6px; border-radius: 6px; background: var(--soft); overflow: hidden; } .sgbar[hidden] { display: none; } .sgbar i { display: block; height: 100%; width: 0; background: var(--grad); }
+.sgdh { display: flex; gap: 14px; align-items: center; } .sgdh img { width: 92px; height: 92px; border-radius: 14px; object-fit: cover; background: #1b0f30; flex: none; }
+.sggrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px; } @media (max-width: 900px) { .sggrid { grid-template-columns: 1fr; } .sg3 { grid-template-columns: 1fr; } }
+.sgtl { display: grid; gap: 10px; } .sgtl > div { display: grid; gap: 2px; font-size: 13.5px; } .sgtl .muted { font-size: 12px; }
+.sgwin { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 12px; background: linear-gradient(120deg, rgba(255,201,38,.18), transparent); border: 1px solid rgba(255,201,38,.45); }
+.sgwin img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: #1b0f30; } .sgwin .grow { min-width: 0; }
+.sgrel { display: grid; gap: 10px; } .sgrel label { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; } .sgrel label.row { display: flex; gap: 8px; font-weight: 500; }
+.sgbars { display: grid; gap: 6px; } .sgb { display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 1fr) 36px; align-items: center; gap: 8px; font-size: 12.5px; }
+.sgb i { display: block; height: 10px; border-radius: 6px; background: var(--grad); min-width: 4px; } .sgb b { text-align: right; }
+.sgplay { position: relative; width: 44px; height: 44px; flex: none; padding: 0; border: 0; border-radius: 10px; overflow: hidden; cursor: pointer; background: #1b0f30; }
+.sgplay img { width: 100%; height: 100%; object-fit: cover; } .sgplay svg { position: absolute; inset: 0; margin: auto; width: 20px; height: 20px; color: #fff; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+.sgplay.on { outline: 3px solid var(--brand); }
+tr.sgw td { background: color-mix(in srgb, #ffc926 10%, transparent); }
+.sgvl { display: grid; gap: 8px; max-height: 320px; overflow-y: auto; } .sgvl > .row { justify-content: space-between; gap: 10px; }
+.drawer.sgd { width: min(680px, 100%); }
