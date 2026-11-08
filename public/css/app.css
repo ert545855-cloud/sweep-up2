@@ -671,6 +671,10 @@ input[type=range] { width: 100%; accent-color: var(--uv); }
 .fal-wait-chip { background: color-mix(in srgb, var(--sun) 20%, transparent); color: #b87700; height: 24px; font-size: 12px; }
 :root[data-skin="gece"] .fal-wait-chip, :root[data-skin="altin"] .fal-wait-chip { color: var(--sun); }
 .fal-hero.teyze .grow + .btn { flex: none; }
+.fal-hero.teyze { flex-wrap: wrap; row-gap: 10px; }
+.fal-hero.teyze .grow { flex: 1 1 calc(100% - 74px); min-width: 0; }
+.fal-hero.teyze > .btn { margin-left: 70px; }
+.fal-hero.teyze > .btn ~ .btn { margin-left: 0; }
 .fal-q { display: grid; gap: 10px; margin: 0 14px 10px; padding: 12px; border-radius: var(--r-md); background: var(--surface); }
 .fal-q .sub { font-size: 13px; }
 .fq-imgs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -2391,3 +2395,50 @@ body.in-maint #tabbar, body.in-maint #fx-layer { display: none; }
 .av-wrap > .ring { display: inline-grid; line-height: 0; }
 .av-wrap > .ring.live { position: static; inset: auto; left: auto; right: auto; width: auto; max-width: none; margin: 0; transform: none; box-shadow: none; z-index: auto; color: inherit; }
 .chat .topbar .who .av-wrap { flex: none; }
+
+/* ===== Figma ikon seti (public/img/eg) ===== */
+.egi { display: inline-block; flex: none; object-fit: contain; vertical-align: middle; -webkit-user-drag: none; user-select: none; }
+.egi-em { display: inline-grid; place-items: center; border-radius: 30%; background: var(--surface); line-height: 1; }
+.streak-chip { gap: 3px; padding-left: 4px; }
+.streak-chip .sc-i { width: 16px; height: 16px; border-radius: 6px; }
+.streak-chip.big { padding-left: 6px; } .streak-chip.big .sc-i { width: 20px; height: 20px; border-radius: 7px; }
+.streak-chip.risk .sc-i { filter: saturate(.55); }
+.eg-it { gap: 6px; padding-top: 12px; }
+.eg-it .eg-ic { width: 40px; height: 40px; box-shadow: 0 6px 14px -8px rgba(0,0,0,.35); border-radius: 13px; }
+.eg-stk { background: var(--surface); }
+.eg-n { top: 5px; right: 6px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #fff; color: #ff3d6e; display: grid; place-items: center; font-size: 11.5px; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.stk-flame { background: rgba(255,255,255,.2); }
+.stk-flame .egi { width: 50px; height: 50px; border-radius: 16px; box-shadow: 0 8px 18px -8px rgba(0,0,0,.4); }
+.stk-frz .egi, .stk-entry .egi, .bc-entry .egi, .bc-pack .egi { border-radius: 13px; }
+.empty .big .egi { margin: 0 auto 6px; border-radius: 22px; box-shadow: 0 12px 26px -12px rgba(0,0,0,.4); }
+.dq-q .dq-ic { display: block; margin: 0 auto 10px; border-radius: 16px; box-shadow: 0 10px 22px -10px rgba(0,0,0,.45); border: 2px solid rgba(255,255,255,.55); }
+.clb-card .em { width: 48px; height: 48px; margin-bottom: 4px; }
+.clb-hero .em { width: 64px; height: 64px; border: 2px solid rgba(255,255,255,.6); border-radius: 21px; }
+.pk-hero .egi { border: 2px solid rgba(255,255,255,.6); border-radius: 17px; }
+.pk-why span { background: var(--surface-2); color: var(--text); }
+.pk-np { display: flex; align-items: center; gap: 6px; } .pk-np .egi { border-radius: 6px; }
+.pk-b.super svg { width: 22px; height: 22px; color: #f5b400; fill: currentColor; }
+.kr-mic { border-radius: 26px; box-shadow: 0 14px 30px -10px rgba(219,39,119,.7); margin-bottom: 4px; }
+.kr-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ff3b5c; margin-right: 6px; vertical-align: 1px; animation: stkPulse 1.2s infinite; }
+.kr-n.r1, .kr-n.r2, .kr-n.r3 { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 13.5px; }
+.kr-n.r1 { background: linear-gradient(135deg, #FFE07A, #F59E0B); } .kr-n.r2 { background: linear-gradient(135deg, #E5E7EB, #9CA3AF); } .kr-n.r3 { background: linear-gradient(135deg, #F6B48A, #B45309); }
+.kr-sc { display: inline-flex; align-items: center; gap: 3px; } .kr-sc svg { width: 15px; height: 15px; color: #f5b400; fill: currentColor; }
+.sec-ic { display: inline-flex; align-items: center; gap: 8px; } .sec-ic .egi { border-radius: 8px; }
+.bc-card .bc-sym { margin: 6px 0 2px; border-radius: 50%; border: 3px solid rgba(255,255,255,.55); box-shadow: 0 16px 34px -14px rgba(0,0,0,.6); }
+.bc-card.none .bc-sym { border-radius: 30px; }
+.bc-pick button .egi { width: 40px; height: 40px; }
+.bc-pick button.on { box-shadow: inset 0 0 0 2px var(--uv); }
+.fp .fp-em { border-radius: 14px; }
+.gift-grid .em { width: 48px; height: 48px; border-radius: 15px; margin-bottom: 2px; }
+.msg.gift-msg .gf-em { width: 64px; height: 64px; border-radius: 20px; box-shadow: 0 10px 22px -10px rgba(225,29,72,.55); margin-bottom: 4px; animation: giftPop .6s cubic-bezier(.2,1.6,.4,1); }
+.fal-msg .fm-h .egi { border-radius: 8px; }
+.compat-msg .gm-h .egi { border-radius: 8px; }
+.fal-tile .em { width: 48px; height: 48px; border-radius: 15px; margin-bottom: 8px; font-size: 0; }
+.fal-mini.egi { width: 44px; height: 44px; padding: 0; background: none; border-radius: 14px; }
+.gfx span .egi { border-radius: 30%; }
+.gi-inl { border-radius: 6px; vertical-align: -5px; margin: 0 3px; }
+.np-add { display: inline-flex; align-items: center; gap: 8px; } .np-add .egi { border-radius: 7px; }
+.np-card.big .egi { border-radius: 12px; }
+.me-links .egi { border-radius: 7px; }
+.sheet .menu button .egi { border-radius: 9px; }
+.ib .egi { border-radius: 9px; }

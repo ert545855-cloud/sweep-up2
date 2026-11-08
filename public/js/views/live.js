@@ -2,6 +2,7 @@ import { icon } from '../icons.js';
 import {
   shareSheet, state, api, esc, on, toast, el, sheet, needCoins, tick, FILTERS, filterCss,
 } from '../core.js';
+import { giftIcon } from '../eg-icons.js';
 
 // Yayıncı efekt seçici (izleyicilerde de aynı efekt görünür)
 function effectSheet(cur, onPick) {
@@ -16,7 +17,7 @@ function effectSheet(cur, onPick) {
 async function giftSheet(hostId) {
   const g = await api('/gifts').catch(() => null);
   if (!g) return;
-  sheet('Hediye gönder', `<div class="gift-grid">${g.gifts.map((x) => `<button data-g="${esc(x.id)}"><span class="em">${x.em}</span><b>${esc(x.name)}</b><small>${x.coins} jeton</small></button>`).join('')}</div>
+  sheet('Hediye gönder', `<div class="gift-grid">${g.gifts.map((x) => `<button data-g="${esc(x.id)}">${giftIcon(x, 48, 'em')}<b>${esc(x.name)}</b><small>${x.coins} jeton</small></button>`).join('')}</div>
     <div class="gift-foot"><span>Bakiye: <b class="bal">${g.coins}</b> jeton</span><a class="link" href="#/store">Jeton al</a></div>`, {
     onMount(sh) {
       sh.querySelector('.gift-grid').onclick = (e) => {
@@ -90,9 +91,9 @@ function wireChat(root, hostId) {
   const fx = root.querySelector('.gifts-fx');
   const addGift = (gv) => {
     const b = root.querySelector('.badge-g'); b.hidden = false; b.querySelector('.gc').textContent = gv.total;
-    cm.append(el(`<div class="c gift"><img class="av av-32" src="${esc(gv.user?.avatar)}" alt=""><div><b>${esc(gv.user?.username)}</b>${gv.gift.em} ${esc(gv.gift.name)} gönderdi</div></div>`));
+    cm.append(el(`<div class="c gift"><img class="av av-32" src="${esc(gv.user?.avatar)}" alt=""><div><b>${esc(gv.user?.username)}</b>${giftIcon(gv.gift, 20, 'gi-inl')} ${esc(gv.gift.name)} gönderdi</div></div>`));
     while (cm.children.length > 40) cm.firstElementChild.remove();
-    const big = el(`<div class="gfx ${gv.gift.coins >= 150 ? 'huge' : ''}"><span>${gv.gift.em}</span><b>${esc(gv.user?.username)}</b></div>`);
+    const big = el(`<div class="gfx ${gv.gift.coins >= 150 ? 'huge' : ''}"><span>${giftIcon(gv.gift, gv.gift.coins >= 150 ? 140 : 96)}</span><b>${esc(gv.user?.username)}</b></div>`);
     fx.append(big); setTimeout(() => big.remove(), 2600);
   };
   const offs = [

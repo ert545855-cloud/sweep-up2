@@ -157,7 +157,7 @@ module.exports = function engage(app, ctx) {
     if (coins) {
       chat.members.forEach((m) => eco.addCoins(m, coins, 'streak', { ref: chat.id, days: s.count }));
       chat.members.forEach((m) => emitTo(m, 'wallet', {}));
-      sendMessage(chat, sender.id, { text: `🔥 ${s.count} günlük seri! İkinize de ${coins} jeton hediye. Seriyi bozmayın 💜`, system: true });
+      sendMessage(chat, sender.id, { text: `${s.count} günlük seri! İkinize de ${coins} jeton hediye. Seriyi bozmayın.`, system: true });
     }
   }
 
@@ -189,7 +189,7 @@ module.exports = function engage(app, ctx) {
     if (!coins && l.count > 30 && l.count % 30 === 0) coins = reward(30, c.milestones);
     if (coins) {
       eco.addCoins(uid, coins, 'login_streak', { days: l.count });
-      notify(uid, { type: 'order', text: `🔥 ${l.count} gündür SwipeUp’tasın! ${coins} jeton hediye.`, url: '/#/seriler', tag: 'login-streak' });
+      notify(uid, { type: 'order', text: `${l.count} gündür SwipeUp’tasın! ${coins} jeton hediye.`, url: '/#/seriler', tag: 'login-streak' });
       emitTo(uid, 'wallet', {});
     }
     emitTo(uid, 'streak:login', { count: l.count, coins, freezeUsed: used });
@@ -227,14 +227,14 @@ module.exports = function engage(app, ctx) {
         s.members.forEach((m) => {
           const o = user(s.members.find((x) => x !== m)); if (!o || isBlocked(m, o.id)) return;
           const wrote = s.w?.[m] === d;
-          notify(m, { type: 'streak', text: wrote ? `🔥 ${first(o)} bugün henüz yazmadı. ${s.count} günlük seriniz bu gece bitiyor, ona hatırlat!` : `🔥 ${first(o)} ile ${s.count} günlük serin bu gece bitiyor! Bir mesaj at.`, url: `/#/chat/${s.id}`, tag: 'streak-' + s.id });
+          notify(m, { type: 'streak', text: wrote ? `${first(o)} bugün henüz yazmadı. ${s.count} günlük seriniz bu gece bitiyor, ona hatırlat!` : `${first(o)} ile ${s.count} günlük serin bu gece bitiyor! Bir mesaj at.`, url: `/#/chat/${s.id}`, tag: 'streak-' + s.id });
         });
       });
     }
     if (c.login.enabled && h >= c.login.warnHour) {
       store.filter('users', (u) => regular(u) && u.loginStreak?.count >= 3 && u.loginStreak.last === y && u.loginStreak.warned !== d && !(u.loginStreak.freezes > 0)).forEach((u) => {
         store.update('users', u.id, { loginStreak: { ...u.loginStreak, warned: d } });
-        notify(u.id, { type: 'streak', text: `🔥 ${u.loginStreak.count} günlük giriş serin bu gece bitiyor! Uğra, seriyi koru.`, url: '/#/seriler', tag: 'login-streak' });
+        notify(u.id, { type: 'streak', text: `${u.loginStreak.count} günlük giriş serin bu gece bitiyor! Uğra, seriyi koru.`, url: '/#/seriler', tag: 'login-streak' });
       });
     }
   }
@@ -269,7 +269,7 @@ module.exports = function engage(app, ctx) {
     const me = req.user.id; const had = a.likes.includes(me);
     a.likes = had ? a.likes.filter((x) => x !== me) : [...a.likes, me];
     store.put('dq', a);
-    if (!had && a.userId !== me && [1, 5, 10, 25, 50, 100].includes(a.likes.length)) notify(a.userId, { type: 'like', fromId: me, text: `💬 Günün sorusuna verdiğin cevap ${a.likes.length} beğeni aldı!`, url: '/#/soru', tag: 'dq-' + a.id });
+    if (!had && a.userId !== me && [1, 5, 10, 25, 50, 100].includes(a.likes.length)) notify(a.userId, { type: 'like', fromId: me, text: `Günün sorusuna verdiğin cevap ${a.likes.length} beğeni aldı!`, url: '/#/soru', tag: 'dq-' + a.id });
     res.json(dqOut(a, me));
   });
   app.post('/api/dq/:id/reply', auth, (req, res) => {
@@ -431,7 +431,7 @@ module.exports = function engage(app, ctx) {
     if (run?.day === d) return;
     store.put('settings', { id: 'picks_run', day: d, at: now() });
     store.filter('users', (u) => regular(u) && u.birthdate && (u.lastSeen || 0) > now() - 14 * DAY).forEach((u) => {
-      notify(u.id, { type: 'picks', text: `☀️ Günaydın ${first(u)}! Bugün senin için ${c.count} kişi seçtik.`, url: '/#/secki', tag: 'picks' });
+      notify(u.id, { type: 'picks', text: `Günaydın ${first(u)}! Bugün senin için ${c.count} kişi seçtik.`, url: '/#/secki', tag: 'picks' });
     });
   }
 
@@ -471,7 +471,7 @@ module.exports = function engage(app, ctx) {
     const open = store.find('messages', (m) => m.chatId === chat.id && m.compat && m.compat.status === 'open' && !m.deleted);
     if (open) return res.status(409).json({ error: 'Bu sohbette zaten açık bir uyum testi var.', messageId: open.id });
     if (limited('compat:' + chat.id, 3, DAY)) return res.status(429).json({ error: 'Bugün yeterince test çözdünüz 🙂 Yarın tekrar deneyin.' });
-    const msg = sendMessage(chat, req.user.id, { text: '💞 Uyum testi', compat: { id: nanoid(8), status: 'open', answers: {}, at: now() } });
+    const msg = sendMessage(chat, req.user.id, { text: 'Uyum testi', compat: { id: nanoid(8), status: 'open', answers: {}, at: now() } });
     if (!msg) return res.status(400).json({ error: 'Gönderilemedi.' });
     res.json(ctx.msgOut(msg));
   });
@@ -493,14 +493,14 @@ module.exports = function engage(app, ctx) {
     chat.members.forEach((x) => emitTo(x, 'message:update', ctx.msgOut(m)));
     if (!done) {
       const o = otherOf(chat, req.user.id);
-      notify(o, { type: 'message', fromId: req.user.id, text: `💞 ${first(req.user)} uyum testini çözdü, sıra sende!`, url: `/#/chat/${chat.id}`, tag: 'chat-' + chat.id });
+      notify(o, { type: 'message', fromId: req.user.id, text: `${first(req.user)} uyum testini çözdü, sıra sende!`, url: `/#/chat/${chat.id}`, tag: 'chat-' + chat.id });
     } else {
       compatComment(chat, m.compat, m.compat.pct).then((txt) => {
         const cur = store.get('messages', m.id); if (!cur?.compat) return;
         Object.assign(cur.compat, { status: 'done', comment: txt, doneAt: now() });
         store.update('messages', cur.id, {});
         chat.members.forEach((x) => emitTo(x, 'message:update', ctx.msgOut(cur)));
-        chat.members.forEach((x) => notify(x, { type: 'message', text: `🔮 Uyum testinizin sonucu geldi: %${cur.compat.pct}! Falcı Teyze yorumladı.`, url: `/#/chat/${chat.id}`, tag: 'chat-' + chat.id }));
+        chat.members.forEach((x) => notify(x, { type: 'message', text: `Uyum testinizin sonucu geldi: %${cur.compat.pct}! Falcı Teyze yorumladı.`, url: `/#/chat/${chat.id}`, tag: 'chat-' + chat.id }));
       });
     }
     res.json(ctx.msgOut(m));

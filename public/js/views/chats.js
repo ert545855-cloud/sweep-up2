@@ -3,6 +3,7 @@ import {
   state, api, esc, ago, on, avatar, openChatWith, sheet, refreshBadges, nm,
 } from '../core.js';
 import { streakChip } from '../engage.js';
+import { egi } from '../eg-icons.js';
 
 const preview = (m) => (m.location ? '📍 Konum' : m.fal ? '🔮 Fal isteği' : m.share && !m.text ? `📤 ${m.share.label}` : m.viewOnce ? '📷 Tek seferlik fotoğraf' : m.game ? '🎲 Oyun' : m.plan ? '📅 Buluşma planı' : '') || m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf');
 
@@ -66,7 +67,7 @@ export default async function chats(view) {
     const s = list.filter((c) => c.streak?.count);
     const risk = s.filter((c) => !c.streak.done).length;
     stkEl.hidden = !s.length;
-    if (s.length) stkEl.innerHTML = `<span class="em">🔥</span><span class="grow"><b>${s.length} sohbet serin var</b><small>${risk ? `${risk} tanesi bugün bekliyor, bozulmasın!` : 'Bugün hepsini korudun 💪'}</small></span><span class="go-chip">Seriler</span>`;
+    if (s.length) stkEl.innerHTML = `${egi('seri', 40)}<span class="grow"><b>${s.length} sohbet serin var</b><small>${risk ? `${risk} tanesi bugün bekliyor, bozulmasın!` : 'Bugün hepsini korudun 💪'}</small></span><span class="go-chip">Seriler</span>`;
   };
   await load();
 

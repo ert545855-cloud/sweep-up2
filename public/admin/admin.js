@@ -549,7 +549,7 @@ VIEWS.media = async (main) => {
 VIEWS.announce = async (main) => {
   const list = await api('/announcements');
   const LINKS = [['/#/notifications', 'Bildirimler'], ['/#/', 'Ana sayfa'], ['/#/store', 'Mağaza (SwipeUp+ / jeton)'], ['/#/genel', 'Genel sohbet'], ['/#/fal', 'Fal'], ['/#/vitrin', 'Vitrin'], ['/#/swipe', 'Keşfet (kaydır)'], ['/#/secki', 'Günlük seçki'], ['/#/soru', 'Günün sorusu'], ['/#/kulupler', 'Kulüpler'], ['/#/seriler', 'Seriler'], ['/#/karaoke', 'Karaoke odası'], ['/#/gorevler', 'Günlük görevler'], ['/#/create', 'Paylaşım oluştur'], ['/#/verify', 'Profil doğrulama'], ['/#/live', 'Canlı yayın aç']];
-  const AUD = [['custom', '🎯 Özel kitle (filtrelerle)…'], ['all', 'Herkes'], ['online', 'Şu an çevrimiçi olanlar'], ['plus', 'SwipeUp+ üyeleri'], ['free', 'Ücretsiz üyeler'], ['verified', 'Mavi tikliler'], ['new7', 'Son 7 günde katılanlar'], ['inactive', '7 gündür girmeyenler'], ['city', 'Şehre göre…'], ['user', 'Tek kullanıcı…']];
+  const AUD = [['custom', 'Özel kitle (filtrelerle)…'], ['all', 'Herkes'], ['online', 'Şu an çevrimiçi olanlar'], ['plus', 'SwipeUp+ üyeleri'], ['free', 'Ücretsiz üyeler'], ['verified', 'Mavi tikliler'], ['new7', 'Son 7 günde katılanlar'], ['inactive', '7 gündür girmeyenler'], ['city', 'Şehre göre…'], ['user', 'Tek kullanıcı…']];
   const ZOD = [['koc', 'Koç'], ['boga', 'Boğa'], ['ikizler', 'İkizler'], ['yengec', 'Yengeç'], ['aslan', 'Aslan'], ['basak', 'Başak'], ['terazi', 'Terazi'], ['akrep', 'Akrep'], ['yay', 'Yay'], ['oglak', 'Oğlak'], ['kova', 'Kova'], ['balik', 'Balık']];
   const PRESETS = [
     ['Kaybolanlar: İstanbul, 18–25, 7 gündür girmeyen', { city: 'İstanbul', ageMin: 18, ageMax: 25, inactiveDays: 7 }],
@@ -756,7 +756,7 @@ VIEWS.verify = async (main) => {
       <div class="pb"><div class="pose-req">${esc(v.poseInfo.em || '')} <b>İstenen poz:</b> ${esc(v.poseInfo.text)}</div>
         <div class="vimgs"><figure><img src="${esc(v.selfie)}" alt=""><figcaption>Selfie</figcaption></figure>
           ${[v.user?.avatar, ...(v.user?.photos || [])].filter(Boolean).slice(0, 4).map((p) => `<figure><img src="${esc(p)}" alt="" loading="lazy"><figcaption>Profil</figcaption></figure>`).join('')}</div>
-        ${v.ai ? (v.ai.error ? `<div class="vai muted">🤖 Yapay zeka kontrolü yapılamadı: ${esc(v.ai.error)}</div>` : `<div class="vai ${v.ai.pose && v.ai.live && v.ai.same ? 'ok' : 'warn'}">🤖 <b>Yapay zeka:</b> Poz ${v.ai.pose ? '✅' : '❌'} · Canlı ${v.ai.live ? '✅' : '❌'} · Aynı kişi ${v.ai.same === null ? '❔' : v.ai.same ? '✅' : '❌'} · Güven %${Math.round(v.ai.confidence * 100)}${v.ai.note ? `<div class="muted">${esc(v.ai.note)}</div>` : ''}</div>`) : ''}
+        ${v.ai ? (v.ai.error ? `<div class="vai muted">Yapay zeka kontrolü yapılamadı: ${esc(v.ai.error)}</div>` : `<div class="vai ${v.ai.pose && v.ai.live && v.ai.same ? 'ok' : 'warn'}"><b>Yapay zeka:</b> Poz ${v.ai.pose ? '✅' : '❌'} · Canlı ${v.ai.live ? '✅' : '❌'} · Aynı kişi ${v.ai.same === null ? '❔' : v.ai.same ? '✅' : '❌'} · Güven %${Math.round(v.ai.confidence * 100)}${v.ai.note ? `<div class="muted">${esc(v.ai.note)}</div>` : ''}</div>`) : ''}
         <div class="muted" style="font-size:12px">${dt(v.at)}${v.status !== 'pending' ? ` · ${v.status === 'approved' ? 'Onaylandı' : 'Reddedildi'} (${esc(v.by || '')})${v.note ? ` · ${esc(v.note)}` : ''}` : ''}</div>
         ${v.status === 'pending' ? `<div class="acts"><input class="field nt" placeholder="Ret nedeni (kullanıcı görür)"><button class="btn sm ok" data-ok="1">${icon('check')} Onayla</button><button class="btn sm danger" data-ok="0">Reddet</button></div>` : ''}
       </div></div>`).join('')}</div>` : '<div class="panel"><div class="empty">Bu listede başvuru yok.</div></div>';
@@ -1292,6 +1292,7 @@ VIEWS.quests = async (main) => {
   };
 };
 
+const egImg = (k) => `<img src="/img/eg/${k}.svg" width="24" height="24" alt="" style="vertical-align:-6px;margin-right:8px;border-radius:7px">`;
 // ---- Etkileşim: seriler, günün sorusu, kulüpler, seçki, karaoke, paketler, yapay zeka denetimi ----
 VIEWS.engage = async (main) => {
   const r = await api('/engage');
@@ -1315,41 +1316,41 @@ VIEWS.engage = async (main) => {
     </div>
     <form class="eg-form">
       <div class="grid g2">
-        <div class="panel"><div class="ph"><h3>🔥 Sohbet serisi</h3></div><div class="pb eg-pb">
+        <div class="panel"><div class="ph"><h3>${egImg('seri')}Sohbet serisi</h3></div><div class="pb eg-pb">
           ${chk('sEn', c.streak.enabled, 'Sohbet serileri açık', 'İki kişi aynı gün birbirine yazınca seri bir gün uzar.')}
           <label class="fl">Ödüller (gün:jeton, ikisine de)<input class="field" name="sMs" value="${esc(ms(c.streak.milestones))}" ${dis}></label>
           ${numF('sWarn', c.streak.warnHour, '“Serin bitiyor” uyarı saati (TR)', 0, 23)}
         </div></div>
-        <div class="panel"><div class="ph"><h3>📅 Günlük giriş serisi</h3></div><div class="pb eg-pb">
+        <div class="panel"><div class="ph"><h3>${egImg('koruyucu')}Günlük giriş serisi</h3></div><div class="pb eg-pb">
           ${chk('lEn', c.login.enabled, 'Giriş serisi açık', 'Her gün uygulamaya giren kullanıcının serisi büyür.')}
           <label class="fl">Ödüller (gün:jeton)<input class="field" name="lMs" value="${esc(ms(c.login.milestones))}" ${dis}></label>
           <div class="row" style="gap:10px">${numF('lFz', c.login.freezeCoins, 'Seri koruyucu (jeton)', 0, 10000)}${numF('lMax', c.login.maxFreezes, 'En fazla koruyucu', 0, 10)}${numF('lWarn', c.login.warnHour, 'Uyarı saati', 0, 23)}</div>
         </div></div>
-        <div class="panel"><div class="ph"><h3>☀️ Günlük seçki</h3></div><div class="pb eg-pb">
+        <div class="panel"><div class="ph"><h3>${egImg('secki')}Günlük seçki</h3></div><div class="pb eg-pb">
           ${chk('pEn', c.picks.enabled, 'Günlük seçki açık', 'Her sabah ilgi alanı, burç ve konuma göre kişiler seçilir, bildirim gider.')}
           <div class="row" style="gap:10px">${numF('pCnt', c.picks.count, 'Kişi sayısı', 1, 20)}${numF('pHour', c.picks.notifyHour, 'Bildirim saati (TR)', 5, 12)}</div>
         </div></div>
-        <div class="panel"><div class="ph"><h3>🎤 Karaoke odası</h3></div><div class="pb eg-pb">
+        <div class="panel"><div class="ph"><h3>${egImg('karaoke')}Karaoke odası</h3></div><div class="pb eg-pb">
           ${chk('kEn', c.karaoke.enabled, 'Karaoke açık')}
           ${numF('kMin', c.karaoke.turnMinutes, 'Sahne süresi (dakika)', 2, 15)}
         </div></div>
-        <div class="panel"><div class="ph"><h3>🤖 Yapay zeka denetimi (Gemini)</h3><span class="chip ${r.ai.enabled ? 'ok' : 'warn'}">${r.ai.enabled ? 'Bağlı' : 'GEMINI_API_KEY yok'}</span></div><div class="pb eg-pb">
+        <div class="panel"><div class="ph"><h3>${egImg('gorev')}Yapay zeka denetimi (Gemini)</h3><span class="chip ${r.ai.enabled ? 'ok' : 'warn'}">${r.ai.enabled ? 'Bağlı' : 'GEMINI_API_KEY yok'}</span></div><div class="pb eg-pb">
           ${chk('aTxt', c.ai.textCheck, 'Mesajları kontrol et', 'Hakaret içeren mesajda gönderen “Emin misin?” uyarısı görür. Kelime listesi her zaman açık.')}
           ${chk('aImg', c.ai.imageCheck, 'Fotoğrafları kontrol et', 'Uygunsuz fotoğrafta uyarı çıkar; yine de gönderilirse Moderasyon’a düşer.')}
           ${chk('aVer', c.ai.verifyCheck, 'Selfie doğrulamada ön kontrol', 'Poz, canlılık ve profil fotoğrafıyla benzerlik puanı Doğrulama sayfasında görünür.')}
           ${chk('aAuto', c.ai.verifyAuto, 'Çok emin olunca otomatik mavi tik', 'Poz + canlı + aynı kişi ve güven %85 üstüyse onaylanır.')}
           <small class="muted">Başarılı çağrı: ${r.ai.ok || 0} · Hata: ${r.ai.fail || 0}${r.ai.lastError ? ` · Son hata: ${esc(r.ai.lastError)}` : ''}</small>
         </div></div>
-        <div class="panel"><div class="ph"><h3>🔮 Falcı Teyze paketleri</h3></div><div class="tw"><table class="tbl"><thead><tr><th>Paket</th><th class="num">Jeton</th><th>Açık</th></tr></thead><tbody>
-          ${c.packs.map((p) => `<tr data-pk="${esc(p.id)}"><td>${p.em} <b>${esc(p.name)}</b><div class="muted" style="font-size:12px">${esc(p.desc)}</div></td><td class="num"><input class="field" type="number" min="0" data-k="coins" value="${p.coins}" style="width:90px" ${dis}></td><td><input type="checkbox" data-k="enabled" ${p.enabled !== false ? 'checked' : ''} ${dis}></td></tr>`).join('')}
+        <div class="panel"><div class="ph"><h3>${egImg('fal-burc')}Falcı Teyze paketleri</h3></div><div class="tw"><table class="tbl"><thead><tr><th>Paket</th><th class="num">Jeton</th><th>Açık</th></tr></thead><tbody>
+          ${c.packs.map((p) => `<tr data-pk="${esc(p.id)}"><td>${egImg(`pack-${p.id}`)}<b>${esc(p.name)}</b><div class="muted" style="font-size:12px">${esc(p.desc)}</div></td><td class="num"><input class="field" type="number" min="0" data-k="coins" value="${p.coins}" style="width:90px" ${dis}></td><td><input type="checkbox" data-k="enabled" ${p.enabled !== false ? 'checked' : ''} ${dis}></td></tr>`).join('')}
         </tbody></table></div></div>
       </div>
-      <div class="panel" style="margin-top:14px"><div class="ph"><h3>🎯 Kulüpler</h3>${owner ? `<button type="button" class="btn sm cl-add">${icon('plus')} Kulüp</button>` : ''}</div><div class="tw"><table class="tbl"><thead><tr><th>Simge</th><th>Kimlik</th><th>Ad</th><th>Açıklama</th><th class="num">Üye</th><th class="num">Paylaşım</th><th></th></tr></thead><tbody class="cl-l">
+      <div class="panel" style="margin-top:14px"><div class="ph"><h3>${egImg('kulup')}Kulüpler</h3>${owner ? `<button type="button" class="btn sm cl-add">${icon('plus')} Kulüp</button>` : ''}</div><div class="tw"><table class="tbl"><thead><tr><th>Simge</th><th>Kimlik</th><th>Ad</th><th>Açıklama</th><th class="num">Üye</th><th class="num">Paylaşım</th><th></th></tr></thead><tbody class="cl-l">
         ${c.clubs.map((k) => { const x = st.clubs.find((y) => y.id === k.id) || {}; return clubRow(k, x, dis); }).join('')}
       </tbody></table></div></div>
       ${owner ? `<div class="row" style="margin:14px 0;justify-content:flex-end"><button class="btn primary">${icon('check')} Ayarları kaydet</button></div>` : ''}
     </form>
-    <div class="panel"><div class="ph"><h3>💬 Günün sorusu</h3></div><div class="pb">
+    <div class="panel"><div class="ph"><h3>${egImg('soru')}Günün sorusu</h3></div><div class="pb">
       <p style="margin:0 0 10px">Bugün: <b>${esc(st.dqQuestion)}</b> <span class="muted">· ${st.dqToday} cevap</span></p>
       ${owner ? `<form class="row dq-f" style="gap:8px;flex-wrap:wrap"><input class="field" type="date" name="day" value="${today()}" style="width:auto"><input class="field" name="q" maxlength="160" placeholder="O güne özel soru (boş bırakılırsa havuzdan seçilir)" style="flex:1;min-width:240px"><button class="btn primary">Kaydet</button></form>` : ''}
       ${Object.keys(c.dq).length ? `<div class="tw" style="margin-top:10px"><table class="tbl"><tbody>${Object.entries(c.dq).sort().map(([k, v]) => `<tr><td style="width:120px">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="font-size:13px;margin:10px 0 0">Özel soru planlanmadı; her gün 40 soruluk havuzdan biri sorulur.</p>'}

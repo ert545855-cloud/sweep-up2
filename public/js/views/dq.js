@@ -1,6 +1,7 @@
 // Günün sorusu: herkese aynı soru, cevaplar beğenilir ve tartışılır
 import { icon } from '../icons.js';
 import { api, esc, toast, state, avatar, nm, ago } from '../core.js';
+import { egi } from '../eg-icons.js';
 
 export default async function dq(view) {
   view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button><div class="center">Günün sorusu</div><span class="ib"></span></header><div class="dq"><div class="spinner"></div></div>`;
@@ -18,11 +19,11 @@ export default async function dq(view) {
       ${open.has(a.id) ? replyHtml(a) : ''}</article>`;
   const paint = () => {
     const mine = d.mine;
-    box.innerHTML = `<section class="dq-q"><small>${d.today ? 'Bugünün sorusu' : new Date(d.day).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}</small><h2>${esc(d.q)}</h2><span>${d.total} kişi cevapladı</span></section>
+    box.innerHTML = `<section class="dq-q">${egi('soru', 52, 'dq-ic')}<small>${d.today ? 'Bugünün sorusu' : new Date(d.day).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}</small><h2>${esc(d.q)}</h2><span>${d.total} kişi cevapladı</span></section>
       ${d.today ? (mine && !editing ? `<div class="dq-mine"><small>Senin cevabın</small><p>${esc(mine.text)}</p><button class="btn sm dq-edit">${icon('edit')} Düzenle</button></div>`
     : `<form class="dq-f"><textarea class="field" maxlength="400" rows="3" placeholder="Cevabını yaz, herkes görsün...">${esc(mine?.text || '')}</textarea><button class="btn primary block">${mine ? 'Güncelle' : 'Cevapla'}</button></form>`) : ''}
       <div class="seg dq-seg"><button data-s="top" class="${sort === 'top' ? 'on' : ''}">En beğenilen</button><button data-s="new" class="${sort === 'new' ? 'on' : ''}">En yeni</button></div>
-      <div class="dq-list">${d.items.length ? d.items.map(card).join('') : '<div class="empty" style="padding:24px">İlk cevabı sen yaz! ✍️</div>'}</div>
+      <div class="dq-list">${d.items.length ? d.items.map(card).join('') : '<div class="empty" style="padding:24px">İlk cevabı sen yaz!</div>'}</div>
       <div class="dq-nav">${d.today ? '<button class="btn sm dq-prev">← Dünün sorusu</button>' : '<button class="btn sm dq-today">Bugünün sorusuna dön</button>'}</div>`;
   };
   const load = async () => { d = await api(`/dq?sort=${sort}${day ? `&day=${day}` : ''}`); paint(); };
@@ -33,7 +34,7 @@ export default async function dq(view) {
     if (f.classList.contains('dq-f')) {
       const text = f.querySelector('textarea').value.trim(); if (!text) return;
       f.querySelector('button').disabled = true;
-      try { await api('/dq', { body: { text } }); editing = false; toast('Cevabın paylaşıldı 💬'); await load(); } catch (er) { toast(er.message); f.querySelector('button').disabled = false; }
+      try { await api('/dq', { body: { text } }); editing = false; toast('Cevabın paylaşıldı'); await load(); } catch (er) { toast(er.message); f.querySelector('button').disabled = false; }
     }
     if (f.classList.contains('dq-rf')) {
       const id = f.closest('[data-id]').dataset.id; const inp = f.querySelector('input'); const text = inp.value.trim(); if (!text) return;
