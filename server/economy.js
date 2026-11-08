@@ -19,6 +19,7 @@ const DEFAULTS = {
     { id: 'kahve', em: '☕️', name: 'Kahve', coins: 25 },
     { id: 'yildiz', em: '🌟', name: 'Yıldız', coins: 50 },
     { id: 'tac', em: '👑', name: 'Taç', coins: 150 },
+    { id: 'yuzuk', em: '💍', name: 'Yüzük', coins: 250 },
     { id: 'roket', em: '🚀', name: 'Roket', coins: 300 },
     { id: 'elmas', em: '💎', name: 'Elmas', coins: 500 },
   ],

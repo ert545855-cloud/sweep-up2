@@ -40,7 +40,7 @@ module.exports = function genel(app, ctx) {
     return { open: false };
   }
   ctx.roomState = roomState;
-  const roomOf = (id) => (id && id !== 'genel' ? rooms().find((r) => r.id === id) : { id: 'genel', name: 'Genel sohbet', em: '💬', always: true });
+  const roomOf = (id) => (id && id !== 'genel' ? rooms().find((r) => r.id === id) || ctx.clubRoom?.(id) || undefined : { id: 'genel', name: 'Genel sohbet', em: '💬', always: true });
   const ioRoom = (id) => (id && id !== 'genel' ? `genel:${id}` : 'genel');
   const roomOfMsg = (m) => m.room || 'genel';
   const out = (m) => ({ ...m, room: roomOfMsg(m), user: brief(store.get('users', m.userId)) });
@@ -99,6 +99,7 @@ module.exports = function genel(app, ctx) {
       const rm = roomOf(rid);
       if (!rm) return ack?.({ error: 'Oda bulunamadı.' });
       if (!roomState(rm).open) return ack?.({ error: 'Bu oda şu an kapalı.' });
+      if (rm.club && !ctx.clubCanSend?.(rm.club, uid)) return ack?.({ error: 'Bu kulübün sohbetine yazmak için önce kulübe katıl.' });
       if (limited('gs:' + uid, 8, 15000)) return ack?.({ error: 'Çok hızlı yazıyorsun, biraz bekle.' });
       const raw = String(data?.text || '').trim().slice(0, 1000);
       const media = isMedia(data?.media) ? data.media : null;

@@ -140,6 +140,7 @@ module.exports = function features(app, ctx) {
     if (store.find('verifications', (x) => x.userId === req.user.id && x.status === 'pending')) return res.status(409).json({ error: 'Doğrulaman zaten inceleniyor.' });
     if (limited('verify:' + req.user.id, 4, DAY)) return res.status(429).json({ error: 'Bugün çok fazla deneme yaptın.' });
     const v = store.put('verifications', { id: nanoid(10), userId: req.user.id, selfie: req.body.selfie, pose: req.user.verifyPose || 'zafer', status: 'pending', at: now() });
+    Promise.resolve(ctx.onVerify?.(v)).catch(() => {}); // yapay zeka ön kontrolü (engage.js)
     res.json({ ok: true, status: v.status });
   });
 

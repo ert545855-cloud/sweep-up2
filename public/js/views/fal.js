@@ -36,7 +36,7 @@ const noteField = (ph) => `<label class="form" style="padding:0;gap:6px"><span c
   <textarea class="field nt" maxlength="1000" rows="3" placeholder="${esc(ph)}"></textarea></label>`;
 
 // ================= Ana ekran =================
-async function hub(view) {
+async function hub(view, sub) {
   const me = state.me;
   if (me.role === 'falci') return queue(view);
   view.innerHTML = `<header class="topbar"><a class="ib" href="#/" aria-label="Geri">${icon('back')}</a><h1 style="justify-content:center"><span>Fal</span></h1><span class="ib"></span></header>
@@ -46,7 +46,9 @@ async function hub(view) {
     kahve: 'Fincanının fotoğraflarını gönder.', tarot: 'Üç kart çek, Falcı Teyze yorumlasın.', burc: 'Burcunu ve sorunu yaz.', uyum: 'Biriyle aranızdaki uyuma baksın.',
   }[k]}</span><em class="price" data-k="${k}"></em></a>`).join('')}
     </div>
+    <a class="bc-entry" href="#/burc"><span class="em">✨</span><span class="grow"><b>Günün burç kartı</b><small>Falcı Teyze’nin bugünkü yorumu · hikayende paylaş</small></span><span class="go-chip">Bak</span></a>
     <div class="fal-sub-box"></div>
+    <div class="fal-packs" id="paketler"></div>
     <a class="fal-bal" href="#/store">${icon('coin')}<span>Bakiye: <b class="cb">…</b> jeton</span><span class="link">Jeton al</span></a>
     <div class="mine"></div>${aiNote()}`;
   const [f, mine] = await Promise.all([api('/fal/falci').catch(() => null), api('/fal/mine').catch(() => []), loadShop()]);
@@ -71,6 +73,30 @@ async function hub(view) {
     }; });
   };
   drawSub();
+  // ---- Falcı Teyze paketleri ----
+  const packBox = view.querySelector('.fal-packs');
+  const drawPacks = async () => {
+    const p = await api('/fal/packs').catch(() => null);
+    if (!p?.packs?.length) { packBox.innerHTML = ''; return; }
+    const left = (t) => { const v = p.mine[t]; return v ? `<span class="pill ok">${v.left} hak · ${new Date(v.until).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}’e kadar</span>` : ''; };
+    packBox.innerHTML = `<div class="section-t"><span>Falcı Teyze paketleri</span></div><div class="pk-list">${p.packs.map((x) => `<div class="fp" data-id="${esc(x.id)}"><span class="fp-em">${x.em}</span><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.desc)}</small>${x.type !== 'yillik' ? left(x.type) : ''}</div>
+      <button class="btn primary sm fp-buy">${icon('coin')} ${x.coins}</button></div>`).join('')}</div>
+      <p class="muted" style="font-size:12.5px;margin:6px 16px 0">Paket hakkın varken o türdeki fallar ücretsiz gönderilir. Yıllık rapor hemen Falcı Teyze’ye iletilir.</p>`;
+    packBox.onclick = async (e) => {
+      const b = e.target.closest('.fp-buy'); if (!b) return;
+      const x = p.packs.find((k) => k.id === b.closest('[data-id]').dataset.id);
+      if (!confirm(`${x.name}: ${x.coins} jeton. Onaylıyor musun?`)) return;
+      b.disabled = true;
+      try {
+        const r = await api(`/fal/packs/${x.id}/buy`, { body: {} });
+        if (shop) { shop.coins = r.coins; view.querySelector('.cb').textContent = r.coins; }
+        if (r.chatId) { toast('🌟 Yıllık raporun Falcı Teyze’ye iletildi!', { ms: 4500 }); location.hash = `#/chat/${r.chatId}`; return; }
+        toast(`${x.em} Paket hesabına eklendi!`); drawPacks();
+      } catch (er) { b.disabled = false; if (er.status === 402) needCoins(er.message); else toast(er.message); }
+    };
+    if (sub === 'paket') packBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  drawPacks();
   const hero = view.querySelector('.fal-hero');
   if (f) {
     hero.querySelector('.fz').outerHTML = `<a href="#/u/${esc(f.username)}"><img class="av av-56" src="${esc(f.avatar)}" alt="Falcı Teyze profili"></a>`;
@@ -275,6 +301,6 @@ export default function fal(view, sub) {
   if (sub === 'tarot') return tarot(view);
   if (sub === 'burc') return burc(view);
   if (sub === 'uyum') return uyum(view);
-  return hub(view);
+  return hub(view, sub);
 }
 export { zodiacOf };

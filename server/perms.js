@@ -20,6 +20,7 @@ const PERMS = [
   ['quests', 'Görevler ve hediye çarkı', 'Uygulama'],
   ['songs', 'Şarkı yarışması', 'Uygulama'],
   ['growth', 'Büyüme panosu', 'Uygulama'],
+  ['engage', 'Etkileşim (seriler, kulüpler, günün sorusu, karaoke, yapay zeka denetimi)', 'Uygulama'],
   ['settings', 'Ayarlar (fiyatlar, etkinlikler, odalar)', 'Uygulama'],
   ['maintenance', 'Bakım modu', 'Uygulama'],
   ['notes', 'Notlar', 'Panel'],
@@ -33,7 +34,7 @@ const LEGACY = ALL.filter((p) => !['erp', 'database', 'maintenance', 'settings']
 
 const PREFIX = {
   admins: 'owner', announcements: 'announce', appeals: 'appeals', audit: 'audit', content: 'content', media: 'content', database: 'database',
-  economy: 'settings', event: 'settings', legal: 'settings', rooms: 'settings', fal: 'fal', falai: 'fal', flags: 'flags', growth: 'growth',
+  economy: 'settings', event: 'settings', legal: 'settings', rooms: 'settings', fal: 'fal', falai: 'fal', flags: 'flags', growth: 'growth', engage: 'engage',
   ledger: 'erp', erp: 'erp', maintenance: 'maintenance', market: 'market', notes: 'notes', orders: 'orders', payouts: 'payouts', promos: 'promos',
   quests: 'quests', wheel: 'quests', reports: 'reports', songs: 'songs', support: 'support', tags: 'tags', verifications: 'verify',
 };
