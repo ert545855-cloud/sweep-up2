@@ -2,6 +2,7 @@
 import { icon } from '../icons.js';
 import { api, esc, toast, avatar, nm, ago, pickFile, compressImage, uploadFile } from '../core.js';
 import { modCheck } from '../engage.js';
+import { clubIcon } from '../eg-icons.js';
 
 const back = (to) => `<button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '${to}')" aria-label="Geri">${icon('back')}</button>`;
 
@@ -13,16 +14,16 @@ async function list(view) {
   let items = [];
   const paint = () => {
     grid.innerHTML = items.map((c) => `<a class="clb-card ${c.joined ? 'on' : ''}" href="#/kulup/${esc(c.id)}">
-      <span class="em">${esc(c.em)}</span><b>${esc(c.name)}</b><small>${esc(c.desc)}</small>
+      ${clubIcon(c, 48, 'em')}<b>${esc(c.name)}</b><small>${esc(c.desc)}</small>
       <span class="clb-m">${icon('users')} ${c.members} üye</span>
-      <button class="btn sm ${c.joined ? '' : 'primary'} clb-j" data-id="${esc(c.id)}">${c.joined ? 'Üyesin ✓' : 'Katıl'}</button></a>`).join('');
+      <button class="btn sm ${c.joined ? '' : 'primary'} clb-j" data-id="${esc(c.id)}">${c.joined ? `Üyesin ${icon('check')}` : 'Katıl'}</button></a>`).join('');
   };
   items = await api('/clubs'); paint();
   grid.addEventListener('click', async (e) => {
     const b = e.target.closest('.clb-j'); if (!b) return;
     e.preventDefault();
     const c = items.find((x) => x.id === b.dataset.id);
-    try { const r = await api(`/clubs/${c.id}/join`, { method: c.joined ? 'DELETE' : 'POST', body: {} }); Object.assign(c, r); paint(); if (r.joined) toast(`${c.em} ${c.name} kulübüne katıldın!`); } catch (er) { toast(er.message); }
+    try { const r = await api(`/clubs/${c.id}/join`, { method: c.joined ? 'DELETE' : 'POST', body: {} }); Object.assign(c, r); paint(); if (r.joined) toast(`${c.name} kulübüne katıldın!`); } catch (er) { toast(er.message); }
   });
   return null;
 }
@@ -37,10 +38,10 @@ async function detail(view, id) {
       <div class="dq-acts"><button class="cp-like ${p.liked ? 'on' : ''}">${icon('heart')} <span>${p.likeCount || ''}</span></button></div></article>`;
   const paint = () => {
     const c = d.club;
-    view.innerHTML = `<header class="topbar">${back('#/kulupler')}<div class="center">${esc(c.em)} ${esc(c.name)}</div><span class="ib"></span></header>
-      <section class="clb-hero"><span class="em">${esc(c.em)}</span><div class="grow"><b>${esc(c.name)}</b><small>${esc(c.desc)}</small>
+    view.innerHTML = `<header class="topbar">${back('#/kulupler')}<div class="center">${esc(c.name)}</div><span class="ib"></span></header>
+      <section class="clb-hero">${clubIcon(c, 64, 'em')}<div class="grow"><b>${esc(c.name)}</b><small>${esc(c.desc)}</small>
         <div class="clb-av">${d.sample.slice(0, 6).map((u) => `<img src="${esc(u.avatar)}" alt="">`).join('')}<span>${c.members} üye</span></div></div></section>
-      <div class="clb-btns"><button class="btn ${c.joined ? '' : 'primary'} join">${c.joined ? 'Üyesin ✓' : 'Kulübe katıl'}</button><a class="btn ${c.joined ? 'primary' : ''}" href="#/genel/${esc(c.room)}">${icon('comment')} Kulüp sohbeti</a></div>
+      <div class="clb-btns"><button class="btn ${c.joined ? '' : 'primary'} join">${c.joined ? `Üyesin ${icon('check')}` : 'Kulübe katıl'}</button><a class="btn ${c.joined ? 'primary' : ''}" href="#/genel/${esc(c.room)}">${icon('comment')} Kulüp sohbeti</a></div>
       ${c.joined ? `<form class="clb-f"><textarea class="field" rows="2" maxlength="1000" placeholder="${esc(c.name)} kulübüyle bir şey paylaş..."></textarea>
         <div class="clb-fx"><button type="button" class="ib pic" aria-label="Fotoğraf ekle">${icon('image')}</button><span class="grow pv"></span><button class="btn primary sm">Paylaş</button></div></form>` : ''}
       <div class="clb-list">${d.posts.length ? d.posts.map(post).join('') : `<div class="empty" style="padding:24px">Henüz paylaşım yok. ${c.joined ? 'İlk paylaşımı sen yap!' : 'Katıl ve ilk paylaşımı sen yap!'}</div>`}</div>

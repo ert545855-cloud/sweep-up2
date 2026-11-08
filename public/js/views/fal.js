@@ -5,6 +5,7 @@ import {
 import {
   FAL_TYPES, TAROT, TAROT_POS, ZODIAC, zodiacOf, seeded,
 } from '../fal-data.js';
+import { egi, falIcon, packIcon } from '../eg-icons.js';
 
 const head = (title, to = '#/fal') => `<header class="topbar"><a class="ib" href="${to}" aria-label="Geri">${icon('back')}</a><div class="center">${esc(title)}</div><span class="ib"></span></header>`;
 const note = '<p class="fal-note">Fallar eğlence amaçlıdır.</p>';
@@ -42,11 +43,11 @@ async function hub(view, sub) {
   view.innerHTML = `<header class="topbar"><a class="ib" href="#/" aria-label="Geri">${icon('back')}</a><h1 style="justify-content:center"><span>Fal</span></h1><span class="ib"></span></header>
     <div class="fal-hero teyze"><span class="fz"></span><div class="grow"><b>Falcı Teyze</b><p>Fincanına, kartlarına ve yıldızlarına bakar. Cevabı Mesajlar’a düşer.</p></div></div>
     <div class="fal-grid">
-      ${Object.entries(FAL_TYPES).map(([k, t]) => `<a class="fal-tile" href="#/fal/${k}"><span class="em">${t.em}</span><b>${t.name}</b><span>${{
+      ${Object.entries(FAL_TYPES).map(([k, t]) => `<a class="fal-tile" href="#/fal/${k}">${falIcon(k, 48, 'em')}<b>${t.name}</b><span>${{
     kahve: 'Fincanının fotoğraflarını gönder.', tarot: 'Üç kart çek, Falcı Teyze yorumlasın.', burc: 'Burcunu ve sorunu yaz.', uyum: 'Biriyle aranızdaki uyuma baksın.',
   }[k]}</span><em class="price" data-k="${k}"></em></a>`).join('')}
     </div>
-    <a class="bc-entry" href="#/burc"><span class="em">✨</span><span class="grow"><b>Günün burç kartı</b><small>Falcı Teyze’nin bugünkü yorumu · hikayende paylaş</small></span><span class="go-chip">Bak</span></a>
+    <a class="bc-entry" href="#/burc">${egi('burc', 44)}<span class="grow"><b>Günün burç kartı</b><small>Falcı Teyze’nin bugünkü yorumu · hikayende paylaş</small></span><span class="go-chip">Bak</span></a>
     <div class="fal-sub-box"></div>
     <div class="fal-packs" id="paketler"></div>
     <a class="fal-bal" href="#/store">${icon('coin')}<span>Bakiye: <b class="cb">…</b> jeton</span><span class="link">Jeton al</span></a>
@@ -79,7 +80,7 @@ async function hub(view, sub) {
     const p = await api('/fal/packs').catch(() => null);
     if (!p?.packs?.length) { packBox.innerHTML = ''; return; }
     const left = (t) => { const v = p.mine[t]; return v ? `<span class="pill ok">${v.left} hak · ${new Date(v.until).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}’e kadar</span>` : ''; };
-    packBox.innerHTML = `<div class="section-t"><span>Falcı Teyze paketleri</span></div><div class="pk-list">${p.packs.map((x) => `<div class="fp" data-id="${esc(x.id)}"><span class="fp-em">${x.em}</span><div class="grow"><b>${esc(x.name)}</b><small>${esc(x.desc)}</small>${x.type !== 'yillik' ? left(x.type) : ''}</div>
+    packBox.innerHTML = `<div class="section-t"><span>Falcı Teyze paketleri</span></div><div class="pk-list">${p.packs.map((x) => `<div class="fp" data-id="${esc(x.id)}">${packIcon(x, 44, 'fp-em')}<div class="grow"><b>${esc(x.name)}</b><small>${esc(x.desc)}</small>${x.type !== 'yillik' ? left(x.type) : ''}</div>
       <button class="btn primary sm fp-buy">${icon('coin')} ${x.coins}</button></div>`).join('')}</div>
       <p class="muted" style="font-size:12.5px;margin:6px 16px 0">Paket hakkın varken o türdeki fallar ücretsiz gönderilir. Yıllık rapor hemen Falcı Teyze’ye iletilir.</p>`;
     packBox.onclick = async (e) => {
@@ -90,8 +91,8 @@ async function hub(view, sub) {
       try {
         const r = await api(`/fal/packs/${x.id}/buy`, { body: {} });
         if (shop) { shop.coins = r.coins; view.querySelector('.cb').textContent = r.coins; }
-        if (r.chatId) { toast('🌟 Yıllık raporun Falcı Teyze’ye iletildi!', { ms: 4500 }); location.hash = `#/chat/${r.chatId}`; return; }
-        toast(`${x.em} Paket hesabına eklendi!`); drawPacks();
+        if (r.chatId) { toast('Yıllık raporun Falcı Teyze’ye iletildi!', { ms: 4500 }); location.hash = `#/chat/${r.chatId}`; return; }
+        toast(`${x.name} hesabına eklendi!`); drawPacks();
       } catch (er) { b.disabled = false; if (er.status === 402) needCoins(er.message); else toast(er.message); }
     };
     if (sub === 'paket') packBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -117,7 +118,7 @@ async function hub(view, sub) {
     hero.insertAdjacentHTML('beforeend', `<a class="btn sm" href="#/chat/${esc(mine[0].chatId)}" style="background:rgba(255,255,255,.22);color:inherit">Mesajlar</a>`);
   }
   view.querySelector('.mine').innerHTML = mine.length ? `<div class="section-t"><span>Fal isteklerin</span></div>${mine.map((m) => `<a class="list-item" href="#/chat/${esc(m.chatId)}">
-      <span class="fal-mini">${FAL_TYPES[m.type].em}</span><div class="grow"><div class="b">${FAL_TYPES[m.type].name}</div><div class="sub">${ago(m.at, true)}</div></div>${statusChip(m.status)}</a>`).join('')}` : '';
+      ${falIcon(m.type, 40, 'fal-mini')}<div class="grow"><div class="b">${FAL_TYPES[m.type].name}</div><div class="sub">${ago(m.at, true)}</div></div>${statusChip(m.status)}</a>`).join('')}` : '';
   return null;
 }
 

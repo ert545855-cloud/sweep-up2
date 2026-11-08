@@ -6,6 +6,7 @@ import { restoreDraft } from '../update.js';
 import { startCall } from '../calls.js';
 import { FAL_TYPES, zodiacOf } from '../fal-data.js';
 import { streakChip, shareFal, shareCard, modCheck } from '../engage.js';
+import { egi, giftIcon, falIcon } from '../eg-icons.js';
 
 const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
 const planDate = (t) => new Date(t).toLocaleString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
@@ -170,7 +171,7 @@ export default async function chat(view, chatId) {
     if (m.fal) {
       const f = m.fal; const t = FAL_TYPES[f.type] || { em: '🔮', name: 'Fal' };
       const z = zodiacOf(f.zodiac);
-      return `<div class="msg fal-msg"><div class="fm-h"><span>${t.em}</span><b>${t.name} isteği</b>${f.status === 'answered' ? '<span class="chip fal-ok">Cevaplandı</span>' : '<span class="chip fal-wait-chip">Bekliyor</span>'}</div>
+      return `<div class="msg fal-msg"><div class="fm-h">${falIcon(f.type, 26)}<b>${t.name} isteği</b>${f.status === 'answered' ? '<span class="chip fal-ok">Cevaplandı</span>' : '<span class="chip fal-wait-chip">Bekliyor</span>'}</div>
         ${f.images?.length ? `<div class="fq-imgs">${f.images.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Fincan fotoğrafı" loading="lazy"></a>`).join('')}</div>` : ''}
         ${f.cards?.length ? `<div class="fq-cards">${f.cards.map((c) => `<span class="chip"><small>${esc(c.pos)}</small> ${c.em} ${esc(c.name)}${c.rev ? ' (ters)' : ''}</span>`).join('')}</div>` : ''}
         ${z ? `<div class="fq-line">${z[2]} ${z[1]}${f.partner ? '' : ''}</div>` : ''}
@@ -185,7 +186,7 @@ export default async function chat(view, chatId) {
         ${m.text ? `<div class="msg">${reply}${esc(m.text)}${meta}</div>` : `<span class="shm-meta">${meta}</span>`}`;
     }
     if (m.game) return `<div class="msg game-msg">${gameHtml(m)}${meta}</div>`;
-    if (m.gift) return `<div class="msg gift-msg"><span class="gf-em">${esc(m.gift.em)}</span><b>${esc(m.gift.name)}</b><small>${m.from === state.me.id ? `${esc(otherName())} kişisine gönderdin` : 'sana hediye gönderdi'} · ${m.gift.coins} jeton</small>${meta}</div>`;
+    if (m.gift) return `<div class="msg gift-msg">${giftIcon(m.gift, 64, 'gf-em')}<b>${esc(m.gift.name)}</b><small>${m.from === state.me.id ? `${esc(otherName())} kişisine gönderdin` : 'sana hediye gönderdi'} · ${m.gift.coins} jeton</small>${meta}</div>`;
     if (m.compat) return `<div class="msg compat-msg">${compatHtml(m)}${meta}</div>`;
     if (m.plan) return `<div class="msg plan-msg">${planHtml(m)}${meta}</div>`;
     if (m.viewOnce) {
@@ -217,14 +218,14 @@ export default async function chat(view, chatId) {
   const loadCompatQs = async () => { compatQs = compatQs || await api('/compat/questions'); return compatQs; };
   function compatHtml(m) {
     const c = m.compat; const me = state.me.id;
-    const head = '<div class="gm-h">💞 <b>Uyum testi</b><small>10 soru · Falcı Teyze yorumlar</small></div>';
+    const head = `<div class="gm-h">${egi('uyum', 26)} <b>Uyum testi</b><small>10 soru · Falcı Teyze yorumlar</small></div>`;
     if (c.status === 'done') {
       const q = compatQs || [];
       const ids = Object.keys(c.answers || {}); const oid = ids.find((x) => x !== me);
       const rows = q.length && c.answers[me] && c.answers[oid] ? `<details class="cp-det"><summary>Cevapları karşılaştır</summary>${q.map((x, i) => `<div class="bm-row ${c.per?.[i] === 10 ? 'same' : ''}"><span>${esc(x.o[c.answers[me][i]])}</span><i>${c.per?.[i] === 10 ? '💞' : c.per?.[i] === 5 ? '≈' : '↔'}</i><span>${esc(x.o[c.answers[oid][i]])}</span></div>`).join('')}<small class="bm-leg"><span>Sen</span><span>${esc(otherName())}</span></small></details>` : '';
-      return `${head}<div class="cp-pct"><b>%${c.pct}</b><span>uyum</span></div><p class="cp-com">🔮 ${esc(c.comment || '')}</p>${rows}<button class="btn sm cp-share">${icon('send')} Hikayende paylaş</button>`;
+      return `${head}<div class="cp-pct"><b>%${c.pct}</b><span>uyum</span></div><p class="cp-com">${esc(c.comment || '')}</p>${rows}<button class="btn sm cp-share">${icon('send')} Hikayende paylaş</button>`;
     }
-    if (c.status === 'scoring') return `${head}<div class="cp-pct"><b>%${c.pct}</b><span>uyum</span></div><p class="gm-s">🔮 Falcı Teyze sonucunuzu yorumluyor…</p>`;
+    if (c.status === 'scoring') return `${head}<div class="cp-pct"><b>%${c.pct}</b><span>uyum</span></div><p class="gm-s">Falcı Teyze sonucunuzu yorumluyor…</p>`;
     const done = c.answers?.[me];
     const n = Object.keys(c.answers || {}).length;
     if (done) return `${head}<p class="gm-s">Cevapların gönderildi. ${esc(otherName())} de çözünce sonuç ve Falcı Teyze’nin yorumu gelecek.</p>`;
@@ -234,7 +235,7 @@ export default async function chat(view, chatId) {
     let q;
     try { q = await loadCompatQs(); } catch (er) { toast(er.message); return; }
     const pick = q.map(() => null);
-    sheet('Uyum testi 💞', `<div class="cp-form">${q.map((x, i) => `<div class="cp-q" data-i="${i}"><b>${i + 1}. ${esc(x.q)}</b><div class="cp-o">${x.o.map((o, j) => `<button type="button" data-v="${j}">${esc(o)}</button>`).join('')}</div></div>`).join('')}
+    sheet('Uyum testi', `<div class="cp-form">${q.map((x, i) => `<div class="cp-q" data-i="${i}"><b>${i + 1}. ${esc(x.q)}</b><div class="cp-o">${x.o.map((o, j) => `<button type="button" data-v="${j}">${esc(o)}</button>`).join('')}</div></div>`).join('')}
       <button class="btn primary block cp-send" disabled>Cevapları gönder (0/${q.length})</button></div>`, {
       onMount(sh, close) {
         const f = sh.querySelector('.cp-form'); const sendB = f.querySelector('.cp-send');
@@ -250,7 +251,7 @@ export default async function chat(view, chatId) {
           }
           if (e.target.closest('.cp-send')) {
             sendB.disabled = true;
-            try { upd(await api(`/messages/${m.id}/compat`, { body: { answers: pick } })); close(); toast('Cevapların gönderildi 💞'); } catch (er) { toast(er.message); sendB.disabled = false; }
+            try { upd(await api(`/messages/${m.id}/compat`, { body: { answers: pick } })); close(); toast('Cevapların gönderildi'); } catch (er) { toast(er.message); sendB.disabled = false; }
           }
         };
       },
@@ -265,7 +266,7 @@ export default async function chat(view, chatId) {
   // ---- Sohbette sanal hediye ----
   async function giftSheet() {
     const g = await api('/gifts').catch(() => null); if (!g) return toast('Hediyeler yüklenemedi.');
-    sheet(`${esc(otherName())} kişisine hediye`, `<div class="gift-grid">${g.gifts.map((x) => `<button data-g="${esc(x.id)}"><span class="em">${x.em}</span><b>${esc(x.name)}</b><small>${x.coins} jeton</small></button>`).join('')}</div>
+    sheet(`${esc(otherName())} kişisine hediye`, `<div class="gift-grid">${g.gifts.map((x) => `<button data-g="${esc(x.id)}">${giftIcon(x, 48, 'em')}<b>${esc(x.name)}</b><small>${x.coins} jeton</small></button>`).join('')}</div>
       <div class="gift-foot"><span>Bakiye: <b class="bal">${g.coins}</b> jeton</span><a class="link" href="#/store">Jeton al</a></div>`, {
       onMount(sh, close) {
         sh.querySelector('.gift-grid').onclick = async (e) => {
@@ -276,7 +277,7 @@ export default async function chat(view, chatId) {
           try {
             const r = await api(`/chats/${chatId}/gift`, { body: { giftId: gift.id } });
             if (r.message) addMsg(r.message);
-            state.me.coins = r.coins; close(); toast(`${gift.em} ${gift.name} gönderildi!`);
+            state.me.coins = r.coins; close(); toast(`${gift.name} gönderildi!`);
           } catch (er) { b.disabled = false; if (er.status === 402) { close(); import('../core.js').then((c) => c.needCoins(er.message)); } else toast(er.message); }
         };
       },
@@ -379,7 +380,7 @@ export default async function chat(view, chatId) {
       if (gb) { upd(await api(`/messages/${m.id}/game`, { body: { guess: +gb.dataset.i } })); return; }
       if (e.target.closest('.bm-play')) { bumuSheet(m); return; }
       if (e.target.closest('.cp-play')) { compatSheet(m); return; }
-      if (e.target.closest('.cp-share')) { shareCard({ kind: 'compat', big: `%${m.compat.pct}`, title: `${(state.me.name || '').split(' ')[0]} & ${otherName()}`, subtitle: 'Uyum testi · Falcı Teyze yorumladı', text: m.compat.comment || '', cta: 'Sen de uyumuna bak' }, { file: 'swipeup-uyum.png' }); return; }
+      if (e.target.closest('.cp-share')) { shareCard({ kind: 'compat', icon: 'uyum', big: `%${m.compat.pct}`, title: `${(state.me.name || '').split(' ')[0]} & ${otherName()}`, subtitle: 'Uyum testi · Falcı Teyze yorumladı', text: m.compat.comment || '', cta: 'Sen de uyumuna bak' }, { file: 'swipeup-uyum.png' }); return; }
       if (e.target.closest('.fal-share')) {
         const i = msgs.indexOf(m); const req = msgs.slice(0, i).reverse().find((x) => x.fal);
         const z = zodiacOf(req?.fal?.zodiac || state.me.zodiac);
@@ -667,9 +668,9 @@ export default async function chat(view, chatId) {
       <button data-a="cam">${icon('camera')}Fotoğraf çek</button>
       <button data-a="once">${icon('eye')}<span class="grow">Tek seferlik fotoğraf<div class="sub muted" style="font-size:12.5px">Bir kez açılır, sonra silinir</div></span></button>
       ${isGroup || falChat ? '' : `<button data-a="game">🎲<span class="grow">Oyun başlat<div class="sub muted" style="font-size:12.5px">İki doğru bir yalan, Bu mu şu mu</div></span></button>
-      <button data-a="plan">📅<span class="grow">Buluşma planla<div class="sub muted" style="font-size:12.5px">Yakındaki kafe ve mekan önerileri, hatırlatma</div></span></button>
-      <button data-a="compat">💞<span class="grow">Uyum testi<div class="sub muted" style="font-size:12.5px">10 soru, sonucu Falcı Teyze yorumlar</div></span></button>
-      <button data-a="gift">🎁<span class="grow">Hediye gönder<div class="sub muted" style="font-size:12.5px">Gül, yüzük ve daha fazlası jetonla</div></span></button>`}
+      <button data-a="plan">${egi('secki', 28)}<span class="grow">Buluşma planla<div class="sub muted" style="font-size:12.5px">Yakındaki kafe ve mekan önerileri, hatırlatma</div></span></button>
+      <button data-a="compat">${egi('uyum', 28)}<span class="grow">Uyum testi<div class="sub muted" style="font-size:12.5px">10 soru, sonucu Falcı Teyze yorumlar</div></span></button>
+      <button data-a="gift">${egi('hediye', 28)}<span class="grow">Hediye gönder<div class="sub muted" style="font-size:12.5px">Gül, yüzük ve daha fazlası jetonla</div></span></button>`}
       <button data-a="loc">${icon('mapPin')}Konum gönder</button>
       <button data-a="ttl">${icon('timer')}<span class="grow">Kaybolan mesajlar</span><span class="muted">${ttlLabel(ttl)}</span></button></div>`, {
       onMount(sh, close) {
@@ -767,7 +768,7 @@ export default async function chat(view, chatId) {
     sheet('Buluşma planla', `<form class="form pl-f">
       <label>Ne zaman<input class="field" type="datetime-local" name="w" value="${localInput(def.getTime())}" min="${localInput(Date.now())}"></label>
       <label>Nerede<input class="field" name="p" maxlength="120" placeholder="Ör. Moda sahili, Kadıköy"></label>
-      <div class="pl-near"><div class="seg pl-k"><button type="button" data-k="cafe" class="on">☕ Kafe</button><button type="button" data-k="restaurant">🍽️ Yemek</button><button type="button" data-k="park">🌳 Park</button><button type="button" data-k="fun">🎳 Etkinlik</button></div>
+      <div class="pl-near"><div class="seg pl-k"><button type="button" data-k="cafe" class="on">Kafe</button><button type="button" data-k="restaurant">Yemek</button><button type="button" data-k="park">Park</button><button type="button" data-k="fun">Etkinlik</button></div>
         <button type="button" class="btn sm block pl-find">${icon('mapPin')} Yakınımdaki yerleri öner</button><div class="pl-sug"></div></div>
       <label>Not (isteğe bağlı)<input class="field" name="n" maxlength="200" placeholder="Kahve içeriz ☕"></label>
       <p class="muted" style="margin:0;font-size:12.5px">💛 İlk buluşmayı kalabalık bir yerde yap. Planı bir arkadaşınla paylaşabilir, sonra “İyiyim” diyerek haber verebilirsin.</p>
