@@ -21,6 +21,14 @@ export default async function feed(view) {
     <a class="sg-feed" href="#/sarki" hidden></a>
     <div class="event-slot"></div>
     <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
+    ${state.me.role === 'falci' ? '' : `<nav class="eg-row" aria-label="Etkileşim">
+      <a class="eg-it eg-stk" href="#/seriler"><span class="eg-ic">🔥</span><b class="eg-n">${state.me.loginStreak?.count || 0}</b><small>Serin</small></a>
+      <a class="eg-it" href="#/soru"><span class="eg-ic">💬</span><small>Günün sorusu</small></a>
+      <a class="eg-it" href="#/secki"><span class="eg-ic">☀️</span><small>Bugün 5 kişi</small></a>
+      <a class="eg-it" href="#/kulupler"><span class="eg-ic">🎯</span><small>Kulüpler</small></a>
+      <a class="eg-it" href="#/karaoke"><span class="eg-ic">🎤</span><small>Karaoke</small></a>
+      <a class="eg-it" href="#/burc"><span class="eg-ic">✨</span><small>Burç kartın</small></a>
+    </nav>`}
     <div class="social-row"><a class="genel-row feedg" href="#/genel"><span class="genel-ic">${icon('users')}</span><span class="grow"><b>Genel sohbet</b><small>Herkes burada</small></span></a>
       <a class="genel-row feedg rooms-e" href="#/odalar"><span class="genel-ic">🎵</span><span class="grow"><b>Odalar</b><small>Müzik, dizi, şehir…</small></span></a>
       <a class="genel-row feedg speed-e" href="#/hizli"><span class="genel-ic">⚡</span><span class="grow"><b>Hızlı tanış</b><small>3 dk görüntülü</small></span></a></div>

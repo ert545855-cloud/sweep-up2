@@ -6,6 +6,36 @@ import { gridTile } from '../components.js';
 import { voiceChip, promptCards, promptReply, superMessage, profileCard } from '../extras.js';
 import { shareSheet } from '../core.js';
 import { eventOn, eventInfo, eventEmoji } from '../event.js';
+import { pickMusic } from '../music.js';
+
+// "Şu an dinlediğim": aynı şarkıyı ve aynı sanatçıyı dinleyenler
+function npSheet(uid) {
+  sheet('🎧 Aynı şarkıyı dinleyenler', '<div class="np-l"><div class="spinner"></div></div>', {
+    async onMount(sh) {
+      const box = sh.querySelector('.np-l');
+      try {
+        const r = await api(`/now-playing/${uid}`);
+        if (!r.nowPlaying) { box.innerHTML = '<div class="empty">Şu an bir şarkı paylaşılmıyor.</div>'; return; }
+        const t = r.nowPlaying;
+        const row = (x, sub) => `<a class="list-item" href="#/u/${esc(x.username)}">${avatar(x, 44)}<div class="grow"><div class="b">${nm(x)}</div><div class="sub">${esc(sub)}</div></div></a>`;
+        box.innerHTML = `<div class="np-card big">${t.cover ? `<img src="${esc(t.cover)}" alt="">` : '<span class="np-nc">🎵</span>'}<div class="grow"><b>${esc(t.title)}</b><small>${esc(t.artist)}</small></div>${t.spotifyUrl ? `<a class="btn sm" href="${esc(t.spotifyUrl)}" target="_blank" rel="noopener">Spotify</a>` : ''}</div>
+          <div class="section-t"><span>${r.same.length ? `Bu şarkıyı dinleyen ${r.same.length} kişi` : 'Şu an bu şarkıyı başka dinleyen yok'}</span></div>
+          ${r.same.map((x) => row(x, `@${x.username}`)).join('')}
+          ${r.artist.length ? `<div class="section-t"><span>${esc(t.artist)} dinleyenler</span></div>${r.artist.map((x) => row(x, `🎵 ${x.track}`)).join('')}` : ''}`;
+      } catch (er) { box.innerHTML = `<div class="empty">${esc(er.message)}</div>`; }
+    },
+  });
+}
+async function setNowPlaying(view, rerender) {
+  const t = await pickMusic({ allowFile: false });
+  if (!t?.src) return;
+  try {
+    const r = await api('/me/now-playing', { method: 'PUT', body: { track: t } });
+    state.me.nowPlaying = r.nowPlaying;
+    toast(r.same ? `🎧 Şu an ${r.same} kişi daha bu şarkıyı dinliyor!` : '🎧 Profilinde 12 saat görünecek.');
+    rerender();
+  } catch (er) { toast(er.message); }
+}
 
 export function themeMenu() {
   const mode = localStorage.getItem('su_theme') || 'system';
@@ -90,6 +120,8 @@ export default async function profile(view, username) {
       <div class="handle">${u.privacy?.private ? `${icon('lock', '', 'style="width:13px;height:13px;vertical-align:-1px"')} ` : ''}@${esc(u.username)}${!self && lastSeen(u) ? ` · ${esc(lastSeen(u))}` : ''}</div>
       ${u.bio ? `<p class="bio">${richText(u.bio)}</p>` : (self ? '<a class="link" href="#/edit" style="margin-top:6px">Biyografi ekle</a>' : '')}
       ${u.voice ? `<div style="margin-top:10px">${voiceChip(u.voice)}</div>` : ''}
+      ${u.nowPlaying && u.nowPlaying.until > Date.now() ? `<button class="np-card np-open"><span class="np-eq"><i></i><i></i><i></i></span>${u.nowPlaying.cover ? `<img src="${esc(u.nowPlaying.cover)}" alt="">` : ''}<span class="grow"><small>Şu an dinliyor</small><b class="ellipsis">${esc(u.nowPlaying.title)}</b><small class="ellipsis">${esc(u.nowPlaying.artist)}</small></span>${self ? '<span class="np-x" role="button" aria-label="Kaldır">✕</span>' : '<span class="go-chip">Kimler dinliyor?</span>'}</button>`
+    : self && !['falci', 'official'].includes(u.role) ? '<button class="np-add">🎧 Şu an ne dinliyorsun? Ekle</button>' : ''}
       ${meta.length || u.interests?.length || (!self && (u.followsYou || u.matched)) ? `<div class="chips">
         ${meta.map((m) => `<span class="chip">${esc(m)}</span>`).join('')}
         ${(u.interests || []).map((t) => `<span class="chip uv">${esc(t)}</span>`).join('')}
@@ -114,7 +146,8 @@ export default async function profile(view, username) {
     ${self ? `<div class="me-links">
       <a href="#/ziyaretciler">${icon('eye')}<span>Ziyaretçiler</span><b class="vc"></b></a>
       <a href="#/gorunum">${icon('crown')}<span>Çerçeve ve rozet</span></a>
-      <a href="#/davet">${icon('gift')}<span>Davet et, kazan</span></a></div>` : ''}
+      <a href="#/davet">${icon('gift')}<span>Davet et, kazan</span></a>
+      <a href="#/seriler"><span style="font-size:18px">🔥</span><span>Seriler</span><b>${u.loginStreak?.count || ''}</b></a></div>` : ''}
     <div class="tabs">
       ${tabs.map((t, i) => `<button data-t="${t}" class="${i ? '' : 'on'}" aria-label="${{ grid: 'Gönderiler', reels: 'Vitrin', saved: 'Kaydedilenler' }[t]}">${icon({ grid: 'grid', reels: 'reels', saved: 'bookmark' }[t])}</button>`).join('')}
     </div>
@@ -147,6 +180,11 @@ export default async function profile(view, username) {
   showTab('grid');
 
   view.querySelector('.fl').onclick = () => peopleSheet('Takipçiler', u.id, 'followers');
+  view.querySelector('.np-add')?.addEventListener('click', () => setNowPlaying(view, () => profile(view, username)));
+  view.querySelector('.np-open')?.addEventListener('click', async (e) => {
+    if (e.target.closest('.np-x')) { await api('/me/now-playing', { method: 'DELETE' }).catch(() => {}); profile(view, username); return; }
+    npSheet(u.id);
+  });
   view.querySelector('.fg').onclick = () => peopleSheet('Takip edilenler', u.id, 'following');
 
   const share = () => shareSheet({

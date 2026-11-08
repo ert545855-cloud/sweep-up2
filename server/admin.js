@@ -388,7 +388,32 @@ module.exports = function mountAdmin(app, ctx) {
   // ---------- Duyurular ----------
   app.get('/api/admin/announcements', adminAuth, (req, res) => res.json(store.all('adm_announcements').sort((a, b) => b.at - a.at)));
   // Hedef kitleye göre kullanıcılar
-  const AUDIENCES = { all: 'Herkes', online: 'Şu an çevrimiçi olanlar', plus: 'SwipeUp+ üyeleri', free: 'Ücretsiz üyeler', verified: 'Mavi tikliler', new7: 'Son 7 günde katılanlar', inactive: '7 gündür girmeyenler', city: 'Şehre göre', user: 'Tek kullanıcı' };
+  const AUDIENCES = { all: 'Herkes', online: 'Şu an çevrimiçi olanlar', plus: 'SwipeUp+ üyeleri', free: 'Ücretsiz üyeler', verified: 'Mavi tikliler', new7: 'Son 7 günde katılanlar', inactive: '7 gündür girmeyenler', city: 'Şehre göre', user: 'Tek kullanıcı', custom: 'Özel kitle' };
+  // Özel kitle: filtreler birlikte uygulanır (ör. İstanbul + 18–25 yaş + 7 gündür girmeyenler)
+  const ageOfU = (u) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(u.birthdate || '')); if (!m) return Number.isFinite(u.age) ? u.age : null; const t = new Date(); let a = t.getFullYear() - +m[1]; if (t.getMonth() + 1 < +m[2] || (t.getMonth() + 1 === +m[2] && t.getDate() < +m[3])) a--; return a; };
+  const ZOD = require('./engage').ZODIAC; const zodOf = (u) => (u.zodiac && ZOD[u.zodiac] ? u.zodiac : require('./engage').zodiacFromDate(u.birthdate));
+  const GENDER = { k: 'Kadın', e: 'Erkek', d: 'Diğer' };
+  function customFilter(list, f = {}) {
+    const t = now(); const lbl = [];
+    const n = (v) => { const x = parseInt(v, 10); return Number.isFinite(x) && x >= 0 ? x : null; };
+    const cities = String(f.city || '').split(',').map((c) => c.toLocaleLowerCase('tr-TR').trim()).filter(Boolean);
+    if (cities.length) { list = list.filter((u) => cities.some((c) => (u.city || '').toLocaleLowerCase('tr-TR').includes(c))); lbl.push(cities.map((c) => c[0].toLocaleUpperCase('tr-TR') + c.slice(1)).join('/')); }
+    const amin = n(f.ageMin); const amax = n(f.ageMax);
+    if (amin != null || amax != null) { list = list.filter((u) => { const a = ageOfU(u); return a != null && (amin == null || a >= amin) && (amax == null || a <= amax); }); lbl.push(`${amin ?? 18}–${amax ?? '99'} yaş`); }
+    if (GENDER[f.gender]) { list = list.filter((u) => u.gender === f.gender); lbl.push(GENDER[f.gender]); }
+    const ina = n(f.inactiveDays); if (ina) { list = list.filter((u) => !isOnline(u.id) && (u.lastSeen || u.createdAt || 0) < t - ina * DAY); lbl.push(`${ina} gündür girmeyen`); }
+    const act = n(f.activeDays); if (act) { list = list.filter((u) => isOnline(u.id) || (u.lastSeen || 0) >= t - act * DAY); lbl.push(`son ${act} günde aktif`); }
+    const nw = n(f.newDays); if (nw) { list = list.filter((u) => u.createdAt >= t - nw * DAY); lbl.push(`son ${nw} günde katılan`); }
+    if (f.plan === 'plus') { list = list.filter((u) => (u.plusUntil || 0) > t); lbl.push('SwipeUp+'); }
+    if (f.plan === 'free') { list = list.filter((u) => !((u.plusUntil || 0) > t)); lbl.push('ücretsiz'); }
+    if (f.verified === 'yes') { list = list.filter((u) => u.verified); lbl.push('mavi tikli'); }
+    if (f.verified === 'no') { list = list.filter((u) => !u.verified); lbl.push('tiksiz'); }
+    const it = String(f.interest || '').toLocaleLowerCase('tr-TR').trim(); if (it) { list = list.filter((u) => (u.interests || []).some((x) => String(x).toLocaleLowerCase('tr-TR').includes(it))); lbl.push(`ilgi: ${f.interest}`); }
+    if (ZOD[f.zodiac]) { list = list.filter((u) => zodOf(u) === f.zodiac); lbl.push(ZOD[f.zodiac][0]); }
+    if (f.push === 'yes') { list = list.filter((u) => store.find('pushSubs', (x) => x.userId === u.id)); lbl.push('push açık'); }
+    if (n(f.minCoins)) { list = list.filter((u) => (u.coins || 0) >= n(f.minCoins)); lbl.push(`${n(f.minCoins)}+ jeton`); }
+    return { list, label: lbl.join(' · ') || 'filtre yok' };
+  }
   function audienceOf(b) {
     const t = now();
     let list = store.filter('users', (u) => statusOf(u) === 'active');
@@ -401,12 +426,14 @@ module.exports = function mountAdmin(app, ctx) {
     if (aud === 'inactive') list = list.filter((u) => !isOnline(u.id) && (u.lastSeen || 0) < t - 7 * DAY);
     if (aud === 'city') { const c = String(b.city || '').toLocaleLowerCase('tr-TR').trim(); list = c ? list.filter((u) => (u.city || '').toLocaleLowerCase('tr-TR').includes(c)) : []; }
     if (aud === 'user') { const un = String(b.username || '').replace(/^@/, '').toLowerCase().trim(); list = list.filter((u) => u.username === un); }
-    return { aud, list };
+    let label = '';
+    if (aud === 'custom') { const r = customFilter(list.filter((u) => !['falci', 'official'].includes(u.role)), b.filters || {}); list = r.list; label = r.label; }
+    return { aud, list, label };
   }
-  const LINKS = ['/#/', '/#/notifications', '/#/store', '/#/genel', '/#/fal', '/#/vitrin', '/#/dalga', '/#/swipe', '/#/create', '/#/verify', '/#/live'];
+  const LINKS = ['/#/', '/#/notifications', '/#/store', '/#/genel', '/#/fal', '/#/vitrin', '/#/dalga', '/#/swipe', '/#/create', '/#/verify', '/#/live', '/#/secki', '/#/soru', '/#/kulupler', '/#/seriler', '/#/karaoke', '/#/gorevler'];
   app.post('/api/admin/announcements/preview', adminAuth, (req, res) => {
     const { list } = audienceOf(req.body || {});
-    res.json({ count: list.length, sample: list.slice(0, 5).map((u) => u.username) });
+    res.json({ count: list.length, push: list.filter((u) => store.find('pushSubs', (x) => x.userId === u.id)).length, online: list.filter((u) => isOnline(u.id)).length, sample: list.slice(0, 5).map((u) => u.username) });
   });
   app.post('/api/admin/announcements', adminAuth, (req, res) => {
     const b = req.body || {};
@@ -415,7 +442,7 @@ module.exports = function mountAdmin(app, ctx) {
     if (!text) return res.status(400).json({ error: 'Bildirim metni boş olamaz.' });
     const url = LINKS.includes(b.url) ? b.url : '/#/notifications';
     const popup = !!b.popup;
-    const { aud, list } = audienceOf(b);
+    const { aud, list, label } = audienceOf(b);
     if (!list.length) return res.status(400).json({ error: 'Bu hedef kitlede kimse yok.' });
     if (list.length > 1 && limited('ann:' + req.admin.id, 10, DAY)) return res.status(429).json({ error: 'Bugün çok fazla toplu bildirim gönderildi.' });
     const id = nanoid(10);
@@ -426,7 +453,7 @@ module.exports = function mountAdmin(app, ctx) {
     });
     if (popup) store.put('settings', { id: 'popup', annId: id, title, text, url, at: now(), users: aud === 'all' ? null : list.map((u) => u.id), until: now() + 7 * DAY });
     const a = store.put('adm_announcements', {
-      id, title, text, url, popup, audience: aud, audienceLabel: AUDIENCES[aud] + (aud === 'city' ? `: ${b.city}` : aud === 'user' ? `: @${b.username}` : ''),
+      id, title, text, url, popup, audience: aud, audienceLabel: AUDIENCES[aud] + (aud === 'city' ? `: ${b.city}` : aud === 'user' ? `: @${b.username}` : aud === 'custom' ? `: ${label}` : ''), filters: aud === 'custom' ? b.filters || {} : undefined,
       by: req.admin.username, at: now(), reach: list.length, pushReach: pushCount, online: list.filter((u) => isOnline(u.id)).length,
     });
     audit(req.admin, 'bildirim gönderdi', aud === 'user' ? list[0].id : null, `${a.audienceLabel} · ${text}`);
