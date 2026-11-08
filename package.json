@@ -1,32 +1,38 @@
-{
-  "name": "swipeup",
-  "version": "1.0.0",
-  "description": "SwipeUp — kaydır, izle, yayınla, sohbet et. Gerçek zamanlı sosyal uygulama.",
-  "main": "server.js",
-  "type": "commonjs",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "vapid": "node -e \"const w=require('web-push');console.log(w.generateVAPIDKeys())\""
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "license": "MIT",
-  "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "compression": "^1.8.2",
-    "express": "^5.3.0",
-    "heic-decode": "^2.1.0",
-    "helmet": "^8.3.0",
-    "jpeg-js": "^0.4.4",
-    "jsonwebtoken": "^9.0.3",
-    "multer": "^2.5.0",
-    "nanoid": "^3.3.20",
-    "nodemailer": "^10.3.1",
-    "pg": "^8.23.1",
-    "redis": "^6.3.1",
-    "socket.io": "^4.8.4",
-    "web-push": "^3.6.7"
-  }
-}
+
+workflows:
+  ios-build:
+    name: SwipeUp iOS Build
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    environment:
+      vars:
+        BUNDLE_ID: "com.swipeup.app"
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm install
+
+      - name: Generate iOS project
+        script: |
+          npx expo prebuild --platform ios
+
+      - name: Install CocoaPods
+        script: |
+          cd ios
+          pod install
+
+      - name: Build iOS
+        script: |
+          cd ios
+          xcodebuild \
+            -workspace *.xcworkspace \
+            -scheme "$(basename *.xcodeproj .xcodeproj)" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO
+
+    artifacts:
+      - ios/build/**/*.app
+      - /tmp/xcodebuild_logs/*.log
