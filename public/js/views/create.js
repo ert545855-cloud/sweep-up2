@@ -1,7 +1,9 @@
 import { icon } from '../icons.js';
 import {
   api, toast, compressImage, uploadFile, esc, state, sheet, FILTERS, filterCss, fmtDur, prepareMedia, uploadPrepared, isVideoFile, isHeicFile, fileType, scaleStickerLayer, mentionAutocomplete, pickPerson,
+  stkPos, dragSticker, pickEmoji, pickGif, richText,
 } from '../core.js';
+import { TEXT_BGS } from '../components.js';
 import { pickMusic, musicChip } from '../music.js';
 
 const musicUrl = (m) => (m.file ? (m._url ||= URL.createObjectURL(m.file)) : m.src);
@@ -58,14 +60,15 @@ const STICKER_COLORS = ['#ffffff', '#111111', '#ff3d6e', '#ffb020', '#22c55e', '
 const SPEEDS = [0.5, 0.75, 1, 1.5, 2];
 
 export default function create(view, kind) {
-  let mode = ['reel', 'story'].includes(kind) ? kind : 'image';
+  let mode = ['reel', 'story', 'text'].includes(kind) ? kind : 'image';
   let unscale = null;
-  const TITLES = { image: 'Yeni gönderi', reel: 'Vitrin videosu', story: 'Yeni hikaye' };
+  const TITLES = { image: 'Yeni gönderi', text: 'Yazı paylaş', reel: 'Vitrin videosu', story: 'Yeni hikaye' };
+  let postText = ''; let postBg = 'g1'; let storyBg = null;
   let items = []; // gönderi: [{file,url,filter}]
   let cur = 0;
   let file = null; // vitrin / hikaye
   let fileUrl = null;
-  let edit = { start: 0, end: null, speed: 1, filter: '', music: null, muteOriginal: false };
+  let edit = { start: 0, end: null, speed: 1, filter: '', music: null, muteOriginal: false, stickers: [] };
   let storyFilter = '';
   let stickers = [];
   let audioEl = null;
@@ -78,6 +81,7 @@ export default function create(view, kind) {
     <div class="create">
       <div class="seg" role="tablist">
         <button data-m="image" class="${mode === 'image' ? 'on' : ''}">Gönderi</button>
+        <button data-m="text" class="${mode === 'text' ? 'on' : ''}">Yazı</button>
         <button data-m="story" class="${mode === 'story' ? 'on' : ''}">Hikaye</button>
         <button data-m="reel" class="${mode === 'reel' ? 'on' : ''}">Vitrin</button>
         <button data-m="live">Canlı</button>
@@ -102,7 +106,8 @@ export default function create(view, kind) {
   const tools = view.querySelector('.tools');
   const title = view.querySelector('.center');
   const goBtns = view.querySelectorAll('.go, .go2');
-  const ready = () => (mode === 'image' ? items.length > 0 : !!file);
+  const ready = () => (mode === 'image' ? items.length > 0 : mode === 'text' ? postText.trim().length > 0 : mode === 'story' ? !!file || !!storyBg : !!file);
+  const bgChips = (cur) => `<div class="bg-chips">${TEXT_BGS.map((b) => `<button type="button" data-bg="${b}" class="tbg-${b} ${cur === b ? 'on' : ''}" aria-label="Arka plan"></button>`).join('')}</div>`;
   const stopAudio = () => { if (audioEl) { audioEl.pause(); audioEl = null; } };
 
   const filterStrip = (active, sample) => `<div class="fstrip">${FILTERS.map(([id, name, css]) => `<button data-f="${id}" class="${(active || '') === id ? 'on' : ''}">
@@ -112,9 +117,18 @@ export default function create(view, kind) {
   function paint() {
     picker.className = `picker ${mode !== 'image' ? 'reel' : ''}`;
     title.textContent = TITLES[mode];
-    view.querySelector('.capw').hidden = mode === 'story';
+    view.querySelector('.capw').hidden = mode === 'story' || mode === 'text';
     goBtns.forEach((b) => { b.disabled = !ready(); });
     tools.innerHTML = '';
+    if (mode === 'text') return paintText();
+    if (mode === 'story' && !file && !storyBg) {
+      stopAudio();
+      picker.innerHTML = `<div class="pick-two"><button class="pick-empty pk-file">${icon('image', '', 'style="width:48px;height:48px;margin:0 auto 10px"')}<div class="b" style="color:var(--text)">Fotoğraf ya da video</div><div>24 saat sonra kaybolur</div></button>
+        <button class="pick-empty pk-text tbg-g2">${icon('text', '', 'style="width:48px;height:48px;margin:0 auto 10px"')}<div class="b">Yazı hikayesi</div><div>Renkli arka plana yaz</div></button></div>`;
+      picker.querySelector('.pk-file').onclick = choose;
+      picker.querySelector('.pk-text').onclick = () => { storyBg = 'g2'; paint(); addSticker('text'); };
+      return;
+    }
     if (!ready()) {
       stopAudio();
       picker.innerHTML = `<button class="pick-empty">${icon(mode === 'reel' ? 'video' : 'image', '', 'style="width:56px;height:56px;margin:0 auto 10px"')}
@@ -126,6 +140,19 @@ export default function create(view, kind) {
     if (mode === 'image') return paintImages();
     if (mode === 'reel') return paintReel();
     return paintStory();
+  }
+
+  // ---------- Yazı gönderisi ----------
+  function paintText() {
+    const sz = (t) => (t.length < 60 ? 'xl' : t.length < 140 ? 'l' : t.length < 320 ? 'm' : 's');
+    picker.className = 'picker txt';
+    picker.innerHTML = `<div class="tpost tbg-${postBg}"><textarea class="tp-in ${sz(postText)}" maxlength="2200" placeholder="Ne düşünüyorsun? #etiket ya da @kişi ekleyebilirsin">${esc(postText)}</textarea></div>`;
+    tools.innerHTML = `<div class="tl">Arka plan</div>${bgChips(postBg)}<p class="muted" style="font-size:12.5px;margin:8px 2px 0">Uzun yazılar akışta birkaç satır görünür, gerisi “devamı” ile açılır.</p>`;
+    const ta = picker.querySelector('textarea');
+    mentionAutocomplete(ta);
+    ta.oninput = () => { postText = ta.value; ta.className = `tp-in ${sz(postText)}`; goBtns.forEach((b) => { b.disabled = !ready(); }); };
+    setTimeout(() => ta.focus(), 60);
+    tools.querySelector('.bg-chips').onclick = (e) => { const b = e.target.closest('[data-bg]'); if (!b) return; postBg = b.dataset.bg; picker.querySelector('.tpost').className = `tpost tbg-${postBg}`; tools.querySelectorAll('.bg-chips button').forEach((x) => x.classList.toggle('on', x === b)); };
   }
 
   function paintImages() {
@@ -149,7 +176,18 @@ export default function create(view, kind) {
   function paintReel() {
     picker.innerHTML = `<video src="${fileUrl}" autoplay muted loop playsinline style="filter:${filterCss(edit.filter)}"></video>`;
     const v = picker.querySelector('video');
-    tools.innerHTML = `<div class="etabs"><button data-t="trim" class="on">${icon('scissors')}Kırp</button><button data-t="speed">${icon('gauge')}Hız</button><button data-t="filter">${icon('wand')}Filtre</button><button data-t="music">${icon('music')}Müzik</button></div><div class="epane"></div>`;
+    picker.insertAdjacentHTML('beforeend', '<div class="ovl ovl-edit"></div>');
+    const ovl = picker.querySelector('.ovl-edit');
+    const paintOvl = () => {
+      ovl.innerHTML = edit.stickers.map((st, i) => (st.type === 'emoji' ? `<span class="ov em" data-i="${i}" style="${stkPos(st)}">${esc(st.em)}</span>`
+        : st.type === 'gif' ? `<img class="ov gif" data-i="${i}" style="${stkPos(st)}" src="${esc(st.src)}" alt="">`
+          : `<span class="ov tx ${st.bgc ? 'bgc' : ''}" data-i="${i}" style="${stkPos(st)};color:${esc(st.color)}">${esc(st.text)}</span>`)).join('');
+      ovl.querySelectorAll('.ov').forEach((elx) => {
+        const st = edit.stickers[+elx.dataset.i];
+        dragSticker(elx, picker, st, { onTap: () => stickerMenu(st, () => { edit.stickers = edit.stickers.filter((x) => x !== st); }, paintOvl) });
+      });
+    };
+    tools.innerHTML = `<div class="etabs"><button data-t="trim" class="on">${icon('scissors')}Kırp</button><button data-t="speed">${icon('gauge')}Hız</button><button data-t="filter">${icon('wand')}Filtre</button><button data-t="music">${icon('music')}Müzik</button><button data-t="stk">${icon('sticker')}Çıkartma</button></div><div class="epane"></div>`;
     const pane = tools.querySelector('.epane');
     const sync = () => {
       v.playbackRate = edit.speed;
@@ -194,6 +232,18 @@ export default function create(view, kind) {
         pane.querySelectorAll('.fstrip span').forEach((sp) => { sp.style.backgroundImage = 'linear-gradient(135deg,#ff8a3d,#7c3aed 60%,#22c55e)'; });
         pane.onclick = (e) => { const b = e.target.closest('[data-f]'); if (!b) return; edit.filter = b.dataset.f; sync(); showTab('filter'); };
       }
+      if (t === 'stk') {
+        pane.innerHTML = `<div class="stk-tools three"><button data-k="gif">${icon('gif')}GIF</button><button data-k="emoji">${icon('smile')}Emoji</button><button data-k="text">${icon('text')}Yazı</button></div>
+          <p class="muted" style="font-size:12.5px;margin:6px 2px 0">Çıkartmayı videonun üstünde sürükleyerek taşı; büyütmek, küçültmek ya da kaldırmak için dokun. En fazla 6 çıkartma.</p>`;
+        pane.onclick = async (e) => {
+          const k = e.target.closest('[data-k]')?.dataset.k; if (!k) return;
+          if (edit.stickers.length >= 6) return toast('En fazla 6 çıkartma ekleyebilirsin.');
+          if (k === 'gif') { const src = await pickGif(); if (src) edit.stickers.push({ type: 'gif', src, x: 50, y: 40, s: 1 }); }
+          if (k === 'emoji') { const em = await pickEmoji(); if (em) edit.stickers.push({ type: 'emoji', em, x: 50, y: 45, s: 1 }); }
+          if (k === 'text') { const tx = await textForm(); if (tx) edit.stickers.push({ type: 'text', ...tx, x: 50, y: 30, s: 1 }); }
+          paintOvl();
+        };
+      }
       if (t === 'music') {
         pane.innerHTML = edit.music ? `<div class="mcard">${musicChip(edit.music)}<button class="ib ch" aria-label="Değiştir">${icon('music')}</button><button class="ib rm" aria-label="Müziği kaldır">${icon('trash')}</button></div>
           <label class="switch-row"><input type="checkbox" class="mo" ${edit.muteOriginal ? 'checked' : ''}> Videonun kendi sesini kapat</label>`
@@ -212,15 +262,52 @@ export default function create(view, kind) {
       }
     };
     tools.querySelector('.etabs').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) showTab(b.dataset.t); };
-    sync(); showTab('trim');
+    sync(); showTab('trim'); paintOvl();
     picker.insertAdjacentHTML('beforeend', `<button class="swap" aria-label="Başka video seç">${icon('video')}</button>`);
     picker.querySelector('.swap').onclick = choose;
   }
 
-  // ---------- Hikaye çıkartmaları ----------
+  // ---------- Çıkartmalar (hikaye + vitrin) ----------
+  // Yazı çıkartması formu
+  function textForm(init = {}) {
+    return new Promise((resolve) => {
+      let done = false;
+      sheet('Yazı ekle', `<form class="form"><textarea class="field" name="a" maxlength="120" rows="2" placeholder="Bir şey yaz">${esc(init.text || '')}</textarea>
+        <div class="colors">${STICKER_COLORS.map((c, i) => `<label><input type="radio" name="c" value="${c}" ${(init.color ? init.color === c : !i) ? 'checked' : ''}><i style="background:${c}"></i></label>`).join('')}</div>
+        <label class="switch-row"><input type="checkbox" name="b" ${init.bgc ? 'checked' : ''}> Arka planlı yazı</label>
+        <button class="btn primary block">Ekle</button></form>`, {
+        onMount(sh, close) {
+          const f = sh.querySelector('form'); setTimeout(() => f.a.focus(), 50);
+          f.onsubmit = (e) => { e.preventDefault(); const a = f.a.value.trim(); if (!a) return; done = true; close(); resolve({ text: a, color: f.c.value, bgc: f.b.checked }); };
+        },
+        onClose() { if (!done) resolve(null); },
+      });
+    });
+  }
+  // Dokununca: büyüt / küçült / döndür / kaldır
+  function stickerMenu(st, remove, repaint) {
+    const movable = ['emoji', 'gif', 'text', 'mention'].includes(st.type);
+    sheet(null, `<div class="menu">${movable ? `<button data-a="up">${icon('plus')}Büyüt</button><button data-a="down">${icon('chevDown')}Küçült</button><button data-a="rot">${icon('undo')}Döndür</button>` : ''}
+      ${st.type === 'text' ? `<button data-a="edit">${icon('edit')}Yazıyı düzenle</button>` : ''}<button data-a="rm" class="danger">${icon('trash')}Kaldır</button></div>`, {
+      onMount(sh, close) {
+        sh.querySelector('.menu').onclick = async (e) => {
+          const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+          close();
+          if (a === 'up') st.s = Math.min(3, Math.round(((st.s || 1) + 0.25) * 100) / 100);
+          if (a === 'down') st.s = Math.max(0.4, Math.round(((st.s || 1) - 0.2) * 100) / 100);
+          if (a === 'rot') st.r = ((st.r || 0) + 15) > 45 ? -45 : (st.r || 0) + 15;
+          if (a === 'edit') { const tx = await textForm(st); if (tx) Object.assign(st, tx); }
+          if (a === 'rm') { remove(); if (st.type === 'music') stopAudio(); }
+          repaint();
+        };
+      },
+    });
+  }
   function stickerHtml(s, i) {
-    const style = `top:${s.y}%`;
-    if (s.type === 'text') return `<div class="stk txt" data-i="${i}" style="${style};color:${s.color}">${esc(s.text)}</div>`;
+    const style = stkPos(s);
+    if (s.type === 'text') return `<div class="stk txt sz-${s.size || 'm'} ${s.bgc ? 'bgc' : ''}" data-i="${i}" style="${style};color:${s.color}">${esc(s.text)}</div>`;
+    if (s.type === 'emoji') return `<div class="stk em" data-i="${i}" style="${style}">${esc(s.em)}</div>`;
+    if (s.type === 'gif') return `<img class="stk gif" data-i="${i}" style="${style}" src="${esc(s.src)}" alt="">`;
     if (s.type === 'poll') return `<div class="stk poll" data-i="${i}" style="${style}"><b>${esc(s.q || 'Anket')}</b>${s.options.map((o) => `<span>${esc(o)}</span>`).join('')}</div>`;
     if (s.type === 'question') return `<div class="stk q" data-i="${i}" style="${style}"><b>${esc(s.q)}</b><span>Bir şey yaz…</span></div>`;
     if (s.type === 'music') return `<div class="stk mu" data-i="${i}" style="${style}">${musicChip(s)}</div>`;
@@ -228,88 +315,69 @@ export default function create(view, kind) {
     return '';
   }
   function paintStory() {
-    const vid = isVideoFile(file);
+    const vid = file && isVideoFile(file);
     const fst = `style="filter:${filterCss(storyFilter)}"`;
-    picker.innerHTML = `${vid ? `<video src="${fileUrl}" autoplay muted loop playsinline class="fit" ${fst}></video>` : `<img src="${fileUrl}" class="blurbg" alt=""><img src="${fileUrl}" alt="Önizleme" class="fit" ${fst}>`}
+    picker.innerHTML = `${!file ? `<div class="tstory tbg-${storyBg}"></div>` : vid ? `<video src="${fileUrl}" autoplay muted loop playsinline class="fit" ${fst}></video>` : `<img src="${fileUrl}" class="blurbg" alt=""><img src="${fileUrl}" alt="Önizleme" class="fit" ${fst}>`}
       <div class="stk-layer">${stickers.map(stickerHtml).join('')}</div>
       <button class="swap" aria-label="Başka dosya seç">${icon('image')}</button>`;
     picker.querySelector('.swap').onclick = choose;
     unscale?.(); unscale = scaleStickerLayer(picker.querySelector('.stk-layer'));
     tools.innerHTML = `<div class="stk-tools">
-      <button data-k="text">${icon('text')}Metin</button><button data-k="poll">${icon('poll')}Anket</button>
-      <button data-k="question">${icon('question')}Soru</button><button data-k="music">${icon('music')}Müzik</button><button data-k="mention">${icon('at')}Bahset</button></div>
-      <p class="muted" style="font-size:12.5px;margin:6px 2px 0">Efekt için fotoğrafı sağa-sola kaydır. Çıkartmayı sürükleyerek taşı, kaldırmak için dokun.</p>
-      <div class="tl">Efektler</div>${filterStrip(storyFilter, vid ? '' : fileUrl)}`;
+      <button data-k="text">${icon('text')}Yazı</button><button data-k="emoji">${icon('smile')}Emoji</button><button data-k="gif">${icon('gif')}GIF</button>
+      <button data-k="mention">${icon('at')}Kişi etiketle</button><button data-k="poll">${icon('poll')}Anket</button>
+      <button data-k="question">${icon('question')}Soru</button><button data-k="music">${icon('music')}Müzik</button></div>
+      <p class="muted" style="font-size:12.5px;margin:6px 2px 0">Çıkartmaları sürükleyerek istediğin yere taşı; büyütmek, döndürmek ya da kaldırmak için dokun.${file ? ' Efekt için fotoğrafı sağa-sola kaydır.' : ''}</p>
+      ${file ? `<div class="tl">Efektler</div>${filterStrip(storyFilter, vid ? '' : fileUrl)}` : `<div class="tl">Arka plan</div>${bgChips(storyBg)}`}`;
     if (vid) tools.querySelectorAll('.fstrip span').forEach((sp) => { sp.style.backgroundImage = 'linear-gradient(135deg,#ff8a3d,#7c3aed 60%,#22c55e)'; });
-    tools.querySelector('.fstrip').onclick = (e) => { const b = e.target.closest('[data-f]'); if (!b) return; storyFilter = b.dataset.f; paint(); };
+    tools.querySelector('.fstrip')?.addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (!b) return; storyFilter = b.dataset.f; paint(); });
+    tools.querySelector('.bg-chips')?.addEventListener('click', (e) => { const b = e.target.closest('[data-bg]'); if (!b) return; storyBg = b.dataset.bg; paint(); });
     tools.querySelector('.stk-tools').onclick = (e) => { const b = e.target.closest('[data-k]'); if (b) addSticker(b.dataset.k); };
-    // sürükle / kaldır
+    const layer = picker.querySelector('.stk-layer');
     picker.querySelectorAll('.stk').forEach((elx) => {
-      let y0 = null; let moved = false;
-      elx.addEventListener('pointerdown', (e) => { y0 = e.clientY; moved = false; elx.setPointerCapture(e.pointerId); });
-      elx.addEventListener('pointermove', (e) => {
-        if (y0 === null) return;
-        const r = picker.getBoundingClientRect();
-        const y = Math.max(5, Math.min(90, ((e.clientY - r.top) / r.height) * 100));
-        if (Math.abs(e.clientY - y0) > 4) moved = true;
-        if (moved) { elx.style.top = `${y}%`; stickers[+elx.dataset.i].y = Math.round(y); }
-      });
-      elx.addEventListener('pointerup', () => {
-        if (!moved && confirm('Bu çıkartma kaldırılsın mı?')) {
-          const s = stickers.splice(+elx.dataset.i, 1)[0];
-          if (s.type === 'music') stopAudio();
-          paint();
-        }
-        y0 = null;
-      });
+      const st = stickers[+elx.dataset.i];
+      dragSticker(elx, layer, st, { onTap: () => stickerMenu(st, () => { stickers = stickers.filter((x) => x !== st); }, paint) });
     });
     const mu = stickers.find((s) => s.type === 'music');
     if (mu && !audioEl) { audioEl = new Audio(musicUrl(mu)); audioEl.loop = true; audioEl.play().catch(() => {}); }
   }
-  function addSticker(k) {
-    if (stickers.length >= 4) return toast('En fazla 4 çıkartma ekleyebilirsin.');
+  async function addSticker(k) {
+    if (stickers.length >= 10) return toast('En fazla 10 çıkartma ekleyebilirsin.');
     if (['poll', 'question', 'music'].includes(k) && stickers.some((s) => s.type === k)) return toast('Bu çıkartmadan bir tane ekleyebilirsin.');
     if (k === 'mention') {
-      pickPerson('Birinden bahset', (u) => { if (!u) return; stickers.push({ type: 'mention', username: u.username, y: 20 }); paint(); });
+      pickPerson('Kişi etiketle', (u) => { if (!u) return; stickers.push({ type: 'mention', username: u.username, x: 50, y: 22 }); paint(); });
       return;
     }
+    if (k === 'emoji') { const em = await pickEmoji(); if (em) { stickers.push({ type: 'emoji', em, x: 50, y: 40, s: 1 }); paint(); } return; }
+    if (k === 'gif') { const src = await pickGif(); if (src) { stickers.push({ type: 'gif', src, x: 50, y: 45, s: 1 }); paint(); } return; }
+    if (k === 'text') { const tx = await textForm(); if (tx) { stickers.push({ type: 'text', ...tx, x: 50, y: 30, s: 1 }); paint(); } return; }
     if (k === 'music') {
       pickMusic().then((m) => {
         if (!m) return;
-        stickers.push({ type: 'music', ...m, y: 78 });
+        stickers.push({ type: 'music', ...m, x: 50, y: 78 });
         stopAudio(); paint();
       });
       return;
     }
     const forms = {
-      text: `<textarea class="field" name="a" maxlength="120" rows="2" placeholder="Bir şey yaz"></textarea>
-        <div class="colors">${STICKER_COLORS.map((c, i) => `<label><input type="radio" name="c" value="${c}" ${i ? '' : 'checked'}><i style="background:${c}"></i></label>`).join('')}</div>`,
       poll: `<input class="field" name="a" maxlength="80" placeholder="Soru (ör. Hangisi daha güzel?)">
         <input class="field" name="o1" maxlength="30" placeholder="1. seçenek" value="Evet"><input class="field" name="o2" maxlength="30" placeholder="2. seçenek" value="Hayır">
         <input class="field" name="o3" maxlength="30" placeholder="3. seçenek (isteğe bağlı)">`,
       question: '<input class="field" name="a" maxlength="80" value="Bana bir soru sor">',
-      mention: '<input class="field" name="a" maxlength="25" placeholder="kullanıcı adı" autocapitalize="off">',
     };
-    const titles = { text: 'Metin ekle', poll: 'Anket ekle', question: 'Soru kutusu', mention: 'Birinden bahset' };
+    const titles = { poll: 'Anket ekle', question: 'Soru kutusu' };
     sheet(titles[k], `<form class="form">${forms[k]}<button class="btn primary block">Ekle</button></form>`, {
       onMount(sh, close) {
         const f = sh.querySelector('form');
         setTimeout(() => f.a?.focus(), 50);
-        f.onsubmit = async (e) => {
+        f.onsubmit = (e) => {
           e.preventDefault();
           const a = f.a.value.trim();
-          if (k === 'text') { if (!a) return; stickers.push({ type: 'text', text: a, color: f.c.value, y: 30 }); }
           if (k === 'poll') {
             const options = [f.o1.value, f.o2.value, f.o3.value].map((x) => x.trim()).filter(Boolean);
             if (options.length < 2) return toast('En az iki seçenek yaz.');
-            stickers.push({ type: 'poll', q: a, options, y: 55 });
+            stickers.push({ type: 'poll', q: a, options, x: 50, y: 55 });
           }
-          if (k === 'question') stickers.push({ type: 'question', q: a || 'Bana bir soru sor', y: 45 });
-          if (k === 'mention') {
-            const un = a.replace(/^@/, '').toLowerCase();
-            try { await api(`/users/${encodeURIComponent(un)}`); } catch { return toast('Bu kullanıcı bulunamadı.'); }
-            stickers.push({ type: 'mention', username: un, y: 20 });
-          }
+          if (k === 'question') stickers.push({ type: 'question', q: a || 'Bana bir soru sor', x: 50, y: 45 });
           close(); paint();
         };
       },
@@ -344,7 +412,7 @@ export default function create(view, kind) {
     } else {
       if (mode === 'reel' && !isVideoFile(ready2[0])) return toast('Vitrin için bir video seç.');
       file = ready2[0]; fileUrl = URL.createObjectURL(file);
-      edit = { start: 0, end: null, speed: 1, filter: '', music: edit.music, muteOriginal: edit.muteOriginal };
+      edit = { start: 0, end: null, speed: 1, filter: '', music: edit.music, muteOriginal: edit.muteOriginal, stickers: edit.stickers || [] };
       storyFilter = '';
     }
     paint();
@@ -353,12 +421,12 @@ export default function create(view, kind) {
   view.querySelector('.seg').onclick = (e) => {
     const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return;
     if (m === 'live') { location.hash = '#/live'; return; }
-    if (m !== mode) { mode = m; file = null; items = []; stickers = []; stopAudio(); storyFilter = ''; edit = { start: 0, end: null, speed: 1, filter: '', music: null, muteOriginal: false }; }
+    if (m !== mode) { mode = m; file = null; items = []; stickers = []; stopAudio(); storyFilter = ''; storyBg = null; edit = { start: 0, end: null, speed: 1, filter: '', music: null, muteOriginal: false, stickers: [] }; }
     view.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.m === mode));
     paint();
   };
   swipeFilters(picker, () => (mode === 'image' ? items[cur]?.filter : mode === 'story' ? storyFilter : edit.filter), (f) => {
-    if (!ready()) return;
+    if (!ready() || mode === 'text' || (mode === 'story' && !file)) return;
     if (mode === 'image') items[cur].filter = f; else if (mode === 'story') storyFilter = f; else edit.filter = f;
     if (mode === 'reel') { const v = picker.querySelector('video'); if (v) v.style.filter = filterCss(f); tools.querySelector('.etabs [data-t=filter]')?.click(); } else paint();
   });
@@ -373,6 +441,12 @@ export default function create(view, kind) {
     const fill = bar.querySelector('i');
     const prog = (base, span) => (p) => { fill.style.width = `${Math.round((base + p * span) * 100)}%`; };
     try {
+      if (mode === 'text') {
+        const p = await api('/posts', { body: { type: 'text', caption: postText, bg: postBg } });
+        toast('Paylaşıldı.');
+        location.hash = `#/p/${p.id}`;
+        return;
+      }
       if (mode === 'image') {
         const out = [];
         for (let i = 0; i < items.length; i++) {
@@ -384,17 +458,17 @@ export default function create(view, kind) {
         location.hash = `#/p/${p.id}`;
         return;
       }
-      const isImg = !isVideoFile(file);
+      const isImg = !file || !isVideoFile(file);
       if (mode === 'story') {
-        const up = await uploadPrepared(isImg ? await compressImage(file) : file, prog(0, 0.8));
+        const up = file ? await uploadPrepared(isImg ? await compressImage(file) : file, prog(0, 0.8)) : null;
         const st = [];
         for (const s of stickers) {
           if (s.type === 'music') {
             const src = s.file ? (await uploadFile(s.file, prog(0.8, 0.2))).url : s.src;
-            st.push({ type: 'music', src, title: s.title, artist: s.artist, cover: s.cover, spotifyUrl: s.spotifyUrl, y: s.y });
+            st.push({ type: 'music', src, title: s.title, artist: s.artist, cover: s.cover, spotifyUrl: s.spotifyUrl, x: s.x, y: s.y });
           } else st.push(s);
         }
-        await api('/stories', { body: { media: up.url, mediaType: isImg ? 'image' : 'video', stickers: st, filter: storyFilter || null } });
+        await api('/stories', { body: { media: up?.url || null, mediaType: isImg ? 'image' : 'video', bg: file ? null : storyBg, stickers: st, filter: storyFilter || null } });
         stopAudio();
         toast('Hikayen paylaşıldı.');
         location.hash = `#/stories/${state.me.id}`;
@@ -411,7 +485,7 @@ export default function create(view, kind) {
           type: 'reel', items: [{ media: up.url, type: 'video', poster }], caption: view.querySelector('.cap').value,
           edit: {
             start: edit.start, end: edit.end, speed: edit.speed, filter: edit.filter || null, audio,
-            audioTitle: m?.title || '', audioArtist: m?.artist || '', audioCover: m?.cover || null, spotifyUrl: m?.spotifyUrl || null, muteOriginal: edit.muteOriginal,
+            audioTitle: m?.title || '', audioArtist: m?.artist || '', audioCover: m?.cover || null, spotifyUrl: m?.spotifyUrl || null, muteOriginal: edit.muteOriginal, stickers: edit.stickers,
           },
         },
       });

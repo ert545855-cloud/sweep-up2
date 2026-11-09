@@ -117,6 +117,60 @@ export async function prepareImage(file) {
 // Hikaye çıkartmaları 390 px genişliğe göre tasarlanır; önizlemede ve her ekran boyunda
 // aynı oranda görünmesi için katman bulunduğu kutuya ölçeklenir.
 export const STORY_W = 390;
+// Çıkartma konumu (x/y yüzde, s ölçek, r döndürme)
+export const stkPos = (st) => `top:${st.y ?? 50}%;left:${st.x ?? 50}%;transform:translate(-50%,-50%) rotate(${st.r || 0}deg) scale(${st.s || 1})`;
+export const EMOJIS = ['😂', '😍', '🥰', '😎', '🤩', '😭', '🥺', '😡', '🤯', '😴', '🤔', '🙈', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💔', '💘', '💯', '🔥', '✨', '⭐', '🌙', '☀️', '🌈', '⚡', '🎉', '🎂', '🎁', '🎈', '🎶', '🎧', '📸', '☕', '🍕', '🍔', '🍟', '🍦', '🍹', '🍾', '⚽', '🏀', '🏖️', '✈️', '🚗', '🏠', '🐶', '🐱', '🦋', '🌸', '🌹', '🍀', '👀', '👏', '🙌', '👍', '👎', '✌️', '🤞', '💪', '🙏', '💋', '👑', '💎', '🔮', '🧿', '📍'];
+export function pickEmoji(title = 'Emoji ekle') {
+  return new Promise((resolve) => {
+    let done = false;
+    sheet(title, `<div class="emo-grid">${EMOJIS.map((e) => `<button type="button" data-e="${e}">${e}</button>`).join('')}</div>`, {
+      onMount(sh, close) { sh.querySelector('.emo-grid').onclick = (e) => { const b = e.target.closest('[data-e]'); if (!b) return; done = true; close(); resolve(b.dataset.e); }; },
+      onClose() { if (!done) resolve(null); },
+    });
+  });
+}
+// GIF seçici: arama açıksa GIPHY/Tenor'dan, her zaman cihazdan GIF yükleme
+export function pickGif() {
+  return new Promise((resolve) => {
+    let done = false;
+    sheet('GIF ekle', `<div class="gif-pick"><div class="gif-q" hidden><input class="field" placeholder="GIF ara…" maxlength="60"></div>
+      <button type="button" class="btn block gif-up">${icon('upload')} Cihazdan GIF yükle</button>
+      <div class="gif-grid"><div class="spinner"></div></div></div>`, {
+      async onMount(sh, close) {
+        const grid = sh.querySelector('.gif-grid');
+        const finish = (v) => { done = true; close(); resolve(v); };
+        sh.querySelector('.gif-up').onclick = async () => {
+          const f = await pickFile('image/gif,image/webp,image/png'); if (!f) return;
+          if (f.size > 8 * 1024 * 1024) return toast('GIF en fazla 8 MB olabilir.');
+          const b = sh.querySelector('.gif-up'); b.disabled = true; b.textContent = 'Yükleniyor…';
+          try { const r = await uploadFile(f); finish(r.url); } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Cihazdan GIF yükle'; }
+        };
+        const show = (items) => { grid.innerHTML = items.length ? items.map((g) => `<button type="button" data-src="${esc(g.src)}"><img src="${esc(g.src)}" alt="" loading="lazy"></button>`).join('') : '<div class="muted" style="padding:10px">Sonuç bulunamadı.</div>'; };
+        grid.onclick = (e) => { const b = e.target.closest('[data-src]'); if (b) finish(b.dataset.src); };
+        const r = await api('/gifs').catch(() => ({ enabled: false }));
+        if (!r.enabled) { grid.innerHTML = '<p class="muted" style="font-size:13px;margin:4px 2px">Telefonundaki bir GIF’i ekleyebilirsin.</p>'; return; }
+        sh.querySelector('.gif-q').hidden = false; show(r.items);
+        let t; sh.querySelector('.gif-q input').oninput = (e) => { clearTimeout(t); t = setTimeout(async () => { const x = await api(`/gifs?q=${encodeURIComponent(e.target.value)}`).catch(() => ({ items: [] })); show(x.items || []); }, 350); };
+      },
+      onClose() { if (!done) resolve(null); },
+    });
+  });
+}
+// Çıkartmayı iki boyutta sürükle; dokununca düzenleme menüsü
+export function dragSticker(elx, box, st, { onTap, onMove } = {}) {
+  let sx = 0; let sy = 0; let moved = false; let down = false;
+  elx.addEventListener('pointerdown', (e) => { e.stopPropagation(); down = true; moved = false; sx = e.clientX; sy = e.clientY; elx.setPointerCapture(e.pointerId); });
+  elx.addEventListener('pointermove', (e) => {
+    if (!down) return;
+    if (Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) > 5) moved = true;
+    if (!moved) return;
+    const r = box.getBoundingClientRect();
+    st.x = Math.round(Math.max(6, Math.min(94, ((e.clientX - r.left) / r.width) * 100)));
+    st.y = Math.round(Math.max(5, Math.min(92, ((e.clientY - r.top) / r.height) * 100)));
+    elx.style.left = `${st.x}%`; elx.style.top = `${st.y}%`; onMove?.(st);
+  });
+  elx.addEventListener('pointerup', (e) => { e.stopPropagation(); if (down && !moved) onTap?.(st); down = false; });
+}
 export function scaleStickerLayer(layer) {
   const box = layer?.parentElement; if (!box) return () => {};
   const fit = () => {
@@ -198,7 +252,7 @@ export function connectSocket() {
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',
     'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'people:new', 'likes:new',
     'call:incoming', 'call:accepted', 'call:ended', 'call:taken', 'call:signal',
-    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event', 'maintenance', 'maintenance:plan', 'falai', 'falhold', 'support', 'quests', 'market', 'features', 'speed:count', 'speed:paired', 'speed:vote', 'speed:result', 'speed:signal', 'speed:left']
+    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event', 'maintenance', 'maintenance:plan', 'falai', 'falhold', 'venue', 'support', 'quests', 'market', 'features', 'speed:count', 'speed:paired', 'speed:vote', 'speed:result', 'speed:signal', 'speed:left']
     .forEach((ev) => s.on(ev, (d) => emit(ev, d)));
   s.on('presence', (d) => { state.presence.set(d.userId, d); emit('presence', d); });
   s.on('presence:all', (ids) => { ids.forEach((id) => state.presence.set(id, { userId: id, online: true })); emit('presence', {}); });
@@ -324,12 +378,13 @@ export function toast(text, { title, img, href, ms = 3500 } = {}) {
 }
 
 // ---- Alt sayfa (sheet) ----
-export function sheet(title, bodyHtml, { onMount, footer } = {}) {
+export function sheet(title, bodyHtml, { onMount, footer, onClose } = {}) {
   const root = document.getElementById('sheet-root');
   const bg = el('<div class="sheet-bg"></div>');
   const sh = el(`<div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>
     ${title ? `<div class="sh-t">${esc(title)}</div>` : ''}<div class="sh-b">${bodyHtml}</div>${footer || ''}</div>`);
-  const close = () => { bg.remove(); sh.remove(); window.removeEventListener('hashchange', close); };
+  let closed = false;
+  const close = () => { if (closed) return; closed = true; bg.remove(); sh.remove(); window.removeEventListener('hashchange', close); onClose?.(); };
   bg.onclick = close;
   window.addEventListener('hashchange', close);
   // aşağı sürükleyerek kapat
@@ -417,7 +472,24 @@ export function applySkin(id, { save = true } = {}) {
 export const currentSkin = () => document.documentElement.dataset.skin || 'gunbatimi';
 
 // ---- Logo ----
-export const logo = () => '<img class="mark" src="/icons/mark.png" alt="">swipeup';
+export const logo = () => '<img class="mark" src="/icons/mark.png" alt=""><span class="wmt">swipeup</span>';
+// SwipeUp+ üyelerine özel logo görünümleri
+export const LOGOS = [['klasik', 'Klasik', 'Herkesin gördüğü logo'], ['altin', 'Altın', 'Parıltılı altın'], ['neon', 'Neon', 'Gece kulübü ışıltısı'], ['gece', 'Gece', 'Siyah beyaz, sade'], ['pastel', 'Pastel', 'Yumuşak pembe-lila'], ['gokkusagi', 'Gökkuşağı', 'Renk değiştiren']];
+export function applyLogo(id) { const v = id && id !== 'klasik' ? id : ''; if (v) document.documentElement.dataset.logo = v; else delete document.documentElement.dataset.logo; try { localStorage.setItem('su_logo', v); } catch {} }
+export function logoMenu() {
+  const cur = state.me?.logo || 'klasik';
+  sheet('Uygulama logosu', `<p class="muted" style="margin:0 16px 12px;font-size:13.5px">SwipeUp+ üyelerine özel: uygulamanın içindeki logoyu istediğin görünüme çevir.${state.me?.plus ? '' : ' <b>SwipeUp+ ile açılır.</b>'}</p>
+    <div class="logo-grid">${LOGOS.map(([id, n, d]) => `<button class="logo-opt ${cur === id ? 'on' : ''}" data-l="${id}"><span class="wordmark lgp" data-lp="${id}"><img class="mark" src="/icons/mark.png" alt=""><span class="wmt">swipeup</span></span><b>${n}</b><small>${d}</small>${id !== 'klasik' && !state.me?.plus ? `<i class="lk">${icon('lock')}</i>` : ''}</button>`).join('')}</div>`, {
+    onMount(sh, close) {
+      sh.querySelector('.logo-grid').onclick = async (e) => {
+        const b = e.target.closest('[data-l]'); if (!b) return;
+        const id = b.dataset.l;
+        if (id !== 'klasik' && !state.me?.plus) { close(); return plusSheet('Logo seçmek SwipeUp+ ayrıcalığıdır.'); }
+        try { const u = await api('/me', { method: 'PATCH', body: { logo: id } }); state.me.logo = u.logo; applyLogo(u.logo); close(); toast('Logo değişti.'); } catch (er) { toast(er.message); }
+      };
+    },
+  });
+}
 
 // ---- Engelle / şikayet ----
 const REASONS = [['spam', 'Spam ya da sahte hesap'], ['taciz', 'Taciz veya zorbalık'], ['uygunsuz', 'Uygunsuz fotoğraf ya da içerik'], ['dolandirici', 'Dolandırıcılık'], ['yas', '18 yaşından küçük olabilir'], ['diger', 'Diğer']];
@@ -546,18 +618,60 @@ export function onDoubleTap(target, onDouble, onSingle) {
 
 // ---- Yorumlar ----
 export function openComments(post) {
+  let replyTo = null;
   const close = sheet('Yorumlar', '<div class="cl"><div class="spinner"></div></div>', {
-    footer: `<form class="comment-input">${avatar(state.me, 32, { dot: false })}<input name="t" placeholder="${esc(post.user.username)} için yorum ekle..." autocomplete="off" maxlength="500"><button class="link">Paylaş</button></form>`,
+    footer: `<div class="reply-to" hidden><span></span><button type="button" class="link rt-x">Vazgeç</button></div><form class="comment-input">${avatar(state.me, 32, { dot: false })}<input name="t" placeholder="${esc(post.user.username)} için yorum ekle..." autocomplete="off" maxlength="500"><button class="link">Paylaş</button></form>`,
     async onMount(sh) {
-      mentionAutocomplete(sh.querySelector('.comment-input input'));
+      const inp = sh.querySelector('.comment-input input');
+      mentionAutocomplete(inp);
       const list = sh.querySelector('.cl');
-      const row = (c) => `<div class="comment" data-cid="${esc(c.id)}">${avatar(c.user, 32, { dot: false })}<div class="t"><span class="b">${nm(c.user, 'username')}</span><span class="muted">${ago(c.at)}</span><div>${richText(c.text)}</div></div><button class="cmore" aria-label="Yorum seçenekleri">${icon('more')}</button></div>`;
+      const rt = sh.querySelector('.reply-to');
+      const owner = post.user?.id === state.me.id;
       let cs = [];
+      const open = new Set();
+      const row = (c, sub) => `<div class="comment ${sub ? 'sub' : ''}" data-cid="${esc(c.id)}">${avatar(c.user, sub ? 28 : 32, { dot: false })}<div class="t"><span class="b">${nm(c.user, 'username')}</span><span class="muted">${ago(c.at)}</span>
+        <div class="ctext">${c.replyToUser && sub ? `<a class="tag" href="#/u/${esc(c.replyToUser)}">@${esc(c.replyToUser)}</a> ` : ''}${richText(c.text)}</div>
+        <div class="cacts"><button class="crep">Yanıtla</button>${owner && c.user?.id !== state.me.id ? '<button class="cpriv">Özel yanıt gönder</button>' : ''}</div></div>
+        <button class="cmore" aria-label="Yorum seçenekleri">${icon('more')}</button></div>`;
+      const paint = () => {
+        if (!cs.length) { list.innerHTML = '<div class="empty"><h2>Henüz yorum yok</h2>Sohbeti başlat.</div>'; return; }
+        const tops = cs.filter((c) => !c.parentId || !cs.some((x) => x.id === c.parentId));
+        list.innerHTML = tops.map((c) => {
+          const kids = cs.filter((x) => x.parentId === c.id);
+          return `<div class="cthread">${row(c)}${kids.length ? (open.has(c.id) ? `<div class="creplies">${kids.map((k) => row(k, true)).join('')}</div><button class="cshow" data-p="${esc(c.id)}">— Yanıtları gizle</button>` : `<button class="cshow" data-p="${esc(c.id)}">— ${kids.length} yanıtı gör</button>`) : ''}</div>`;
+        }).join('');
+      };
+      const setReply = (c) => {
+        replyTo = c;
+        if (!c) { rt.hidden = true; inp.placeholder = `${post.user.username} için yorum ekle...`; return; }
+        rt.hidden = false; rt.querySelector('span').innerHTML = `<b>@${esc(c.user.username)}</b> kişisine yanıt veriyorsun`;
+        inp.value = ''; inp.placeholder = `@${c.user.username} kişisine yanıt yaz...`; inp.focus();
+      };
+      rt.querySelector('.rt-x').onclick = () => setReply(null);
+      const privateReply = (c) => {
+        sheet(`@${c.user.username} kişisine özel yanıt`, `<form class="form" style="padding:0 16px 16px"><div class="pq-quote" style="margin:0"><small>Gönderindeki yorumu</small>${esc(c.text)}</div>
+          <textarea class="field" name="t" rows="3" maxlength="1000" placeholder="Mesajın sadece ona gider..."></textarea><button class="btn primary block">${icon('send')} Gönder</button></form>`, {
+          onMount(s2, close2) {
+            const f = s2.querySelector('form'); setTimeout(() => f.t.focus(), 60);
+            f.onsubmit = async (e) => {
+              e.preventDefault(); const text = f.t.value.trim(); if (!text) return;
+              try { const r = await api(`/posts/${post.id}/comments/${c.id}/private`, { body: { text } }); close2(); toast('Özel yanıt mesaj olarak gönderildi. Sohbete gitmek için dokun.', { href: `#/chat/${r.chatId}` }); } catch (er) { toast(er.message); }
+            };
+          },
+        });
+      };
       list.addEventListener('click', (e) => {
+        const sh2 = e.target.closest('.cshow');
+        if (sh2) { const id = sh2.dataset.p; if (open.has(id)) open.delete(id); else open.add(id); paint(); return; }
+        const el_ = e.target.closest('[data-cid]'); if (!el_) return;
+        const c = cs.find((x) => x.id === el_.dataset.cid); if (!c) return;
+        if (e.target.closest('.crep')) return setReply(c);
+        if (e.target.closest('.cpriv')) return privateReply(c);
         const b = e.target.closest('.cmore'); if (!b) return;
-        const el_ = b.closest('[data-cid]'); const c = cs.find((x) => x.id === el_.dataset.cid); if (!c) return;
-        const mine = c.user?.id === state.me.id; const owner = post.user?.id === state.me.id;
+        const mine = c.user?.id === state.me.id;
         sheet(null, `<div class="menu">
+          <button data-a="reply">${icon('reply')}Yanıtla</button>
+          ${owner && !mine ? `<button data-a="priv">${icon('send')}Özel yanıt gönder</button>` : ''}
           ${mine || owner ? `<button data-a="del" class="danger">${icon('trash')}Yorumu sil</button>` : ''}
           ${mine ? '' : `<button data-a="rep" class="danger">${icon('flag')}Yorumu bildir</button>`}
           <button data-a="copy">${icon('copy')}Kopyala</button></div>`, {
@@ -565,32 +679,36 @@ export function openComments(post) {
             s2.querySelector('.menu').onclick = async (ev) => {
               const a = ev.target.closest('[data-a]')?.dataset.a; if (!a) return;
               close2();
+              if (a === 'reply') setReply(c);
+              if (a === 'priv') privateReply(c);
               if (a === 'copy') { await navigator.clipboard?.writeText(c.text); toast('Kopyalandı.'); }
               if (a === 'rep') reportMessage({ kind: 'comment', id: c.id, postId: post.id, user: c.user, text: c.text });
               if (a === 'del') {
-                try { await api(`/posts/${post.id}/comments/${c.id}`, { method: 'DELETE' }); el_.remove(); post.commentCount = Math.max(0, post.commentCount - 1); toast('Yorum silindi.'); } catch (er) { toast(er.message); }
+                try {
+                  await api(`/posts/${post.id}/comments/${c.id}`, { method: 'DELETE' });
+                  const gone = cs.filter((x) => x.id === c.id || x.parentId === c.id).length;
+                  cs = cs.filter((x) => x.id !== c.id && x.parentId !== c.id); paint();
+                  post.commentCount = Math.max(0, post.commentCount - gone); toast('Yorum silindi.');
+                } catch (er) { toast(er.message); }
               }
             };
           },
         });
       });
-      try {
-        cs = await api(`/posts/${post.id}/comments`);
-        list.innerHTML = cs.length ? cs.map(row).join('') : '<div class="empty"><h2>Henüz yorum yok</h2>Sohbeti başlat.</div>';
-      } catch (e) { list.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+      try { cs = await api(`/posts/${post.id}/comments`); paint(); } catch (e) { list.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
       const f = sh.querySelector('form');
       f.onsubmit = async (e) => {
         e.preventDefault();
         const text = f.t.value.trim(); if (!text) return;
         f.t.value = '';
+        const to = replyTo;
         try {
-          const c = await api(`/posts/${post.id}/comments`, { body: { text } });
-          cs.push(c);
-          if (list.querySelector('.empty')) list.innerHTML = '';
-          list.insertAdjacentHTML('beforeend', row(c));
-          post.commentCount++;
-          list.lastElementChild.scrollIntoView({ behavior: 'smooth' });
-        } catch (er) { toast(er.message); }
+          const c = await api(`/posts/${post.id}/comments`, { body: { text, replyTo: to?.id || null } });
+          cs.push(c); post.commentCount++;
+          if (c.parentId) open.add(c.parentId);
+          setReply(null); paint();
+          list.querySelector(`[data-cid="${CSS.escape(c.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (er) { toast(er.message); f.t.value = text; }
       };
     },
   });

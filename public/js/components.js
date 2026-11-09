@@ -76,26 +76,71 @@ export function applyEdit(v, edit) {
   return () => { au?.pause(); if (au) au.src = ''; };
 }
 
+// Yazı gönderisi arka planları
+export const TEXT_BGS = ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8'];
+const tsize = (t) => (t.length < 60 ? 'xl' : t.length < 140 ? 'l' : t.length < 320 ? 'm' : 's');
+export const textCard = (p) => `<div class="tpost tbg-${esc(p.bg || 'g1')}"><div class="tp-t ${tsize(p.caption || '')}">${richText(p.caption || '')}</div></div>`;
+// Vitrin videosu / hikaye üstündeki çıkartmalar (emoji, GIF, yazı)
+export function overlayHtml(list = []) {
+  if (!list?.length) return '';
+  return `<div class="ovl">${list.map((st) => {
+    const tr = `left:${st.x}%;top:${st.y}%;transform:translate(-50%,-50%) rotate(${st.r || 0}deg) scale(${st.s || 1})`;
+    if (st.type === 'emoji') return `<span class="ov em" style="${tr}">${esc(st.em)}</span>`;
+    if (st.type === 'gif') return `<img class="ov gif" style="${tr}" src="${esc(st.src)}" alt="" loading="lazy">`;
+    if (st.type === 'text') return `<span class="ov tx ${st.bgc ? 'bgc' : ''}" style="${tr};color:${esc(st.color || '#fff')}">${esc(st.text)}</span>`;
+    return '';
+  }).join('')}</div>`;
+}
+// Uzun yazılar: birkaç satır görünür, "devamı" ile açılır
+export function capHtml(p, withUser = true) {
+  if (!p.caption) return '';
+  return `<div class="cap-w"><div class="cap clamp">${withUser ? `<a class="cu" href="#/u/${esc(p.user.username)}">${esc(p.user.username)}</a> ` : ''}${richText(p.caption)}</div><button class="cap-more" hidden>devamı</button></div>`;
+}
+export function wireCaption(root) {
+  root.querySelectorAll('.cap-w').forEach((w) => {
+    const c = w.querySelector('.cap'); const b = w.querySelector('.cap-more');
+    if (!c || !b) return;
+    const check = () => { b.hidden = !(c.classList.contains('clamp') && c.scrollHeight > c.clientHeight + 2); };
+    requestAnimationFrame(check); setTimeout(check, 400);
+    b.onclick = (e) => { e.stopPropagation(); c.classList.remove('clamp'); b.hidden = true; };
+    c.addEventListener('click', (e) => { if (e.target.closest('a')) return; if (c.classList.contains('clamp') && !b.hidden) { c.classList.remove('clamp'); b.hidden = true; } });
+  });
+}
+
 export function postCard(p) {
+  const text = p.type === 'text';
+  const canRepost = p.user.id !== state.me.id && !p.user.private;
   return `<article class="post" data-post="${esc(p.id)}">
+    ${p.repostedBy ? `<a class="rp-by" href="#/u/${esc(p.repostedBy.username)}">${icon('repost')}<span><b>${esc(p.repostedBy.username)}</b> yeniden paylaştı</span></a>` : ''}
     <header class="post-h">
-      <a href="#/u/${esc(p.user.username)}" class="row grow" style="gap:10px">${avatar(p.user, 40, { ring: true })}
-        <span class="grow" style="line-height:1.25"><span class="u ellipsis" style="display:block">${nm(p.user)}</span><span class="muted" style="font-size:13px">${p.sponsored ? '<span class="spons">Sponsorlu</span>' : `@${esc(p.user.username)} · ${ago(p.createdAt)}`}</span></span></a>
+      <a href="#/u/${esc(p.user.username)}" class="row grow" style="gap:10px">${avatar(p.user, 32, { ring: true })}
+        <span class="grow" style="line-height:1.25"><span class="u ellipsis" style="display:block">${nm(p.user, 'username')}</span>${p.sponsored ? '<span class="muted" style="font-size:12.5px"><span class="spons">Sponsorlu</span></span>' : ''}</span></a>
       <button class="more" aria-label="Diğer seçenekler">${icon('more')}</button>
     </header>
-    <div class="post-media">${mediaHtml(p)}</div>
+    <div class="post-media ${text ? 'is-text' : ''}">${text ? textCard(p) : mediaHtml(p)}${p.type === 'reel' ? overlayHtml(p.edit?.stickers) : ''}</div>
     <div class="post-actions">
       <button class="like ${p.liked ? 'liked' : ''}" aria-label="Beğen">${icon('heart')}<span class="cnt">${p.likeCount ? num(p.likeCount) : ''}</span></button>
       <button class="cm" aria-label="Yorum yap">${icon('comment')}<span>${p.commentCount ? num(p.commentCount) : ''}</span></button>
+      ${canRepost ? `<button class="rp ${p.reposted ? 'on' : ''}" aria-label="Yeniden paylaş">${icon('repost')}<span class="cnt">${p.repostCount ? num(p.repostCount) : ''}</span></button>` : ''}
       <button class="sh" aria-label="Paylaş">${icon('send')}</button>
       <span class="sp"></span>
       <button class="sv" aria-label="Kaydet">${icon('bookmark', '', saved.has(p.id) ? 'fill="currentColor"' : '')}</button>
     </div>
     <div class="post-body">
-      ${p.caption ? `<div>${richText(p.caption)}</div>` : ''}
-      ${p.commentCount ? `<button class="muted cm2" style="text-align:left">${p.commentCount} yorumu gör</button>` : ''}
+      ${text ? '' : capHtml(p)}
+      ${p.commentCount ? `<button class="muted cm2" style="text-align:left">${p.commentCount} yorumun tümünü gör</button>` : ''}
+      <span class="when">${ago(p.repostAt || p.createdAt)}</span>
     </div>
   </article>`;
+}
+// Yeniden paylaş / geri al
+export async function toggleRepost(p, btn) {
+  try {
+    const r = await api(`/posts/${p.id}/repost`, { body: { on: !p.reposted } });
+    p.reposted = r.reposted; p.repostCount = r.repostCount;
+    if (btn) { btn.classList.toggle('on', r.reposted); const c = btn.querySelector('.cnt'); if (c) c.textContent = r.repostCount ? num(r.repostCount) : ''; }
+    toast(r.reposted ? 'Yeniden paylaşıldı; takipçilerinin akışında görünecek.' : 'Yeniden paylaşım geri alındı.');
+  } catch (e) { toast(e.message); }
 }
 
 export const promoHit = (p) => { if (p?.sponsored) api(`/promos/${p.sponsored.id}/hit`, { body: {} }).catch(() => {}); };
@@ -105,13 +150,15 @@ export function wirePost(root, p, onRemove) {
   if (p.sponsored) root.querySelector('.post-h a')?.addEventListener('click', () => promoHit(p));
   const mediaBox = root.querySelector('.post-media');
   wireCarousel(mediaBox);
-  fitMedia(mediaBox);
+  if (p.type !== 'text') fitMedia(mediaBox);
   if (p.edit) applyEdit(mediaBox.querySelector('video'), p.edit);
   onDoubleTap(mediaBox, () => { heartBurst(mediaBox); toggleLike(p, likeBtn, true); }, () => {
     const v = mediaBox.querySelector('video');
     if (v) { v.muted = !v.muted; }
   });
   root.querySelectorAll('.cm, .cm2').forEach((b) => { b.onclick = () => { promoHit(p); openComments(p); }; });
+  const rp = root.querySelector('.rp'); if (rp) rp.onclick = () => toggleRepost(p, rp);
+  wireCaption(root);
   root.querySelector('.sh').onclick = () => { promoHit(p); sharePost(p); };
   const sv = root.querySelector('.sv');
   sv.onclick = () => {
@@ -170,6 +217,7 @@ export function autoplay(root) {
 }
 
 export function gridTile(p) {
+  if (p.type === 'text') return `<a href="#/p/${esc(p.id)}" class="gt-text tbg-${esc(p.bg || 'g1')}"><span>${esc((p.caption || '').slice(0, 90))}</span></a>`;
   const vid = p.type === 'reel' || isVideo(p.media);
   const href = p.type === 'reel' ? `#/vitrin/${p.id}` : `#/p/${p.id}`;
   return `<a href="${href}">${vid

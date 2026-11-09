@@ -1,13 +1,13 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, ago, toast, sheet, avatar, emit, nm, filterCss, scaleStickerLayer,
+  state, api, esc, ago, toast, sheet, avatar, emit, nm, filterCss, scaleStickerLayer, stkPos,
 } from '../core.js';
 import { musicChip } from '../music.js';
 
 function pollHtml(st, mine) {
   const showRes = mine || st.mine != null;
   const total = st.total || 0;
-  return `<div class="stk poll act" data-sid="${esc(st.id)}" style="top:${st.y}%">${st.q ? `<b>${esc(st.q)}</b>` : ''}
+  return `<div class="stk poll act" data-sid="${esc(st.id)}" style="${stkPos(st)}">${st.q ? `<b>${esc(st.q)}</b>` : ''}
     ${st.options.map((o, i) => {
     const pct = total ? Math.round(((st.counts?.[i] || 0) / total) * 100) : 0;
     return `<button data-o="${i}" class="${st.mine === i ? 'me' : ''} ${showRes ? 'res' : ''}" ${showRes ? 'disabled' : ''}>${showRes ? `<i style="width:${pct}%"></i>` : ''}<span>${esc(o)}</span>${showRes ? `<em>%${pct}</em>` : ''}</button>`;
@@ -15,11 +15,13 @@ function pollHtml(st, mine) {
 }
 function stickersHtml(it, mine) {
   return (it.stickers || []).map((st) => {
-    const pos = `top:${st.y}%`;
+    const pos = stkPos(st);
     if (st.type === 'poll') return pollHtml(st, mine);
     if (st.type === 'question') return `<button class="stk q act" data-sid="${esc(st.id)}" style="${pos}"><b>${esc(st.q)}</b><span>${mine ? 'Yanıtları görmek için görüntüleyenlere bak' : 'Yanıtla…'}</span></button>`;
     if (st.type === 'music') return st.spotifyUrl ? `<a class="stk mu act" href="${esc(st.spotifyUrl)}" target="_blank" rel="noopener" style="${pos}">${musicChip(st)}<em>Spotify</em></a>` : `<div class="stk mu" style="${pos}">${musicChip(st)}</div>`;
-    if (st.type === 'text') return `<div class="stk txt" style="${pos};color:${esc(st.color)}">${esc(st.text)}</div>`;
+    if (st.type === 'text') return `<div class="stk txt sz-${esc(st.size || 'm')} ${st.bgc ? 'bgc' : ''}" style="${pos};color:${esc(st.color)}">${esc(st.text)}</div>`;
+    if (st.type === 'emoji') return `<div class="stk em" style="${pos}">${esc(st.em)}</div>`;
+    if (st.type === 'gif') return `<img class="stk gif" style="${pos}" src="${esc(st.src)}" alt="">`;
     if (st.type === 'mention') return `<a class="stk men act" href="#/u/${esc(st.username)}" style="${pos}">@${esc(st.username)}</a>`;
     return '';
   }).join('');
@@ -45,10 +47,10 @@ export default async function stories(view, userId) {
     const g = groups[gi]; const it = g.items[ii];
     const mine = g.user.id === state.me.id;
     view.innerHTML = `<div class="story-v">
-      <div class="media">${it.mediaType === 'video' ? `<video src="${esc(it.media)}" playsinline autoplay style="filter:${filterCss(it.filter)}"></video>` : `<img class="blurbg" src="${esc(it.media)}" alt=""><img class="fit" src="${esc(it.media)}" alt="" style="filter:${filterCss(it.filter)}">`}</div>
+      <div class="media">${it.mediaType === 'text' || !it.media ? `<div class="tstory tbg-${esc(it.bg || 'g2')}"></div>` : it.mediaType === 'video' ? `<video src="${esc(it.media)}" playsinline autoplay style="filter:${filterCss(it.filter)}"></video>` : `<img class="blurbg" src="${esc(it.media)}" alt=""><img class="fit" src="${esc(it.media)}" alt="" style="filter:${filterCss(it.filter)}">`}</div>
       <div class="bars">${g.items.map((_, i) => `<i><b style="width:${i < ii ? 100 : 0}%"></b></i>`).join('')}</div>
       <div class="head">
-        <a href="#/u/${esc(g.user.username)}" class="row" style="gap:10px;flex:1;min-width:0"><img class="av av-32" src="${esc(g.user.avatar)}" alt=""><b class="ellipsis">${nm(g.user, 'username')}</b><span style="opacity:.8">${ago(it.at)}</span></a>
+        <a href="#/u/${esc(g.user.username)}" class="row" style="gap:10px;flex:1;min-width:0"><img class="av av-32" src="${esc(g.user.avatar)}" alt=""><b class="ellipsis">${nm(g.user, 'username')}</b><span style="opacity:.8">${ago(it.at)}</span>${it.reshareOf ? `<span class="rs-of">${icon('repost')} @${esc(it.reshareOf.username)}</span>` : ''}</a>
         ${mine ? `<button class="del" aria-label="Sil">${icon('trash')}</button>` : `<button class="more" aria-label="Diğer">${icon('more')}</button>`}
         <button class="x" aria-label="Kapat">${icon('close')}</button>
       </div>
@@ -58,7 +60,7 @@ export default async function stories(view, userId) {
     ? `<button class="vw">${icon('eye')} ${it.viewerCount || 0} görüntüleme</button>`
     : g.user.role === 'official' ? '<a class="rp-fal" href="#/destek">🛡️ SwipeUp resmi hesabı · yanıt kapalı</a>'
     : g.user.role === 'falci' || state.me.role === 'falci' ? `<a class="rp-fal" href="#/fal">🔮 ${state.me.role === 'falci' ? 'Hikayelere yanıt kapalı' : 'Falcı Teyze’ye fal baktır'}</a>`
-    : `<div class="sr-bar" hidden>${['😂', '😮', '😍', '😢', '👏', '🔥', '🎉', '💯'].map((e) => `<button type="button" data-e="${e}">${e}</button>`).join('')}</div><form class="rp" style="display:flex;gap:10px;flex:1"><input placeholder="${esc(g.user.name.split(' ')[0])} kişisine yanıt ver..." maxlength="500"><button type="button" class="sr-heart ${it.myReaction === '❤️' ? 'on' : ''}" aria-label="Beğen">${icon('heart', '', it.myReaction === '❤️' ? 'fill="currentColor"' : '')}</button><button aria-label="Gönder">${icon('send')}</button></form>`}</div>
+    : `${(it.stickers || []).some((x) => x.type === 'mention' && x.username === state.me.username) ? `<button class="rs-add">${icon('plus')} Hikayene ekle</button>` : ''}<div class="sr-bar" hidden>${['😂', '😮', '😍', '😢', '👏', '🔥', '🎉', '💯'].map((e) => `<button type="button" data-e="${e}">${e}</button>`).join('')}</div><form class="rp" style="display:flex;gap:10px;flex:1"><input placeholder="${esc(g.user.name.split(' ')[0])} kişisine yanıt ver..." maxlength="500"><button type="button" class="sr-heart ${it.myReaction === '❤️' ? 'on' : ''}" aria-label="Beğen">${icon('heart', '', it.myReaction === '❤️' ? 'fill="currentColor"' : '')}</button><button aria-label="Gönder">${icon('send')}</button></form>`}</div>
     </div>`;
     if (!mine && !it.seen) { it.seen = true; api(`/stories/${it.id}/view`, { body: {} }).catch(() => {}); }
     const v = view.querySelector('video');
@@ -145,6 +147,15 @@ export default async function stories(view, userId) {
           document.querySelector('.sheet-bg')?.addEventListener('click', () => pause(false));
         },
       });
+    });
+    view.querySelector('.rs-add')?.addEventListener('click', async (e) => {
+      e.stopPropagation(); pause(true);
+      if (!confirm(`@${g.user.username} kişisinin seni etiketlediği bu hikaye senin hikayende de paylaşılsın mı?`)) return pause(false);
+      try {
+        await api('/stories', { body: { media: it.media, mediaType: it.mediaType, bg: it.bg, filter: it.filter, reshareOf: g.user.id, stickers: (it.stickers || []).filter((x) => ['text', 'emoji', 'gif', 'mention'].includes(x.type)) } });
+        toast('Hikayende paylaşıldı.'); emit('stories:update', {});
+      } catch (er) { toast(er.message); }
+      pause(false);
     });
     view.querySelector('.del')?.addEventListener('click', async () => {
       pause(true);

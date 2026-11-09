@@ -3,6 +3,8 @@ const { nanoid } = require('nanoid');
 
 const CATS = { hesap: 'Hesap ve giriş', odeme: 'Ödeme ve jeton', sikayet: 'Şikayet ve güvenlik', hata: 'Hata bildirimi', oneri: 'Öneri', diger: 'Diğer' };
 const STATUS = { open: 'Cevap bekliyor', answered: 'Cevaplandı', closed: 'Kapandı' };
+// Destek cevapladıktan sonra kullanıcı 48 saat yazmazsa talep kendiliğinden kapanır
+const AUTO_CLOSE = 48 * 3600000;
 
 module.exports = function support(app, ctx) {
   const { store, auth, brief, notify, emitTo, limited, isMedia, pushAdmins } = ctx;
@@ -10,7 +12,7 @@ module.exports = function support(app, ctx) {
   const clean = (s, n) => String(s || '').trim().slice(0, n);
   const summary = (t) => ({
     id: t.id, no: t.no, category: t.category, categoryLabel: CATS[t.category] || 'Diğer', subject: t.subject, status: t.status, statusLabel: STATUS[t.status],
-    at: t.at, lastAt: t.lastAt, last: (t.msgs[t.msgs.length - 1] || {}).text?.slice(0, 120) || '', lastFrom: (t.msgs[t.msgs.length - 1] || {}).from, userUnread: t.userUnread || 0, adminUnread: !!t.adminUnread, count: t.msgs.length,
+    at: t.at, lastAt: t.lastAt, closesAt: t.status === 'answered' ? t.lastAt + AUTO_CLOSE : null, autoClosed: !!t.autoClosed, last: (t.msgs[t.msgs.length - 1] || {}).text?.slice(0, 120) || '', lastFrom: (t.msgs[t.msgs.length - 1] || {}).from, userUnread: t.userUnread || 0, adminUnread: !!t.adminUnread, count: t.msgs.length,
   });
   const nextNo = () => { const m = store.get('settings', 'support_seq') || { id: 'support_seq', n: 1000 }; m.n += 1; store.put('settings', m); return m.n; };
   const alertAdmins = (t, text) => {
@@ -52,6 +54,7 @@ module.exports = function support(app, ctx) {
     const t = mine(req, res); if (!t) return;
     const text = clean(req.body?.text, 2000); const image = isMedia(req.body?.image) ? req.body.image : null;
     if (!text && !image) return res.status(400).json({ error: 'Mesaj boş.' });
+    if (t.status === 'closed') return res.status(410).json({ error: 'Bu talep kapandı. Yardım için yeni bir talep açabilirsin.', closed: true });
     if (limited('supr:' + req.user.id, 30, 3600000)) return res.status(429).json({ error: 'Biraz yavaş 🙂' });
     t.msgs.push({ id: nanoid(8), from: 'user', text, image, at: now() });
     store.update('support', t.id, { msgs: t.msgs, status: 'open', lastAt: now(), adminUnread: true });
@@ -63,6 +66,13 @@ module.exports = function support(app, ctx) {
     store.update('support', t.id, { status: 'closed', closedAt: now() });
     res.json({ ok: true });
   });
+  setInterval(() => {
+    store.filter('support', (t) => t.status === 'answered' && t.lastAt < now() - AUTO_CLOSE).forEach((t) => {
+      t.msgs.push({ id: nanoid(8), from: 'system', text: '48 saat içinde yanıt gelmediği için bu talep kendiliğinden kapatıldı. Sorunun devam ediyorsa yeni bir talep açabilirsin.', at: now() });
+      store.update('support', t.id, { msgs: t.msgs, status: 'closed', closedAt: now(), autoClosed: true });
+      emitTo(t.userId, 'support', { id: t.id });
+    });
+  }, 10 * 60000).unref();
   app.get('/api/support-unread', auth, (req, res) => res.json({ n: store.filter('support', (t) => t.userId === req.user.id && t.userUnread).length }));
 
   // ---- Yönetim ----

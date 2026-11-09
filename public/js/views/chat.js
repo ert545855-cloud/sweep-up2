@@ -171,7 +171,7 @@ export default async function chat(view, chatId) {
         : `<a href="${esc(m.media)}" target="_blank" rel="noopener"><img src="${esc(m.media)}" alt="Fotoğraf" loading="lazy"></a>`}${m.text ? '' : meta}</div>
         ${m.text ? `<div class="msg">${reply}${esc(m.text)}${meta}</div>` : ''}`;
     }
-    const quote = m.quote?.kind === 'prompt' ? `<span class="pq-quote"><small>${esc(m.quote.q)}</small>${esc(m.quote.a)}</span>` : '';
+    const quote = m.quote?.kind === 'prompt' ? `<span class="pq-quote"><small>${esc(m.quote.q)}</small>${esc(m.quote.a)}</span>` : m.quote?.kind === 'comment' ? `<a class="pq-quote" href="#/p/${esc(m.quote.postId)}"><small>${esc(m.quote.q)}</small>${esc(m.quote.a)}</a>` : '';
     if (m.superMsg) return `<div class="msg super-msg"><span class="sm-tag">💌 Süper mesaj</span>${esc(m.text)}${meta}</div>`;
     return `<div class="msg">${story}${quote}${reply}${esc(m.text)}${meta}</div>`;
   };

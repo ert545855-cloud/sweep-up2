@@ -98,6 +98,7 @@ function pub(u, viewerId) {
     plus: isPlus(u), verified: !!u.verified,
     age: self ? u.age ?? null : shownAge(u), ageHidden: !!priv(u).hideAge, tags: tagsOf(u),
     prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
+    badges: (u.badges || []).filter((b) => self || !b.hidden).map(({ no, ...b }) => b),
     ...(self ? { email: email || '', hasLocation: lat != null, birthdate: birthdate || null, coins: coins || 0, earnings: earnings || 0, needsBirthdate: !birthdate, refCode: refCode || null, falSub: falSub || null, frames: frames || [] } : {}),
     ...(viewerId && !self ? { isFollowing: !!fdoc && fdoc.status !== 'pending', requested: fdoc?.status === 'pending', distanceKm: distance(store.get('users', viewerId), u) } : {}),
   };
@@ -105,7 +106,7 @@ function pub(u, viewerId) {
 const brief = (u) => u && ({
   id: u.id, username: u.username, name: u.name, avatar: u.avatar,
   online: priv(u).hideLastSeen ? false : isOnline(u.id), live: lives.has(u.id), lastSeen: priv(u).hideLastSeen ? null : u.lastSeen,
-  createdAt: u.createdAt, role: u.role || null, verified: !!u.verified, plus: isPlus(u), frame: u.frame || null,
+  createdAt: u.createdAt, role: u.role || null, verified: !!u.verified, plus: isPlus(u), frame: u.frame || null, private: !!priv(u).private,
 });
 
 function distance(a, b) {
@@ -119,13 +120,16 @@ function distance(a, b) {
 function postOut(p, viewerId) {
   return {
     ...p,
-    items: p.items || [{ media: p.media, type: p.type === 'reel' ? 'video' : 'image', poster: p.poster || null }],
+    items: p.type === 'text' ? [] : (p.items || [{ media: p.media, type: p.type === 'reel' ? 'video' : 'image', poster: p.poster || null }]),
     user: brief(store.get('users', p.userId)),
+    repostCount: (p.reposts || []).length,
+    reposted: (p.reposts || []).includes(viewerId),
     likeCount: p.likes.length,
     liked: p.likes.includes(viewerId),
     commentCount: p.comments.filter((c) => !isBlocked(viewerId, c.userId)).length,
     comments: undefined,
     likes: undefined,
+    reposts: undefined,
   };
 }
 
@@ -519,7 +523,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (b.privacy && typeof b.privacy === 'object') {
     const cur = priv(req.user);
     const np = { ...cur };
-    ['private', 'hideLastSeen', 'hideRead', 'hideFromDeck', 'hideVisits', 'hideAge'].forEach((k) => { if (b.privacy[k] !== undefined) np[k] = !!b.privacy[k]; });
+    ['private', 'hideLastSeen', 'hideRead', 'hideFromDeck', 'hideVisits', 'hideAge', 'hideCheckin'].forEach((k) => { if (b.privacy[k] !== undefined) np[k] = !!b.privacy[k]; });
     patch.privacy = np;
     // Gizli hesap kapatılınca bekleyen istekleri kabul et
     if (cur.private && !np.private) store.filter('follows', (f) => f.to === req.user.id && f.status === 'pending').forEach((f) => store.update('follows', f.id, { status: null }));
@@ -529,6 +533,11 @@ app.patch('/api/me', auth, (req, res) => {
   if (Array.isArray(b.interests)) patch.interests = b.interests.map((s) => String(s).slice(0, 24)).slice(0, 8);
   if (Array.isArray(b.photos)) patch.photos = b.photos.map(String).slice(0, 6);
   if (b.skin !== undefined) patch.skin = ['gunbatimi', 'pembe', 'gece', 'altin'].includes(b.skin) ? b.skin : 'gunbatimi';
+  if (b.logo !== undefined) {
+    const LOGOS = ['klasik', 'altin', 'neon', 'gece', 'pastel', 'gokkusagi'];
+    if (b.logo && b.logo !== 'klasik' && !isPlus(req.user)) return res.status(402).json({ error: 'Logo seçmek SwipeUp+ ayrıcalığıdır.', plus: true });
+    patch.logo = LOGOS.includes(b.logo) ? b.logo : 'klasik';
+  }
   if (b.zodiac !== undefined) patch.zodiac = ['koc', 'boga', 'ikizler', 'yengec', 'aslan', 'basak', 'terazi', 'akrep', 'yay', 'oglak', 'kova', 'balik'].includes(b.zodiac) ? b.zodiac : null;
   if (b.prefs) {
     const ageMin = Math.max(18, Math.min(99, parseInt(b.prefs.ageMin, 10) || 18));
@@ -648,6 +657,10 @@ function rankPeople(list) {
 }
 app.get('/api/people', auth, (req, res) => {
   const me = req.user.id;
+  if (req.query.new) {
+    const lim = now() - 7 * DAY;
+    return res.json(store.filter('users', (u) => u.id !== me && !SPECIAL.has(u.role) && isActive(u) && !isBlocked(me, u.id) && (u.createdAt || 0) > lim).sort((a, b) => b.createdAt - a.createdAt).slice(0, 30).map(brief));
+  }
   const list = rankPeople(store.filter('users', (u) => u.id !== me && !SPECIAL.has(u.role) && isActive(u) && !isBlocked(me, u.id)));
   res.json(list.slice(0, 60).map(brief));
 });
@@ -655,13 +668,24 @@ app.get('/api/people', auth, (req, res) => {
 // ---------- Gönderiler ----------
 app.get('/api/feed', auth, (req, res) => {
   const me = req.user.id;
-  const following = new Set(store.filter('follows', (f) => f.from === me).map((f) => f.to));
+  const following = new Set(store.filter('follows', (f) => f.from === me && f.status !== 'pending').map((f) => f.to));
   following.add(me);
-  const off = official(); if (off) following.add(off.id); // yönetim hesabının paylaşımları herkeste öne çıkar
-  // Herkesin gönderileri; takip ettiklerin biraz öne çıkar
-  const posts = store.filter('posts', (p) => p.type === 'image' && !isBlocked(me, p.userId) && canSee(me, store.get('users', p.userId)));
-  posts.sort((a, b) => (b.createdAt + (following.has(b.userId) ? 6 * 3600000 : 0)) - (a.createdAt + (following.has(a.userId) ? 6 * 3600000 : 0)));
-  res.json(withPromos(posts.slice(0, 80).map((p) => postOut(p, me)), req.user, 'image', [1, 7, 13]));
+  // Falcı Teyze ve SwipeUp resmi hesabının paylaşımları herkesin akışına düşer
+  store.filter('users', (u) => SPECIAL.has(u.role)).forEach((u) => following.add(u.id));
+  const ok = (p) => p && !isBlocked(me, p.userId) && canSee(me, store.get('users', p.userId));
+  const posts = store.filter('posts', (p) => ['image', 'text'].includes(p.type) && following.has(p.userId) && ok(p))
+    .map((p) => ({ p, t: p.createdAt }));
+  const have = new Set(posts.map((x) => x.p.id));
+  // Takip ettiklerinin yeniden paylaştıkları (son 14 gün)
+  const lim = now() - 14 * DAY;
+  store.filter('reposts', (r) => r.at > lim && r.userId !== me && following.has(r.userId)).sort((a, b) => b.at - a.at).forEach((r) => {
+    if (have.has(r.postId)) return;
+    const p = store.get('posts', r.postId); if (!ok(p) || p.userId === me) return;
+    have.add(p.id); posts.push({ p, t: r.at, by: r.userId });
+  });
+  posts.sort((a, b) => b.t - a.t);
+  const out = posts.slice(0, 80).map(({ p, t, by }) => ({ ...postOut(p, me), ...(by ? { repostedBy: brief(store.get('users', by)), repostAt: t } : {}) }));
+  res.json(withPromos(out, req.user, 'image', [1, 7, 13]));
 });
 // Öne çıkan (sponsorlu) içerikleri listeye yerleştir
 function withPromos(list, viewer, type, slots) {
@@ -674,7 +698,8 @@ function withPromos(list, viewer, type, slots) {
 }
 
 app.get('/api/reels', auth, (req, res) => {
-  const posts = store.filter('posts', (p) => p.type === 'reel' && !isBlocked(req.user.id, p.userId) && canSee(req.user.id, store.get('users', p.userId)));
+  const fol = req.query.tab === 'following' ? new Set(store.filter('follows', (f) => f.from === req.user.id && f.status !== 'pending').map((f) => f.to)) : null;
+  const posts = store.filter('posts', (p) => p.type === 'reel' && (!fol || fol.has(p.userId)) && !isBlocked(req.user.id, p.userId) && canSee(req.user.id, store.get('users', p.userId)));
   posts.sort((a, b) => b.createdAt - a.createdAt);
   res.json(withPromos(posts.slice(0, 60).map((p) => postOut(p, req.user.id)), req.user, 'reel', [2, 8, 14]));
 });
@@ -692,6 +717,16 @@ app.post('/api/posts', auth, (req, res) => {
   const items = raw.filter((i) => i && isMedia(i.media)).slice(0, type === 'reel' ? 1 : 10).map((i) => ({
     media: String(i.media), type: i.type === 'video' ? 'video' : 'image', poster: isMedia(i.poster) ? i.poster : null, filter: FILTERS.includes(i.filter) ? i.filter : null,
   }));
+  const TEXT_BG = ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8'];
+  if (type === 'text') {
+    const text = moderation.mask(String(b.caption || '').trim().slice(0, 2200));
+    if (text.length < 1) return res.status(400).json({ error: 'Bir şey yaz.' });
+    const p = store.put('posts', { id: nanoid(10), userId: req.user.id, type: 'text', media: null, poster: null, items: [], bg: TEXT_BG.includes(b.bg) ? b.bg : 'g1', caption: text, tags: extractTags(text), likes: [], comments: [], reposts: [], createdAt: now() });
+    featureCtx.quest?.(req.user.id, 'paylas'); featureCtx.track?.('post'); featureCtx.contestEvent?.('post', req.user.id);
+    notifyMentions(text, req.user, `/#/p/${p.id}`, 'bir gönderide');
+    store.filter('follows', (f) => f.to === req.user.id && f.status !== 'pending').forEach((f) => notify(f.from, { type: 'post', fromId: req.user.id, ref: p.id, text: `${req.user.username} yeni bir gönderi paylaştı.`, url: `/#/p/${p.id}` }));
+    return res.json(postOut(p, req.user.id));
+  }
   if (!['image', 'reel'].includes(type) || !items.length) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç.' });
   let edit = null;
   if (type === 'reel' && b.edit && typeof b.edit === 'object') {
@@ -706,15 +741,16 @@ app.post('/api/posts', auth, (req, res) => {
       muteOriginal: !!e.muteOriginal && (isMedia(e.audio) || music.isPreview(e.audio)),
     };
     if (edit.end != null && edit.end <= edit.start + 0.5) edit.end = null;
+    edit.stickers = (Array.isArray(e.stickers) ? e.stickers : []).slice(0, 6).map(cleanOverlay).filter(Boolean);
   }
   const caption = moderation.mask(String(b.caption || '').slice(0, 2200));
   const p = store.put('posts', {
     id: nanoid(10), userId: req.user.id, type, media: items[0].media, poster: items[0].poster || null, items, edit,
-    caption, tags: extractTags(caption), likes: [], comments: [], createdAt: now(),
+    caption, tags: extractTags(caption), likes: [], comments: [], reposts: [], createdAt: now(),
   });
-  featureCtx.quest?.(req.user.id, 'paylas'); featureCtx.track?.(type === 'reel' ? 'reel' : 'post');
+  featureCtx.quest?.(req.user.id, 'paylas'); featureCtx.track?.(type === 'reel' ? 'reel' : 'post'); featureCtx.contestEvent?.(type === 'reel' ? 'reel' : 'post', req.user.id);
   notifyMentions(caption, req.user, type === 'reel' ? `/#/vitrin/${p.id}` : `/#/p/${p.id}`, type === 'reel' ? 'bir vitrin videosunda' : 'bir gönderide');
-  store.filter('follows', (f) => f.to === req.user.id).forEach((f) => notify(f.from, {
+  store.filter('follows', (f) => f.to === req.user.id && f.status !== 'pending').forEach((f) => notify(f.from, {
     type: 'post', fromId: req.user.id, ref: p.id,
     text: type === 'reel' ? `${req.user.username} vitrinine yeni bir video ekledi.` : `${req.user.username} yeni bir gönderi paylaştı.`,
     url: type === 'reel' ? `/#/vitrin/${p.id}` : `/#/p/${p.id}`,
@@ -732,7 +768,31 @@ app.delete('/api/posts/:id', auth, (req, res) => {
   const p = store.get('posts', req.params.id);
   if (!p || p.userId !== req.user.id) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
   store.del('posts', p.id);
+  store.filter('reposts', (r) => r.postId === p.id).forEach((r) => store.del('reposts', r.id));
   res.json({ ok: true });
+});
+
+// Yeniden paylaş (Instagram'daki gibi): takipçilerinin akışına "X yeniden paylaştı" olarak düşer, profilinde ayrı sekmede görünür
+app.post('/api/posts/:id/repost', auth, (req, res) => {
+  const p = store.get('posts', req.params.id);
+  const o = p && store.get('users', p.userId);
+  if (!p || !o || isBlocked(req.user.id, o.id) || !canSee(req.user.id, o)) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
+  if (o.id === req.user.id) return res.status(400).json({ error: 'Kendi gönderini yeniden paylaşamazsın.' });
+  if (priv(o).private) return res.status(403).json({ error: 'Gizli hesapların gönderileri yeniden paylaşılamaz.' });
+  const id = `${req.user.id}_${p.id}`;
+  const list = p.reposts || [];
+  const want = req.body?.on ?? !list.includes(req.user.id);
+  if (want && !list.includes(req.user.id)) {
+    p.reposts = [...list, req.user.id];
+    store.put('reposts', { id, userId: req.user.id, postId: p.id, ownerId: o.id, at: now() });
+    notify(o.id, { type: 'repost', fromId: req.user.id, ref: p.id, text: `${req.user.username} ${p.type === 'reel' ? 'vitrin videonu' : 'gönderini'} yeniden paylaştı.`, url: p.type === 'reel' ? `/#/vitrin/${p.id}` : `/#/p/${p.id}` });
+    featureCtx.contestEvent?.('repost', o.id);
+  } else if (!want) {
+    p.reposts = list.filter((x) => x !== req.user.id);
+    store.del('reposts', id);
+  }
+  store.update('posts', p.id, { reposts: p.reposts });
+  res.json({ reposted: (p.reposts || []).includes(req.user.id), repostCount: (p.reposts || []).length });
 });
 
 // Çoklu gönderiden tek bir fotoğrafı kaldır (gönderi sahibi)
@@ -757,9 +817,10 @@ app.post('/api/posts/:id/like', auth, (req, res) => {
   const want = req.body?.like ?? !p.likes.includes(me);
   if (want && !p.likes.includes(me)) {
     p.likes.push(me);
+    if (p.userId !== me) featureCtx.likeLog?.(me, p);
     notify(p.userId, { type: 'like', fromId: me, ref: p.id, text: `${req.user.username} ${p.type === 'reel' ? 'vitrin videonu' : 'gönderini'} beğendi.`, url: `/#/p/${p.id}` });
   }
-  if (!want) p.likes = p.likes.filter((x) => x !== me);
+  if (!want) { p.likes = p.likes.filter((x) => x !== me); featureCtx.likeUnlog?.(me, p); }
   store.update('posts', p.id, {});
   io.emit('post:likes', { id: p.id, likeCount: p.likes.length });
   res.json({ liked: want, likeCount: p.likes.length });
@@ -768,7 +829,7 @@ app.post('/api/posts/:id/like', auth, (req, res) => {
 app.get('/api/posts/:id/comments', auth, (req, res) => {
   const p = store.get('posts', req.params.id);
   if (!p) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
-  res.json(p.comments.filter((c) => !isBlocked(req.user.id, c.userId)).map((c) => ({ ...c, user: brief(store.get('users', c.userId)) })));
+  res.json(p.comments.filter((c) => !isBlocked(req.user.id, c.userId)).map((c) => ({ ...c, user: brief(store.get('users', c.userId)), replyToUser: c.replyToUserId ? store.get('users', c.replyToUserId)?.username || null : null })));
 });
 
 app.post('/api/posts/:id/comments', auth, (req, res) => {
@@ -778,22 +839,56 @@ app.post('/api/posts/:id/comments', auth, (req, res) => {
   if (!canSee(req.user.id, store.get('users', p.userId))) return res.status(403).json({ error: 'Bu gönderiye yorum yapamazsın.' });
   if (isBlocked(req.user.id, p.userId)) return res.status(403).json({ error: 'Bu gönderiye yorum yapamazsın.' });
   if (limited('cm:' + req.user.id, 30, 600000)) return res.status(429).json({ error: 'Çok hızlı yorum yapıyorsun, biraz bekle.' });
-  const c = { id: nanoid(10), userId: req.user.id, text, at: now() };
+  // Bir yoruma cevap: cevaplar ana yorumun altında toplanır
+  const target = req.body?.replyTo ? p.comments.find((x) => x.id === req.body.replyTo) : null;
+  const parent = target ? (target.parentId ? p.comments.find((x) => x.id === target.parentId) || target : target) : null;
+  const c = { id: nanoid(10), userId: req.user.id, text, at: now(), parentId: parent?.id || null, replyToUserId: target ? target.userId : null };
   p.comments.push(c);
   store.update('posts', p.id, {});
-  notify(p.userId, { type: 'comment', fromId: req.user.id, ref: p.id, text: `${req.user.username} yorum yaptı: ${text.slice(0, 80)}`, url: `/#/p/${p.id}` });
+  if (target && target.userId !== req.user.id) notify(target.userId, { type: 'comment', fromId: req.user.id, ref: p.id, text: `${req.user.username} yorumuna cevap verdi: ${text.slice(0, 80)}`, url: `/#/p/${p.id}` });
+  if (p.userId !== req.user.id && p.userId !== target?.userId) notify(p.userId, { type: 'comment', fromId: req.user.id, ref: p.id, text: `${req.user.username} yorum yaptı: ${text.slice(0, 80)}`, url: `/#/p/${p.id}` });
+  if (p.userId !== req.user.id) featureCtx.contestEvent?.('comment', p.userId);
   notifyMentions(text, req.user, `/#/p/${p.id}`, 'bir yorumda');
   featureCtx.quest?.(req.user.id, 'yorum'); featureCtx.track?.('comment');
-  res.json({ ...c, user: brief(req.user) });
+  res.json({ ...c, user: brief(req.user), replyToUser: target ? store.get('users', target.userId)?.username || null : null });
+});
+// Yoruma özel yanıt: yorumu yazan kişiye, yorumu alıntılayarak mesaj gönder (gönderi sahibi)
+app.post('/api/posts/:id/comments/:cid/private', auth, (req, res) => {
+  const p = store.get('posts', req.params.id);
+  const c = p && p.comments.find((x) => x.id === req.params.cid);
+  const text = moderation.mask(String(req.body?.text || '').trim().slice(0, 1000));
+  if (!c) return res.status(404).json({ error: 'Yorum bulunamadı.' });
+  if (p.userId !== req.user.id) return res.status(403).json({ error: 'Özel yanıtı sadece gönderi sahibi gönderebilir.' });
+  if (c.userId === req.user.id) return res.status(400).json({ error: 'Kendi yorumuna özel yanıt gönderemezsin.' });
+  const t = store.get('users', c.userId);
+  if (!t || SPECIAL.has(t.role) || isBlocked(req.user.id, t.id)) return res.status(403).json({ error: 'Bu kişiye yazamazsın.' });
+  if (!text) return res.status(400).json({ error: 'Bir şey yaz.' });
+  if (limited('pvr:' + req.user.id, 40, DAY)) return res.status(429).json({ error: 'Bugün çok fazla özel yanıt gönderdin.' });
+  const chat = chatBetween(req.user.id, t.id);
+  const msg = sendMessage(chat, req.user.id, { text, quote: { kind: 'comment', q: 'Gönderindeki yorumuna özel yanıt', a: c.text.slice(0, 200), postId: p.id } });
+  if (!msg) return res.status(400).json({ error: 'Gönderilemedi.' });
+  res.json({ ok: true, chatId: chat.id });
 });
 
 // ---------- Hikayeler (24 saat) ----------
 const storyAlive = (s) => now() - s.at < DAY;
 const FILTERS = ['canli', 'siyahbeyaz', 'noir', 'sicak', 'soguk', 'altin', 'vintage', 'retro', 'soluk', 'pastel', 'pembe', 'dram', 'sinema', 'gece', 'neon', 'cadi', 'hayalet', 'kar', 'isilti', 'ask', 'ruya'];
+// Vitrin videosu ve hikaye üstü hareketli çıkartmalar (emoji / GIF / yazı)
+const GIF_HOSTS = /^https:\/\/(media\d*\.giphy\.com|i\.giphy\.com|media\.tenor\.com|c\.tenor\.com)\//;
+function cleanOverlay(st) {
+  if (!st || typeof st !== 'object') return null;
+  const pos = { x: Math.max(4, Math.min(96, Number.isFinite(+st.x) ? +st.x : 50)), y: Math.max(4, Math.min(96, Number.isFinite(+st.y) ? +st.y : 50)), s: Math.max(0.4, Math.min(3, +st.s || 1)), r: Math.max(-180, Math.min(180, Math.round(+st.r || 0))) };
+  if (st.type === 'emoji') { const em = [...String(st.em || '')].slice(0, 2).join(''); return em ? { id: nanoid(6), type: 'emoji', em, ...pos } : null; }
+  if (st.type === 'gif') { const src = String(st.src || ''); return isMedia(src) || GIF_HOSTS.test(src) ? { id: nanoid(6), type: 'gif', src, ...pos } : null; }
+  if (st.type === 'text') { const text = moderation.mask(String(st.text || '').trim().slice(0, 120)); return text ? { id: nanoid(6), type: 'text', text, color: /^#[0-9a-f]{6}$/i.test(st.color) ? st.color : '#ffffff', bgc: !!st.bgc, ...pos } : null; }
+  return null;
+}
 function cleanSticker(st) {
   if (!st || typeof st !== 'object') return null;
+  if (st.type === 'emoji' || st.type === 'gif') return cleanOverlay(st);
   const y = Math.max(5, Math.min(90, +st.y || 60));
-  const base = { id: nanoid(6), type: st.type, y };
+  const x = Math.max(8, Math.min(92, Number.isFinite(+st.x) ? +st.x : 50));
+  const base = { id: nanoid(6), type: st.type, y, x };
   if (st.type === 'poll') {
     const options = (Array.isArray(st.options) ? st.options : []).map((o) => moderation.mask(String(o || '').trim().slice(0, 30))).filter(Boolean).slice(0, 4);
     if (options.length < 2) return null;
@@ -807,7 +902,7 @@ function cleanSticker(st) {
   }
   if (st.type === 'text') {
     const text = moderation.mask(String(st.text || '').trim().slice(0, 120));
-    return text ? { ...base, text, color: /^#[0-9a-f]{6}$/i.test(st.color) ? st.color : '#ffffff' } : null;
+    return text ? { ...base, text, color: /^#[0-9a-f]{6}$/i.test(st.color) ? st.color : '#ffffff', size: ['s', 'm', 'l'].includes(st.size) ? st.size : 'm', bgc: !!st.bgc } : null;
   }
   if (st.type === 'mention') {
     const u = store.find('users', (x) => x.username === String(st.username || '').toLowerCase());
@@ -832,7 +927,7 @@ app.get('/api/stories', auth, (req, res) => {
     .forEach((s) => {
       if (!byUser.has(s.userId)) byUser.set(s.userId, []);
       byUser.get(s.userId).push({
-        id: s.id, media: s.media, mediaType: s.mediaType, filter: s.filter || null, at: s.at, seen: s.viewers.includes(me), myReaction: (s.reactions || {})[me]?.emoji || null, viewerCount: s.userId === me ? s.viewers.length : undefined,
+        id: s.id, media: s.media, mediaType: s.mediaType, bg: s.bg || null, filter: s.filter || null, at: s.at, reshareOf: s.reshareOf ? brief(store.get('users', s.reshareOf)) : null, seen: s.viewers.includes(me), myReaction: (s.reactions || {})[me]?.emoji || null, viewerCount: s.userId === me ? s.viewers.length : undefined,
         stickers: stickersOut(s, me),
       });
     });
@@ -842,14 +937,24 @@ app.get('/api/stories', auth, (req, res) => {
 });
 app.post('/api/stories', auth, (req, res) => {
   const { media, mediaType } = req.body || {};
-  if (!media) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç.' });
-  const stickers = (Array.isArray(req.body.stickers) ? req.body.stickers : []).slice(0, 4).map(cleanSticker).filter(Boolean);
+  const STORY_BG = ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8'];
+  const bg = STORY_BG.includes(req.body?.bg) ? req.body.bg : null;
+  if (!media && !bg) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç ya da yazı yaz.' });
+  if (media && !isMedia(media)) return res.status(400).json({ error: 'Dosya bulunamadı.' });
+  const stickers = (Array.isArray(req.body.stickers) ? req.body.stickers : []).slice(0, 12).map(cleanSticker).filter(Boolean);
+  if (!media && !stickers.some((x) => ['text', 'emoji', 'gif', 'poll', 'question', 'mention'].includes(x.type))) return res.status(400).json({ error: 'Yazı hikayesine bir şey yaz.' });
   const filter = FILTERS.includes(req.body.filter) ? req.body.filter : null;
   // Türü yüklenen dosyanın kaydından al (telefon yanlış/boş tür gönderse bile doğru gösterilsin)
   const meta = store.get('media_meta', String(media).replace(/^\/media\//, ''));
-  const kind = meta?.mime ? (meta.mime.startsWith('video/') ? 'video' : 'image') : (mediaType === 'video' ? 'video' : 'image');
-  const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: String(media), mediaType: kind, filter, at: now(), viewers: [], stickers, votes: {}, answers: [] });
+  const kind = !media ? 'text' : meta?.mime ? (meta.mime.startsWith('video/') ? 'video' : 'image') : (mediaType === 'video' ? 'video' : 'image');
+  const reshareOf = req.body?.reshareOf ? store.get('users', String(req.body.reshareOf)) : null;
+  const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: media ? String(media) : null, mediaType: kind, bg, filter, at: now(), viewers: [], stickers, votes: {}, answers: [], reshareOf: reshareOf ? reshareOf.id : null });
   io.emit('stories:update', { userId: req.user.id });
+  // Hikayede etiketlenen kişilere bildirim
+  stickers.filter((x) => x.type === 'mention' && x.userId !== req.user.id).forEach((x) => {
+    if (isBlocked(req.user.id, x.userId)) return;
+    notify(x.userId, { type: 'mention', fromId: req.user.id, ref: s.id, text: `${req.user.username} seni hikayesinde etiketledi.`, url: `/#/stories/${req.user.id}` });
+  });
   featureCtx.quest?.(req.user.id, 'paylas'); featureCtx.track?.('story');
   res.json(s);
 });
@@ -955,9 +1060,14 @@ app.get('/api/users/:username', auth, (req, res) => {
     locked,
     postCount: store.filter('posts', (p) => p.userId === u.id).length,
     matched: !!store.get('matches', mid),
+    checkin: blockedByMe ? null : featureCtx.checkinOf?.(u, req.user.id) || null,
     blockedByMe,
     hasStory: !locked && store.filter('stories', (s) => s.userId === u.id && storyAlive(s)).length > 0,
     posts: posts.map((p) => postOut(p, req.user.id)),
+    reposts: blockedByMe || locked ? [] : store.filter('reposts', (r) => r.userId === u.id).sort((a, b) => b.at - a.at).map((r) => store.get('posts', r.postId))
+      .filter((p) => p && !isBlocked(req.user.id, p.userId) && canSee(req.user.id, store.get('users', p.userId))).slice(0, 60).map((p) => postOut(p, req.user.id)),
+    tagged: blockedByMe || locked ? [] : store.filter('posts', (p) => p.userId !== u.id && new RegExp(`(^|[^a-z0-9._])@${u.username.replace(/\./g, '\\.')}(?![a-z0-9._])`, 'i').test(p.caption || ''))
+      .filter((p) => !isBlocked(req.user.id, p.userId) && canSee(req.user.id, store.get('users', p.userId))).sort((a, b) => b.createdAt - a.createdAt).slice(0, 60).map((p) => postOut(p, req.user.id)),
   });
 });
 
@@ -1067,7 +1177,7 @@ app.delete('/api/posts/:id/comments/:cid', auth, (req, res) => {
   const p = store.get('posts', req.params.id);
   const c = p && p.comments.find((x) => x.id === req.params.cid);
   if (!c || (c.userId !== req.user.id && p.userId !== req.user.id)) return res.status(404).json({ error: 'Yorum bulunamadı.' });
-  p.comments = p.comments.filter((x) => x.id !== c.id);
+  p.comments = p.comments.filter((x) => x.id !== c.id && x.parentId !== c.id);
   store.update('posts', p.id, {});
   res.json({ ok: true });
 });
@@ -1101,7 +1211,7 @@ function cardOut(me, u, likedYou) {
     distanceKm: distance(me, u), likedYou: eco.isPlus(me) ? likedYou : false,
     boosted: (u.boostUntil || 0) > now(),
     photos: photos.length ? photos : [u.avatar],
-    voice: u.voice || null, badges: u.badges || [], prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
+    voice: u.voice || null, badges: (u.badges || []).filter((b) => !b.hidden).map(({ no, ...b }) => b), prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
   };
 }
 
@@ -1293,7 +1403,7 @@ app.post('/api/fal', auth, (req, res) => {
   const fp = featureCtx.falPriceFor ? featureCtx.falPriceFor(req.user, b.type, Math.max(0, parseInt(eco.get().falPrices[b.type], 10) || 0)) : { price: Math.max(0, parseInt(eco.get().falPrices[b.type], 10) || 0) };
   const price = fp.price;
   if (price && (req.user.coins || 0) < price) return res.status(402).json({ error: `Bu fal ${price} jeton. Jetonun yetmiyor.`, need: price, coins: req.user.coins || 0 });
-  if (limited('fal:' + req.user.id, 5, DAY)) return res.status(429).json({ error: 'Bugün en fazla 5 fal isteği gönderebilirsin. Yarın tekrar dene.' });
+  if (limited('fal:' + req.user.id, 10, 10 * 60000)) return res.status(429).json({ error: 'Çok hızlı fal isteği gönderiyorsun kuzum, biraz bekle.' });
   const images = (Array.isArray(b.images) ? b.images : []).filter(isMedia).slice(0, 3);
   if (b.type === 'kahve' && !images.length) return res.status(400).json({ error: 'Kahve falı için en az bir fincan fotoğrafı ekle.' });
   const zodiacs = ['koc', 'boga', 'ikizler', 'yengec', 'aslan', 'basak', 'terazi', 'akrep', 'yay', 'oglak', 'kova', 'balik'];
@@ -1368,6 +1478,31 @@ app.get('/api/lives', auth, (req, res) => res.json([...lives.values()].map(liveO
 app.get('/api/music/search', auth, wrap(async (req, res) => {
   if (limited('ms:' + req.user.id, 40, 60000)) return res.status(429).json({ error: 'Biraz yavaş 🙂' });
   res.json({ items: await music.search(req.query.q), spotify: music.enabled() });
+}));
+// GIF arama (GIPHY_API_KEY ya da TENOR_API_KEY varsa); yoksa kullanıcı cihazından GIF yükler
+const gifCache = new Map();
+app.get('/api/gifs', auth, wrap(async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 60);
+  const giphy = process.env.GIPHY_API_KEY; const tenor = process.env.TENOR_API_KEY;
+  if (!giphy && !tenor) return res.json({ enabled: false, items: [] });
+  const key = `${giphy ? 'g' : 't'}|${q.toLowerCase()}`;
+  const c = gifCache.get(key); if (c && c.at > now() - 3600000) return res.json({ enabled: true, items: c.items });
+  let items = [];
+  try {
+    if (giphy) {
+      const u = q ? `https://api.giphy.com/v1/gifs/search?api_key=${giphy}&q=${encodeURIComponent(q)}&limit=30&rating=pg-13&lang=tr` : `https://api.giphy.com/v1/gifs/trending?api_key=${giphy}&limit=30&rating=pg-13`;
+      const j = await (await fetch(u)).json();
+      items = (j.data || []).map((g) => ({ id: g.id, src: g.images?.fixed_width?.url || g.images?.original?.url, w: +g.images?.fixed_width?.width || 200, h: +g.images?.fixed_width?.height || 200 })).filter((g) => g.src);
+    } else {
+      const u = `https://tenor.googleapis.com/v2/${q ? 'search' : 'featured'}?key=${tenor}${q ? `&q=${encodeURIComponent(q)}` : ''}&limit=30&contentfilter=medium&media_filter=tinygif,gif&locale=tr_TR`;
+      const j = await (await fetch(u)).json();
+      items = (j.results || []).map((g) => ({ id: g.id, src: g.media_formats?.tinygif?.url || g.media_formats?.gif?.url, w: g.media_formats?.tinygif?.dims?.[0] || 200, h: g.media_formats?.tinygif?.dims?.[1] || 200 })).filter((g) => g.src);
+    }
+  } catch (e) { console.error('[gif]', e.message); }
+  items = items.map((g) => ({ ...g, src: g.src.replace(/\?.*$/, '') }));
+  gifCache.set(key, { at: now(), items });
+  if (gifCache.size > 300) gifCache.delete(gifCache.keys().next().value);
+  res.json({ enabled: true, items });
 }));
 app.get('/api/music/featured', auth, wrap(async (req, res) => res.json({ items: await music.getFeatured(), spotify: music.enabled() })));
 
@@ -1478,6 +1613,8 @@ require('./server/erp')(app, featureCtx);
 require('./server/quests')(app, featureCtx);
 require('./server/growth')(app, featureCtx);
 require('./server/songs')(app, featureCtx);
+require('./server/venues')(app, featureCtx);
+require('./server/contests')(app, featureCtx);
 gameOut = featureCtx.gameOut;
 
 // ---------- Statik ----------
@@ -1838,7 +1975,7 @@ async function ensureOfficial() {
   await ensureOfficial();
   await adminApi.ensureAdmin?.();
   music.selfTest().catch(() => {});
-  server.listen(PORT, () => console.log(`SwipeUp http://localhost:${PORT} · sürüm ${APP_VERSION}`));
+  server.listen(PORT, () => console.log(`SwipeUp hazır · port ${PORT} · sürüm ${APP_VERSION}`));
 
   // Render ücretsiz planda uykuya geçmemek için kendine ping at
   const selfUrl = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;

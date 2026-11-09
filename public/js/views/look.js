@@ -14,18 +14,23 @@ export default async function look(view) {
     box.innerHTML = `
       <section class="look-hero">${c.frame ? preview(c.frame) : `<div class="av-wrap"><img class="av av-96" src="${esc(state.me.avatar)}" alt=""></div>`}
         <div><b>${esc(state.me.name)}</b><small>${icon('coin')} ${c.coins.toLocaleString('tr-TR')} jeton</small></div></section>
-      ${ev ? `<section class="badge-offer"><span class="be">${ev.em}</span><div class="grow"><b>${esc(ev.name)} rozeti</b><small>Sınırlı sayıda: ${ev.limit} rozetten ${ev.left} tane kaldı. Profilinde ve kartında numarasıyla görünür.</small></div>
+      ${ev ? `<section class="badge-offer"><span class="be">${ev.em}</span><div class="grow"><b>${esc(ev.name)} rozeti</b><small>Sınırlı sayıda: ${ev.limit} rozetten ${ev.left} tane kaldı. Profilinde ve kartında görünür; istediğin zaman gizleyip yeniden takabilirsin.</small></div>
         ${owned.has(ev.id) ? '<span class="pill ok">Sende</span>' : `<button class="btn primary sm bb" ${ev.left ? '' : 'disabled'}>${icon('coin')} ${ev.coins}</button>`}</section>` : ''}
       <h3 class="shop-h">Profil çerçeveleri</h3>
       <p class="muted" style="font-size:13px;margin:-4px 2px 10px">Çerçeve fotoğrafının etrafında her yerde görünür: profilinde, hikayelerde, sohbetlerde.</p>
       <div class="frames">${c.frames.map((f) => `<button class="frame-it ${c.frame === f.id ? 'on' : ''}" data-id="${esc(f.id)}">${preview(f.id)}<b>${esc(f.name)}</b>
         <small>${c.frame === f.id ? 'Kullanılıyor' : f.owned ? 'Sende' : `${icon('coin')} ${f.coins}`}</small>${f.limited ? '<i class="lim">Sınırlı</i>' : ''}</button>`).join('')}</div>
       ${c.frame ? '<button class="btn block nofr" style="margin-top:14px">Çerçeveyi kaldır</button>' : ''}
-      ${(c.badges || []).length ? `<h3 class="shop-h">Rozetlerin</h3><div class="badges">${c.badges.map((b) => `<span class="badge">${b.em} ${esc(b.name)}<small>#${b.no}</small></span>`).join('')}</div>` : ''}
+      ${(c.badges || []).length ? `<h3 class="shop-h">Rozetlerin</h3><p class="muted" style="font-size:13px;margin:-4px 2px 10px">Rozetlerin etkinlik bittikten sonra da sende kalır. Profilinde görünüp görünmeyeceğini buradan seçebilirsin.</p>
+        <div class="bdg-list">${c.badges.map((b) => `<label class="bdg-row"><span class="be">${b.em}</span><span class="grow"><b>${esc(b.name)}</b><small>${b.hidden ? 'Profilinde gizli' : 'Profilinde görünüyor'}</small></span><input type="checkbox" class="sw bt" data-id="${esc(b.id)}" ${b.hidden ? '' : 'checked'}></label>`).join('')}</div>` : ''}
       <div style="height:30px"></div>`;
   };
   const load = async () => { c = await api('/cosmetics'); render(); };
   const sync = (r) => { if (r.coins != null) state.me.coins = r.coins; emit('me', state.me); };
+  box.addEventListener('change', async (e) => {
+    const t = e.target.closest('.bt'); if (!t) return;
+    try { const r = await api(`/cosmetics/badge/${encodeURIComponent(t.dataset.id)}/toggle`, { body: { show: t.checked } }); c.badges = r.badges; state.me.badges = r.badges; render(); toast(t.checked ? 'Rozet profilinde görünüyor.' : 'Rozet profilinden kaldırıldı.'); } catch (er) { toast(er.message); t.checked = !t.checked; }
+  });
   box.onclick = async (e) => {
     const fb = e.target.closest('.frame-it');
     try {

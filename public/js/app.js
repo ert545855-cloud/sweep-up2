@@ -1,12 +1,13 @@
 import { icon } from './icons.js';
 import {
-  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin, notifHref,
+  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin, notifHref, applyLogo,
 } from './core.js';
 import { initCalls } from './calls.js';
 import { checkVersion, recover, afterBoot } from './update.js';
 import { maybeShowInstall } from './install.js';
 import { initEvent } from './event.js';
 import { checkSafety } from './extras.js';
+import { initI18n } from './i18n.js';
 
 const routes = [
   [/^\/?$/, 'feed', { tab: 'home' }],
@@ -24,6 +25,8 @@ const routes = [
   [/^\/reklam(?:\/([\w-]+))?$/, 'promote', { tabs: false }],
   [/^\/gorevler$/, 'quests', { tabs: false }],
   [/^\/cark$/, 'wheel', { tabs: false }],
+  [/^\/mekan$/, 'venue', { tabs: false }],
+  [/^\/yarismalar(?:\/([\w-]+))?$/, 'contests', { tabs: false }],
   [/^\/sarki(?:\/(yukle))?$/, 'songs', { tabs: false }],
   [/^\/destek(?:\/([\w-]+))?$/, 'support', { tabs: false }],
   [/^\/chat\/([\w-]+)$/, 'chat', { tabs: false }],
@@ -267,8 +270,10 @@ document.addEventListener('error', (e) => {
 }, true);
 
 async function boot() {
+  await initI18n().catch(() => {});
   try { const t = localStorage.getItem('su_theme'); if (t && t !== 'system') document.documentElement.dataset.theme = t; } catch {}
   try { applySkin(localStorage.getItem('su_skin') || 'gunbatimi', { save: false }); } catch {}
+  try { const lg = localStorage.getItem('su_logo'); if (lg) document.documentElement.dataset.logo = lg; } catch {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   navigator.serviceWorker?.addEventListener('message', (e) => {
     if (e.data?.type === 'navigate' && e.data.url) location.href = e.data.url;
@@ -279,6 +284,7 @@ async function boot() {
       state.config = cfg; state.me = me;
       if (me.ban) state.ban = me.ban;
       if (me.skin && me.skin !== currentSkin()) applySkin(me.skin);
+      applyLogo(me.plus ? me.logo : 'klasik');
       if (!state.ban) { wireRealtime(); refreshBadges(); }
     } catch { state.token = null; }
   }

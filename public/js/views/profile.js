@@ -67,56 +67,65 @@ export default async function profile(view, username) {
   view.innerHTML = '<div class="spinner" style="margin-top:40vh"></div>';
   const u = await api(`/users/${self ? state.me.id : encodeURIComponent(username)}`);
   if (self) Object.assign(state.me, u);
-  const posts = u.posts.filter((p) => p.type === 'image');
+  const posts = u.posts.filter((p) => p.type === 'image' || p.type === 'text');
   const reels = u.posts.filter((p) => p.type === 'reel');
-  const tabs = self ? ['grid', 'reels', 'saved'] : ['grid', 'reels'];
+  const reposts = u.reposts || [];
+  const tagged = u.tagged || [];
+  const tabs = self ? ['grid', 'reels', 'reposts', 'tagged', 'saved'] : ['grid', 'reels', 'reposts', 'tagged'];
+  const TAB = { grid: ['grid', 'Gönderiler'], reels: ['reels', 'Vitrin'], reposts: ['repost', 'Yeniden paylaşılanlar'], tagged: ['tagged', 'Etiketlendiği gönderiler'], saved: ['bookmark', 'Kaydedilenler'] };
   const avHref = u.live ? `#/live/${u.id}` : u.hasStory ? `#/stories/${u.id}` : self ? '#/create/story' : null;
   const meta = [self && u.ageHidden && u.age ? `${u.age} · gizli` : u.age, u.city, !self && u.distanceKm ? `${u.distanceKm} km` : null].filter(Boolean);
 
   view.innerHTML = `<header class="topbar">
       ${self ? `<a class="ib soft" href="#/create" aria-label="Oluştur">${icon('plus')}</a>` : `<button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button>`}
-      <div class="center">${self ? 'Profilin' : ''}</div>
-      ${self ? `<a class="ib soft" href="#/settings" aria-label="Ayarlar">${icon('settings')}</a>` : `<button class="ib soft menu-btn" aria-label="Seçenekler">${icon('more')}</button>`}
+      <div class="center ig-un">${u.privacy?.private ? `${icon('lock', '', 'style="width:15px;height:15px;vertical-align:-2px"')} ` : ''}${esc(u.username)}</div>
+      ${self ? `<a class="ib soft" href="#/settings" aria-label="Ayarlar">${icon('menu')}</a>` : `<button class="ib soft menu-btn" aria-label="Seçenekler">${icon('more')}</button>`}
     </header>
-    <section class="profile-hero">
-      <${avHref ? `a href="${esc(avHref)}"` : 'div'} class="av-wrap ${u.frame ? `fr fr-${esc(u.frame)}` : ''}">
-        ${u.live || u.hasStory ? `<div class="ring ${u.live ? 'live' : ''}"><img class="av" src="${esc(u.avatar)}" alt=""></div>` : `<img class="av" src="${esc(u.avatar)}" alt="">`}
-        ${u.live ? '<span class="live-tag">CANLI</span>' : self && !u.hasStory ? `<span class="plus">${icon('plus')}</span>` : (!self && isOn(u) ? '<i class="online"></i>' : '')}
-      </${avHref ? 'a' : 'div'}>
-      <h2>${nm(u)}${u.plus ? `<span class="plus-chip">${icon('crown')}+</span>` : ''}</h2>
-      ${(u.badges || []).length ? `<div class="badges">${u.badges.map((b) => `<span class="badge" title="${esc(b.name)} #${b.no}">${b.em} ${esc(b.name)}<small>#${b.no}</small></span>`).join('')}</div>` : ''}
-      ${u.role === 'falci' ? '<span class="chip uv" style="margin-top:8px">🔮 Falcı</span>' : ''}${u.role === 'official' ? '<span class="chip official" style="margin-top:8px">🛡️ SwipeUp resmi hesabı</span>' : ''}
-      ${(u.tags || []).length ? `<div class="utags">${u.tags.map((t) => `<span class="utag t-${esc(t.color)}">${t.em} ${esc(t.name)}</span>`).join('')}</div>` : ''}
-      <div class="handle">${u.privacy?.private ? `${icon('lock', '', 'style="width:13px;height:13px;vertical-align:-1px"')} ` : ''}@${esc(u.username)}${!self && lastSeen(u) ? ` · ${esc(lastSeen(u))}` : ''}</div>
-      ${u.bio ? `<p class="bio">${richText(u.bio)}</p>` : (self ? '<a class="link" href="#/edit" style="margin-top:6px">Biyografi ekle</a>' : '')}
-      ${u.voice ? `<div style="margin-top:10px">${voiceChip(u.voice)}</div>` : ''}
-      ${meta.length || u.interests?.length || (!self && (u.followsYou || u.matched)) ? `<div class="chips">
-        ${meta.map((m) => `<span class="chip">${esc(m)}</span>`).join('')}
-        ${(u.interests || []).map((t) => `<span class="chip uv">${esc(t)}</span>`).join('')}
-        ${!self && u.matched ? '<span class="chip uv">💜 Eşleştiniz</span>' : !self && u.followsYou ? '<span class="chip">Seni takip ediyor</span>' : ''}
-      </div>` : ''}
+    <section class="ig-hero">
+      <div class="ig-top">
+        <${avHref ? `a href="${esc(avHref)}"` : 'div'} class="av-wrap ${u.frame ? `fr fr-${esc(u.frame)}` : ''}">
+          ${u.live || u.hasStory ? `<div class="ring ${u.live ? 'live' : ''}"><img class="av" src="${esc(u.avatar)}" alt=""></div>` : `<img class="av" src="${esc(u.avatar)}" alt="">`}
+          ${u.live ? '<span class="live-tag">CANLI</span>' : self && !u.hasStory ? `<span class="plus">${icon('plus')}</span>` : (!self && isOn(u) ? '<i class="online"></i>' : '')}
+        </${avHref ? 'a' : 'div'}>
+        <div class="ig-stats">
+          <div><b>${num(u.postCount ?? u.posts.length)}</b><span>gönderi</span></div>
+          <button class="fl"><b>${num(u.followers)}</b><span>takipçi</span></button>
+          <button class="fg"><b>${num(u.following)}</b><span>takip</span></button>
+        </div>
+      </div>
+      <div class="ig-info">
+        <h2>${nm(u)}${u.plus ? `<span class="plus-chip">${icon('crown')}+</span>` : ''}</h2>
+        ${u.role === 'falci' || u.role === 'official' || (u.tags || []).length || (u.badges || []).length ? `<div class="utags">
+          ${u.role === 'falci' ? '<span class="chip uv">🔮 Falcı</span>' : ''}${u.role === 'official' ? '<span class="chip official">🛡️ SwipeUp resmi hesabı</span>' : ''}
+          ${(u.tags || []).map((t) => `<span class="utag t-${esc(t.color)}">${t.em} ${esc(t.name)}</span>`).join('')}
+          ${(u.badges || []).filter((b) => self || !b.hidden).map((b) => `<span class="badge ${b.hidden ? 'off' : ''}" title="${esc(b.name)}">${b.em} ${esc(b.name)}</span>`).join('')}</div>` : ''}
+        ${!self && lastSeen(u) ? `<div class="handle">${esc(lastSeen(u))}</div>` : ''}
+        ${u.checkin ? `<a class="ci-chip" href="${self ? '#/mekan' : '#/u/' + esc(u.username)}"><span>${u.checkin.em}</span><span>Şu an</span> <b>${esc(u.checkin.name)}</b></a>` : ''}
+        ${u.bio ? `<p class="bio">${richText(u.bio)}</p>` : (self ? '<a class="link" href="#/edit">Biyografi ekle</a>' : '')}
+        ${u.voice ? `<div style="margin-top:8px">${voiceChip(u.voice)}</div>` : ''}
+        ${meta.length || u.interests?.length || (!self && (u.followsYou || u.matched)) ? `<div class="chips">
+          ${meta.map((m) => `<span class="chip">${esc(m)}</span>`).join('')}
+          ${(u.interests || []).map((t) => `<span class="chip uv">${esc(t)}</span>`).join('')}
+          ${!self && u.matched ? '<span class="chip uv">💜 Eşleştiniz</span>' : !self && u.followsYou ? '<span class="chip">Seni takip ediyor</span>' : ''}
+        </div>` : ''}
+      </div>
     </section>
-    ${(u.prompts || []).length ? `<div class="pqs">${promptCards(u, { reply: !self && !u.blockedByMe })}</div>` : self ? '<a class="pq-cta" href="#/edit">💬 Profil sorularını cevapla, sohbetler kendiliğinden başlasın</a>' : ''}
-    <div class="stats">
-      <div><b>${num(u.postCount ?? u.posts.length)}</b><span>gönderi</span></div>
-      <button class="fl"><b>${num(u.followers)}</b><span>takipçi</span></button>
-      <button class="fg"><b>${num(u.following)}</b><span>takip</span></button>
-    </div>
     <div class="profile-btns">
       ${self
-    ? `<a class="btn" href="#/edit">Profili düzenle</a><button class="btn share">Paylaş</button>${u.verified ? '' : `<a class="btn sq" href="#/verify" aria-label="Profilini doğrula">${icon('shield', '', 'style="width:18px;height:18px"')}</a>`}`
+    ? `<a class="btn" href="#/edit">Profili düzenle</a><button class="btn share">Profili paylaş</button>${u.verified ? '' : `<a class="btn sq" href="#/verify" aria-label="Profilini doğrula">${icon('shield', '', 'style="width:18px;height:18px"')}</a>`}`
     : u.blockedByMe
       ? '<button class="btn primary unb">Engeli kaldır</button>'
       : u.role === 'falci'
-        ? `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : 'Takip et'}</button><a class="btn" href="#/fal">🔮 Fal baktır</a><button class="btn sq msg" aria-label="Mesaj gönder">${icon('send', '', 'style="width:18px;height:18px"')}</button>`
-        : `<button class="btn ${u.isFollowing || u.requested ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : u.requested ? 'İstek gönderildi' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button>${u.role === 'official' ? '<a class="btn fal-go" href="#/destek">🎧 Destek</a>' : u.role === 'falci' && state.me.role !== 'falci' ? '<a class="btn fal-go" href="#/fal">🔮 Fal baktır</a>' : `<button class="btn msg">${icon('send')} Mesaj</button>`}${u.matched || ['falci', 'official'].includes(u.role) || ['falci', 'official'].includes(state.me.role) ? '' : '<button class="btn sq smsg" aria-label="Süper mesaj" title="Süper mesaj">💌</button>'}`}
+        ? `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : 'Takip et'}</button><a class="btn" href="#/fal">🔮 Fal baktır</a>`
+        : `<button class="btn ${u.isFollowing || u.requested ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : u.requested ? 'İstek gönderildi' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button>${u.role === 'official' ? '<a class="btn fal-go" href="#/destek">🎧 Destek</a>' : state.me.role === 'falci' ? '' : `<button class="btn msg">Mesaj</button>`}${u.matched || ['falci', 'official'].includes(u.role) || ['falci', 'official'].includes(state.me.role) ? '' : '<button class="btn sq smsg" aria-label="Süper mesaj" title="Süper mesaj">💌</button>'}`}
     </div>
+    ${(u.prompts || []).length ? `<div class="pqs">${promptCards(u, { reply: !self && !u.blockedByMe })}</div>` : self ? '<a class="pq-cta" href="#/edit">💬 Profil sorularını cevapla, sohbetler kendiliğinden başlasın</a>' : ''}
     ${self ? `<div class="me-links">
-      <a href="#/ziyaretciler">${icon('eye')}<span>Ziyaretçiler</span><b class="vc"></b></a>
+      <a href="#/ziyaretciler">${icon('eye')}<span>Ziyaretçiler</span><b class="vc" hidden></b></a>
       <a href="#/gorunum">${icon('crown')}<span>Çerçeve ve rozet</span></a>
-      <a href="#/davet">${icon('gift')}<span>Davet et, kazan</span></a></div>` : ''}
-    <div class="tabs">
-      ${tabs.map((t, i) => `<button data-t="${t}" class="${i ? '' : 'on'}" aria-label="${{ grid: 'Gönderiler', reels: 'Vitrin', saved: 'Kaydedilenler' }[t]}">${icon({ grid: 'grid', reels: 'reels', saved: 'bookmark' }[t])}</button>`).join('')}
+      <a href="#/davet">${icon('gift')}<span>Davet et</span></a></div>` : ''}
+    <div class="tabs ig-tabs">
+      ${tabs.map((t, i) => `<button data-t="${t}" class="${i ? '' : 'on'}" aria-label="${TAB[t][1]}" title="${TAB[t][1]}">${icon(TAB[t][0])}</button>`).join('')}
     </div>
     <div class="tab-body"></div>`;
 
@@ -127,7 +136,7 @@ export default async function profile(view, username) {
       return;
     }
     view.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
-    let items = t === 'grid' ? posts : reels;
+    let items = { grid: posts, reels, reposts, tagged }[t] || [];
     if (t === 'saved') {
       body.innerHTML = '<div class="spinner"></div>';
       items = (await Promise.all(saved.all().slice(0, 30).map((id) => api(`/posts/${id}`).catch(() => null)))).filter(Boolean);
@@ -137,11 +146,13 @@ export default async function profile(view, username) {
         grid: self ? ['Fotoğraf paylaş', 'Paylaştığın fotoğraflar profilinde görünür.', '#/create', 'İlk fotoğrafını paylaş'] : ['Henüz gönderi yok', '', '', ''],
         reels: self ? ['Vitrinine video ekle', 'Kısa dikey videoların burada görünür.', '#/create/reel', 'Video ekle'] : ['Vitrinde henüz video yok', '', '', ''],
         saved: ['Kaydedilenler', 'Kaydettiğin gönderiler sadece sana görünür.', '', ''],
+        reposts: self ? ['Yeniden paylaşılanlar', 'Beğendiğin gönderileri ve vitrin videolarını yeniden paylaş; burada görünür.', '', ''] : ['Henüz yeniden paylaşım yok', '', '', ''],
+        tagged: self ? ['Senin fotoğrafların', 'Birisi seni bir gönderide etiketlediğinde burada görünür.', '', ''] : ['Etiketlendiği gönderi yok', '', '', ''],
       }[t];
-      body.innerHTML = `<div class="empty" style="padding-top:28px"><div class="big">${icon(t === 'grid' ? 'camera' : t === 'reels' ? 'reels' : 'bookmark')}</div><h2>${msg[0]}</h2>${msg[1]}${msg[2] ? `<p><a class="btn primary" href="${msg[2]}">${msg[3]}</a></p>` : ''}</div>`;
+      body.innerHTML = `<div class="empty" style="padding-top:28px"><div class="big ig-ring">${icon({ grid: 'camera', reels: 'reels', saved: 'bookmark', reposts: 'repost', tagged: 'tagged' }[t])}</div><h2>${msg[0]}</h2>${msg[1]}${msg[2] ? `<p><a class="btn primary" href="${msg[2]}">${msg[3]}</a></p>` : ''}</div>`;
       return;
     }
-    body.innerHTML = `<div class="grid">${items.map(gridTile).join('')}</div>`;
+    body.innerHTML = `<div class="grid ig-grid">${items.map(gridTile).join('')}</div>`;
   };
   view.querySelector('.tabs').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) showTab(b.dataset.t); };
   showTab('grid');
@@ -158,7 +169,7 @@ export default async function profile(view, username) {
   view.querySelector('.smsg')?.addEventListener('click', () => superMessage(u));
   view.querySelector('.pqs')?.addEventListener('click', (e) => { const b = e.target.closest('.pq-r'); if (b) promptReply(u, b.closest('[data-pid]').dataset.pid); });
   if (!self) api(`/users/${u.id}/view`, { body: {} }).catch(() => {});
-  if (self) api('/me/viewers').then((r) => { const b = view.querySelector('.me-links .vc'); if (b && r.count) b.textContent = r.count; }).catch(() => {});
+  if (self) api('/me/viewers').then((r) => { const b = view.querySelector('.me-links .vc'); if (b && r.fresh) { b.textContent = r.fresh; b.hidden = false; } }).catch(() => {});
   view.querySelector('.unb')?.addEventListener('click', async () => {
     await api(`/users/${u.id}/block`, { method: 'DELETE' }); toast('Engel kaldırıldı.'); profile(view, username);
   });

@@ -326,3 +326,9 @@ textarea.field { height: auto; padding: 10px 12px; resize: vertical; }
 tr.sgw td { background: color-mix(in srgb, #ffc926 10%, transparent); }
 .sgvl { display: grid; gap: 8px; max-height: 320px; overflow-y: auto; } .sgvl > .row { justify-content: space-between; gap: 10px; }
 .drawer.sgd { width: min(680px, 100%); }
+.ctg { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+.ctp { display: flex; flex-wrap: wrap; gap: 6px; }
+.ctt { display: grid; gap: 6px; padding: 8px; border-radius: 10px; background: var(--soft); }
+.ctprs { display: grid; gap: 8px; }
+.ctpr { display: grid; grid-template-columns: 28px repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.ctpr label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; }

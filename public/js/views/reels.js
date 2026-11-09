@@ -2,7 +2,7 @@ import { icon } from '../icons.js';
 import {
   state, api, esc, num, toggleLike, heartBurst, onDoubleTap, openComments, sharePost, saved, toast, on, paintLike, richText, nm,
 } from '../core.js';
-import { applyEdit, promoHit } from '../components.js';
+import { applyEdit, promoHit, overlayHtml, toggleRepost } from '../components.js';
 
 export default async function reels(view, focusId) {
   view.innerHTML = `<div class="reels-top">
@@ -40,11 +40,13 @@ export default async function reels(view, focusId) {
     }
     box.innerHTML = items.map((r) => `<section class="reel" data-id="${esc(r.id)}" data-post>
       <video src="${esc(r.media)}" ${r.poster ? `poster="${esc(r.poster)}"` : ''} loop playsinline preload="metadata" ${state.muted ? 'muted' : ''}></video>
+      ${overlayHtml(r.edit?.stickers)}
       <div class="shade"></div>
       <div class="mute-ind">${icon(state.muted ? 'mute' : 'volume')}</div>
       <div class="rail">
         <button class="like ${r.liked ? 'liked' : ''}" aria-label="Beğen">${icon('heart')}<span class="cnt">${r.likeCount ? num(r.likeCount) : ''}</span></button>
         <button class="cm" aria-label="Yorumlar">${icon('comment')}<span>${r.commentCount ? num(r.commentCount) : ''}</span></button>
+        ${r.user.id !== state.me.id && !r.user.private ? `<button class="rp ${r.reposted ? 'on' : ''}" aria-label="Yeniden paylaş">${icon('repost')}<span class="cnt">${r.repostCount ? num(r.repostCount) : ''}</span></button>` : ''}
         <button class="sh" aria-label="Paylaş">${icon('send')}</button>
         <button class="sv" aria-label="Kaydet">${icon('bookmark', '', saved.has(r.id) ? 'fill="currentColor"' : '')}</button>
         <a href="#/u/${esc(r.user.username)}" aria-label="Profil"><img class="mini" src="${esc(r.user.avatar)}" alt=""></a>
@@ -73,6 +75,7 @@ export default async function reels(view, focusId) {
       });
       sec.querySelector('.cm').onclick = () => { promoHit(r); openComments(r); };
       sec.querySelector('.sh').onclick = () => { promoHit(r); sharePost(r); };
+      const rpb = sec.querySelector('.rp'); if (rpb) rpb.onclick = () => toggleRepost(r, rpb);
       if (r.sponsored) sec.querySelectorAll('.meta a, .rail a').forEach((a) => a.addEventListener('click', () => promoHit(r)));
       const sv = sec.querySelector('.sv');
       sv.onclick = () => { const s = saved.toggle(r.id); sv.innerHTML = icon('bookmark', '', s ? 'fill="currentColor"' : ''); };

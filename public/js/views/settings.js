@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, toast, sheet, logout, avatar, refreshBadges,
+  state, api, esc, toast, sheet, logout, avatar, refreshBadges, logoMenu,
 } from '../core.js';
 
 const PRIV = [
@@ -10,10 +10,12 @@ const PRIV = [
   ['hideFromDeck', 'flame', 'Kaydırmada beni gösterme', 'Keşfet destesinde yeni kişilere çıkmazsın'],
   ['hideAge', 'person', 'Yaşımı gizle', 'Yaşın profilinde ve kaydırma kartında görünmez; yaş filtreleri yine çalışır'],
   ['hideVisits', 'eye', 'Profil ziyaretlerimi gösterme', 'Baktığın profillerin ziyaretçi listesinde görünmezsin'],
+  ['hideCheckin', 'mapPin', 'Mekanımı arkadaşlarıma gösterme', 'Etiketlediğin mekan, karşılıklı takipleştiğin kişilere ve eşleşmelerine de görünmez'],
 ];
 import { notifSettings, themeMenu } from './profile.js';
 import { openFilters } from './swipe.js';
 import { eventInfo, eventLive, eventEnabled, setEventEnabled, eventIcon, eventEmoji } from '../event.js';
+import { LANGS, getLang, setLang } from '../i18n.js';
 
 export default function settings(view) {
   const me = state.me;
@@ -28,6 +30,8 @@ export default function settings(view) {
       <a class="it" href="#/odalar">${icon('users')}<span class="grow">Etkinlik odaları ve hızlı tanışma<div class="sub">Konu odaları, 3 dakikalık görüntülü turlar</div></span></a>
       <a class="it" href="#/reklam">🚀<span class="grow">Öne çıkarmalarım<div class="sub">Gönderilerini jetonla daha çok kişiye göster</div></span></a>
       <a class="it" href="#/cark">🎡<span class="grow">Hediye çarkı<div class="sub">Her hafta bir çevirme hakkı, cuma yenilenir</div></span></a>
+      <a class="it" href="#/yarismalar">${icon('trophy')}<span class="grow">Yarışmalar<div class="sub">En çok paylaşan, beğeni ya da yorum alan kazanır</div></span></a>
+      <a class="it" href="#/mekan">${icon('mapPin')}<span class="grow">Mekandayım<div class="sub">Bulunduğun mekanı etiketle, aynı yerdekilerle eşleş</div></span></a>
       <a class="it" href="#/sarki">${icon('music')}<span class="grow">Şarkı yarışması<div class="sub">3 ayda bir; kazanan şarkı Spotify’da yayınlanır</div></span></a>
       <a class="it" href="#/gorevler">${icon('check')}<span class="grow">Günlük görevler<div class="sub">Görevleri tamamla, jeton kazan</div></span></a>
       <a class="it" href="#/davet">${icon('gift')}<span class="grow">Davet et, kazan<div class="sub">Arkadaşın katılınca ikiniz de jeton kazanın</div></span></a>
@@ -56,6 +60,8 @@ export default function settings(view) {
       <a class="it" href="#/install">${icon('download')}<span class="grow">Telefona yükle<div class="sub">iPhone’da Ana Ekrana Ekle, Android’de Uygulamayı yükle</div></span></a>
       <button class="it nt">${icon('bell')}<span class="grow">Bildirimler</span></button>
       <button class="it th">${icon('sun')}<span class="grow">Tema<div class="sub">Gün batımı, Pembe rüya, Gece moru, Altın</div></span></button>
+      <button class="it lng">${icon('globe')}<span class="grow">Dil / Language<div class="sub">${LANGS.find((l) => l[0] === getLang())?.[1] || 'Türkçe'}</div></span></button>
+      <button class="it lgo">${icon('crown')}<span class="grow">Uygulama logosu<div class="sub">${me.plus ? 'Altın, neon, gökkuşağı ve daha fazlası' : 'SwipeUp+ üyelerine özel'}</div></span></button>
       ${eventLive() ? `<label class="it ev-it"><span class="ev-ic">${eventIcon()}</span><span class="grow">${esc(eventInfo().name)} teması<div class="sub">${esc(new Date(eventInfo().end - 1).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' }))} gününe kadar. Sonra seçtiğin tema kendiliğinden geri gelir.</div></span><input type="checkbox" class="sw sw-ev" ${eventEnabled() ? 'checked' : ''}></label>` : ''}
     </div>
     <div class="group-t">Yasal ve verilerim</div>
@@ -112,6 +118,11 @@ export default function settings(view) {
   view.querySelector('.pref').onclick = () => openFilters(() => toast('Tercihler kaydedildi.'));
   view.querySelector('.nt').onclick = notifSettings;
   view.querySelector('.th').onclick = themeMenu;
+  view.querySelector('.lgo').onclick = logoMenu;
+  view.querySelector('.lng').onclick = () => sheet('Dil / Language', `<div class="menu">${LANGS.map(([k, n, f]) => `<button data-l="${k}"><span style="font-size:22px">${f}</span><span class="grow">${n}</span>${getLang() === k ? icon('check') : ''}</button>`).join('')}</div>
+    <p class="muted" style="margin:6px 16px 16px;font-size:12.5px" data-noi18n>Gönderiler, mesajlar ve kullanıcıların yazdıkları çevrilmez. · Posts, messages and user content are not translated.</p>`, {
+    onMount(sh) { sh.querySelector('.menu').onclick = (e) => { const b = e.target.closest('[data-l]'); if (b && b.dataset.l !== getLang()) setLang(b.dataset.l); }; },
+  });
   view.querySelector('.lo').onclick = () => { if (confirm('Çıkış yapılsın mı?')) logout(); };
   view.querySelector('.em').onclick = () => sheet('E-posta', `<form class="form"><p class="muted" style="margin:0">Şifreni unutursan sıfırlama kodu bu adrese gönderilir. Başkalarına gösterilmez.</p>
       <input class="field" name="e" type="email" value="${esc(me.email || '')}" placeholder="ornek@mail.com"><button class="btn primary block">Kaydet</button></form>`, {

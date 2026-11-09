@@ -66,20 +66,30 @@ async function thread(view, id) {
   const paint = () => {
     view.querySelector('.n').textContent = t.subject;
     view.querySelector('.s').textContent = `#${t.no} · ${t.categoryLabel} · ${ST[t.status][1]}`;
-    box.innerHTML = t.msgs.map((m) => `<div class="mwrap ${m.from === 'user' ? 'me' : 'them'} gap">${m.from === 'admin' ? '<span class="sender">SwipeUp Destek</span>' : ''}<div class="msg">${m.image ? `<a href="${esc(m.image)}" target="_blank" rel="noopener"><img class="sup-im" src="${esc(m.image)}" alt=""></a>` : ''}${esc(m.text)}<span class="meta">${clock(m.at)}</span></div></div>`).join('')
-      + (t.status === 'open' ? '<div class="sys">Talebin ekibimize iletildi. Cevap gelince bildirim alacaksın.</div>' : t.status === 'closed' ? '<div class="sys">Bu talep kapatıldı. Yazarsan yeniden açılır.</div>' : '');
+    box.innerHTML = t.msgs.map((m) => (m.from === 'system' ? `<div class="sys">${esc(m.text)}</div>` : `<div class="mwrap ${m.from === 'user' ? 'me' : 'them'} gap">${m.from === 'admin' ? '<span class="sender">SwipeUp Destek</span>' : ''}<div class="msg">${m.image ? `<a href="${esc(m.image)}" target="_blank" rel="noopener"><img class="sup-im" src="${esc(m.image)}" alt=""></a>` : ''}${esc(m.text)}<span class="meta">${clock(m.at)}</span></div></div>`)).join('')
+      + (t.status === 'open' ? '<div class="sys">Talebin ekibimize iletildi. Cevap gelince bildirim alacaksın.</div>'
+        : t.status === 'answered' && t.closesAt ? `<div class="sys">Ekibimiz cevap verdi. ${new Date(t.closesAt).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} tarihine kadar yazmazsan talep kendiliğinden kapanır.</div>` : '');
     box.scrollTop = box.scrollHeight;
+    paintComp();
+  };
+  // Kapanan talebe yazılamaz; yeni talep açılır
+  const paintComp = () => {
+    if (t.status === 'closed') {
+      comp.innerHTML = `<div class="sup-closed"><span>${icon('lock')} Bu talep kapandı. Mesaj yazılamaz.</span><a class="btn primary sm" href="#/destek/yeni">Yeni talep aç</a></div>`;
+      return;
+    }
+    if (comp.querySelector('form')) return;
+    comp.innerHTML = `<form class="row1"><div class="box"><textarea rows="1" placeholder="Mesaj yaz..." maxlength="2000"></textarea></div><button class="go" aria-label="Gönder">${icon('send')}</button></form>`;
+    const ta = comp.querySelector('textarea');
+    ta.oninput = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(120, ta.scrollHeight)}px`; };
+    comp.querySelector('form').onsubmit = async (e) => {
+      e.preventDefault(); const text = ta.value.trim(); if (!text) return;
+      ta.value = ''; ta.style.height = 'auto';
+      try { await api(`/support/${id}/reply`, { body: { text } }); await load(); } catch (er) { toast(er.message); ta.value = text; if (/kapandı/.test(er.message)) load().catch(() => {}); }
+    };
   };
   const load = async () => { t = await api(`/support/${id}`); paint(); };
   try { await load(); } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return null; }
-  comp.innerHTML = `<form class="row1"><div class="box"><textarea rows="1" placeholder="Mesaj yaz..." maxlength="2000"></textarea></div><button class="go" aria-label="Gönder">${icon('send')}</button></form>`;
-  const ta = comp.querySelector('textarea');
-  ta.oninput = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(120, ta.scrollHeight)}px`; };
-  comp.querySelector('form').onsubmit = async (e) => {
-    e.preventDefault(); const text = ta.value.trim(); if (!text) return;
-    ta.value = ''; ta.style.height = 'auto';
-    try { await api(`/support/${id}/reply`, { body: { text } }); await load(); } catch (er) { toast(er.message); ta.value = text; }
-  };
   view.querySelector('.more').onclick = async () => {
     if (t.status === 'closed' || !confirm('Sorunun çözüldü mü? Talep kapatılsın mı?')) return;
     try { await api(`/support/${id}/close`, { body: {} }); toast('Talep kapatıldı. Teşekkürler!'); load(); } catch (er) { toast(er.message); }

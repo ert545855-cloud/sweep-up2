@@ -87,8 +87,12 @@ module.exports = function social(app, ctx) {
     const seen = new Map();
     store.filter('pviews', (v) => v.to === req.user.id && v.at >= since).sort((a, b) => b.at - a.at).forEach((v) => { if (!seen.has(v.from)) seen.set(v.from, v.at); });
     const list = [...seen.entries()].map(([id, at]) => ({ u: user(id), at })).filter((x) => x.u && !isBlocked(req.user.id, x.u.id));
-    if (eco.isPlus(req.user)) return res.json({ plus: true, count: list.length, items: list.map(({ u, at }) => ({ ...brief(u), age: ctx.shownAge(u), city: u.city, at, photo: (u.photos || [])[0] || u.avatar })) });
-    res.json({ plus: false, count: list.length, items: list.slice(0, 12).map(({ u, at }) => ({ photo: (u.photos || [])[0] || u.avatar, at })) });
+    const seenAt = req.user.viewersSeenAt || 0;
+    const fresh = list.filter((x) => x.at > seenAt).length;
+    // Sayfa açılınca "yeni ziyaretçi" sayısı sıfırlanır
+    if (req.query.seen) store.update('users', req.user.id, { viewersSeenAt: now() });
+    if (eco.isPlus(req.user)) return res.json({ plus: true, count: list.length, fresh, items: list.map(({ u, at }) => ({ ...brief(u), age: ctx.shownAge(u), city: u.city, at, photo: (u.photos || [])[0] || u.avatar })) });
+    res.json({ plus: false, count: list.length, fresh, items: list.slice(0, 12).map(({ u, at }) => ({ photo: (u.photos || [])[0] || u.avatar, at })) });
   });
   // eski ziyaret kayıtlarını temizle
   setInterval(() => store.filter('pviews', (v) => v.at < now() - 30 * DAY).forEach((v) => store.del('pviews', v.id)), 6 * 3600000).unref();
@@ -137,6 +141,14 @@ module.exports = function social(app, ctx) {
     store.update('users', req.user.id, { badges });
     emitTo(req.user.id, 'wallet', {});
     res.json({ badges, coins: user(req.user.id).coins || 0 });
+  });
+
+  // Rozeti profilde göster / gizle (etkinlik bitse de istediği zaman)
+  app.post('/api/cosmetics/badge/:id/toggle', auth, (req, res) => {
+    const badges = (req.user.badges || []).map((b) => (b.id === req.params.id ? { ...b, hidden: req.body?.show === undefined ? !b.hidden : !req.body.show } : b));
+    if (!badges.some((b) => b.id === req.params.id)) return res.status(404).json({ error: 'Rozet bulunamadı.' });
+    store.update('users', req.user.id, { badges });
+    res.json({ badges });
   });
 
   // ================= Süper mesaj =================

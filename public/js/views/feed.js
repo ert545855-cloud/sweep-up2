@@ -19,11 +19,14 @@ export default async function feed(view) {
     <a class="wh-card-f" href="#/cark" hidden><img class="wf-ic" src="/img/wheel/gift.svg" alt=""><span class="grow"><b>Hediye çarkı hazır!</b><small>Bu haftaki çevirme hakkını kullan</small></span><span class="go-chip">Çevir</span></a>
     <a class="qs-card" href="#/gorevler" hidden></a>
     <a class="sg-feed" href="#/sarki" hidden></a>
+    <a class="sg-feed ct-feed" href="#/yarismalar" hidden></a>
     <div class="event-slot"></div>
     <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
     <div class="social-row"><a class="genel-row feedg" href="#/genel"><span class="genel-ic">${icon('users')}</span><span class="grow"><b>Genel sohbet</b><small>Herkes burada</small></span></a>
       <a class="genel-row feedg rooms-e" href="#/odalar"><span class="genel-ic">🎵</span><span class="grow"><b>Odalar</b><small>Müzik, dizi, şehir…</small></span></a>
-      <a class="genel-row feedg speed-e" href="#/hizli"><span class="genel-ic">⚡</span><span class="grow"><b>Hızlı tanış</b><small>3 dk görüntülü</small></span></a></div>
+      <a class="genel-row feedg speed-e" href="#/hizli"><span class="genel-ic">⚡</span><span class="grow"><b>Hızlı tanış</b><small>3 dk görüntülü</small></span></a>
+      <a class="genel-row feedg vn-e" href="#/mekan"><span class="genel-ic">📍</span><span class="grow"><b>Mekandayım</b><small>Aynı yerdekilerle eşleş</small></span></a></div>
+    <div class="vn-friends"></div>
     ${state.config?.features?.market ? `<a class="mk-entry" href="#/market"><span class="mk-ei">${icon('bag')}</span><span class="grow"><b>SwipeUp Store</b><small>İkinci el al, sat · komisyon yok · güvenli ödeme</small></span><span class="go-chip">Göz at</span></a>` : ''}
     <div class="push-slot"></div>
     <div class="people"></div>
@@ -56,9 +59,16 @@ export default async function feed(view) {
         ${isOn(g.user) ? '<i class="online"></i>' : ''}<span class="name">${esc(g.user.username)}</span></a>`).join('')}`;
   };
 
+  let fresh = [];
+  const pcard = (u, isNew) => `<div class="person-card">
+        ${isNew ? '<span class="new">YENİ</span>' : ''}
+        <a href="#/u/${esc(u.username)}" class="av-wrap" data-presence="${esc(u.id)}"><img class="av av-56" src="${esc(u.avatar)}" alt="">${isOn(u) ? '<i class="online"></i>' : ''}</a>
+        <a href="#/u/${esc(u.username)}" class="n ellipsis">${nm(u)}</a>
+        <span class="s ellipsis">${isOn(u) ? 'çevrimiçi' : '@' + esc(u.username)}</span>
+        <button class="btn primary sm msg" data-id="${esc(u.id)}">Mesaj</button></div>`;
   const paintPeople = () => {
-    const list = people.slice(0, 20);
-    if (!list.length) {
+    const online = people.filter(isOn).slice(0, 20);
+    if (!people.length && !fresh.length) {
       peopleEl.innerHTML = `<div class="push-card" style="background:var(--surface)">${icon('userPlus')}<div class="grow"><b>Arkadaşlarını davet et</b><p>Henüz başka üye yok. Bağlantıyı paylaş, kaydolan herkes burada görünür.</p></div><button class="btn primary sm inv">Paylaş</button></div>`;
       peopleEl.querySelector('.inv').onclick = async () => {
         const url = location.origin;
@@ -67,21 +77,16 @@ export default async function feed(view) {
       };
       return;
     }
-    const onlineCount = list.filter(isOn).length;
-    peopleEl.innerHTML = `<div class="section-t"><span>${onlineCount ? `Şu an çevrimiçi · ${onlineCount}` : 'Yeni üyeler'}</span><a href="#/search">Tümü</a></div>
-      <div class="people-row">${list.map((u) => `<div class="person-card">
-        ${Date.now() - (u.createdAt || 0) < 3 * 86400000 ? '<span class="new">YENİ</span>' : ''}
-        <a href="#/u/${esc(u.username)}" class="av-wrap" data-presence="${esc(u.id)}"><img class="av av-56" src="${esc(u.avatar)}" alt="">${isOn(u) ? '<i class="online"></i>' : ''}</a>
-        <a href="#/u/${esc(u.username)}" class="n ellipsis">${nm(u)}</a>
-        <span class="s ellipsis">${isOn(u) ? 'çevrimiçi' : '@' + esc(u.username)}</span>
-        <button class="btn primary sm msg" data-id="${esc(u.id)}">Mesaj</button></div>`).join('')}</div>`;
+    // Çevrimiçi olanlar ve son 7 günde katılanlar (7 gün dolunca "Yeni üyeler"den çıkar)
+    peopleEl.innerHTML = `${online.length ? `<div class="section-t"><span>Şu an çevrimiçi · ${online.length}</span><a href="#/search">Tümü</a></div><div class="people-row">${online.map((u) => pcard(u, false)).join('')}</div>` : ''}
+      ${fresh.length ? `<div class="section-t"><span>Yeni üyeler</span><a href="#/search">Tümü</a></div><div class="people-row">${fresh.map((u) => pcard(u, true)).join('')}</div>` : ''}`;
   };
   peopleEl.addEventListener('click', (e) => {
     const b = e.target.closest('.msg'); if (b) openChatWith(b.dataset.id).catch((er) => toast(er.message));
   });
 
   const loadStories = async () => { stories = await api('/stories').catch(() => []); paintStories(); };
-  const loadPeople = async () => { people = await api('/people').catch(() => []); paintPeople(); };
+  const loadPeople = async () => { [people, fresh] = await Promise.all([api('/people').catch(() => []), api('/people?new=1').catch(() => [])]); paintPeople(); };
 
   offs.push(on('lives', paintStories));
   offs.push(on('presence', () => { paintStories(); paintPeople(); }));
@@ -100,6 +105,18 @@ export default async function feed(view) {
       <span class="qc-bar"><i style="width:${Math.round((q.doneCount / q.total) * 100)}%"></i></span>${q.claimable ? '<span class="go-chip">Al</span>' : ''}`;
   };
   paintQs();
+  // Devam eden yarışma kartı
+  api('/contests').then((r) => {
+    const c = (r.items || []).find((x) => x.phase === 'live'); const a = view.querySelector('.ct-feed'); if (!c || !a) return;
+    a.href = `#/yarismalar/${c.id}`;
+    a.innerHTML = `<span class="sgf-ic" style="font-size:30px;display:grid;place-items:center">${esc(c.em)}</span><span class="grow"><b>${esc(c.title)}</b><small>${esc(c.metricLabel)}${c.me ? ` · ${c.me.rank}. sıradasın` : ''}</small></span><span class="go-chip">${c.me ? 'Sıralama' : 'Katıl'}</span>`;
+    a.hidden = false;
+  }).catch(() => {});
+  // Arkadaşların şu an nerede (karşılıklı takip)
+  api('/checkins/friends').then((list) => {
+    const el2 = view.querySelector('.vn-friends'); if (!el2 || !list.length) return;
+    el2.innerHTML = `<div class="section-t"><span>📍 Arkadaşların şu an</span><a href="#/mekan">Mekandayım</a></div><div class="vnf-row">${list.map((x) => `<a class="vnf" href="#/u/${esc(x.user.username)}"><img class="av av-40" src="${esc(x.user.avatar)}" alt=""><span class="grow"><b class="ellipsis">${esc(x.user.name)}</b><small class="ellipsis">${x.venue.em} ${esc(x.venue.name)}</small></span></a>`).join('')}</div>`;
+  }).catch(() => {});
   api('/wheel').then((w) => { view.querySelector('.wh-card-f').hidden = !w.canSpin; }).catch(() => {});
   api('/songs/summary').then((r) => {
     const c = r.contest; const a = view.querySelector('.sg-feed'); if (!c || !a) return;
@@ -146,12 +163,12 @@ export default async function feed(view) {
   const [posts] = await Promise.all([api('/feed'), loadStories(), loadPeople()]);
   const list = view.querySelector('.posts');
   if (!posts.length) {
-    list.innerHTML = `<div class="empty"><div class="big">${icon('camera')}</div><h2>Akışın boş</h2>Birkaç kişiyi takip et ya da ilk gönderini paylaş.<p><a class="btn primary" href="#/create">Gönderi paylaş</a></p></div>`;
+    list.innerHTML = `<div class="empty"><div class="big">${icon('camera')}</div><h2>Akışın boş</h2>Akışında takip ettiğin kişilerin paylaşımları görünür. Birkaç kişiyi takip et ya da ilk gönderini paylaş.<p><a class="btn primary" href="#/search">Kişileri keşfet</a></p></div>`;
   } else {
     list.innerHTML = `<div class="section-t"><span>Akış</span></div>${posts.map(postCard).join('')}`;
     posts.forEach((p) => wirePost(list.querySelector(`[data-post="${p.id}"]`), p));
     offs.push(autoplay(list));
-    list.insertAdjacentHTML('beforeend', `<div class="empty" style="padding:24px">Hepsini gördün. <a class="link" href="#/swipe">Yeni insanlarla tanış</a></div>`);
+    list.insertAdjacentHTML('beforeend', `<div class="empty" style="padding:24px">Takip ettiklerinin paylaşımlarının hepsini gördün. <a class="link" href="#/search">Yeni kişiler keşfet</a></div>`);
   }
   return () => offs.forEach((f) => f());
 }
