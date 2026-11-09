@@ -293,6 +293,7 @@ const D = {
   'Arkadaşını çağır': 'Invite a friend', 'SwipeUp’tan birini çağır': 'Invite someone on SwipeUp', 'Masa bağlantısını kopyala': 'Copy table link', 'Oda bağlantısını kopyala': 'Copy room link', 'Arkadaşlarını çağır': 'Invite your friends',
   'Herkes sırayla çizer, diğerleri yazarak tahmin eder.': 'Everyone takes turns drawing; the others type their guesses.', 'Oyunu başlat': 'Start game', 'En az 2 kişi gerekli': 'At least 2 players needed', 'Davet et': 'Invite', 'Bir kelime seç': 'Pick a word', 'Çizeceğin kelimeyi seç': 'Pick the word to draw',
   'Tahminini yaz…': 'Type your guess…', 'Çizerken sohbet edebilirsin…': 'You can chat while drawing…', 'Yeniden oyna': 'Play again', 'Oyunlara dön': 'Back to games', 'Oyun bitti': 'Game over', 'Bunu çiz! Harf ya da sayı yazma 😉': 'Draw this! No letters or numbers 😉', 'Kelime buydu': 'That was the word', 'Bildin! Diğerlerini bekle': 'You got it! Wait for the others',
+  'Kapağı düzenle': 'Edit cover', 'Kapak güncellendi.': 'Cover updated.', 'Galeriden': 'Gallery', 'Konum': 'Position',
 };
 
 // Sayı / isim içeren metinler

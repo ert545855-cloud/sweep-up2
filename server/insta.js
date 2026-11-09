@@ -17,8 +17,18 @@ module.exports = function insta(app, ctx) {
     const it = ctx.storyItem(s, s.userId);
     return { ...it, seen: true, myReaction: null, viewerCount: undefined, reshareOf: it.reshareOf ? { id: it.reshareOf.id, username: it.reshareOf.username } : null, src: s.id };
   };
-  const coverOf = (it) => (it.mediaType === 'image' && it.media ? it.media : null);
-  const hlOut = (h) => ({ id: h.id, title: h.title, cover: h.cover || null, bg: h.items[0]?.bg || 'g2', count: h.items.length, at: h.at, kind: h.items[0]?.mediaType || 'text' });
+  // Kapak: kendi yüklediği fotoğraf ya da öne çıkandaki bir hikaye (fotoğraf, video, yazı, fal kartı)
+  const coverItem = (h) => h.items.find((i) => i.id === h.coverId) || h.items.find((i) => i.mediaType === 'image' && i.media && i.media === h.cover) || h.items.find((i) => i.mediaType === 'image' && i.media) || h.items[0];
+  const coverOut = (h) => {
+    const pos = Number.isFinite(h.coverPos) ? h.coverPos : 50;
+    if (h.coverMedia) return { t: 'image', media: h.coverMedia, pos };
+    const it = coverItem(h); if (!it) return { t: 'text', bg: 'g2', text: '' };
+    if (it.mediaType === 'card' && it.card) return { t: 'card', fal: it.card.type || 'kahve', id: it.id };
+    if ((it.mediaType === 'image' || it.mediaType === 'video') && it.media) return { t: it.mediaType, media: it.media, filter: it.filter || null, pos, id: it.id };
+    const txt = (it.stickers || []).find((x) => x.type === 'text')?.text || (it.stickers || []).find((x) => x.type === 'emoji')?.emoji || '';
+    return { t: 'text', bg: it.bg || 'g2', text: String(txt).slice(0, 60), id: it.id };
+  };
+  const hlOut = (h) => ({ id: h.id, title: h.title, cover: coverOut(h), count: h.items.length, at: h.at, custom: !!h.coverMedia });
   ctx.highlightsOf = (uid) => store.filter('highlights', (h) => h.userId === uid && h.items.length).sort((a, b) => (a.order ?? a.at) - (b.order ?? b.at)).map(hlOut);
   const cleanTitle = (t) => moderation.mask(String(t || '').trim().slice(0, 24)) || 'Öne çıkan';
 
@@ -53,12 +63,11 @@ module.exports = function insta(app, ctx) {
     if (h && h.userId !== me) return res.status(404).json({ error: 'Öne çıkan bulunamadı.' });
     if (!h) {
       if (store.filter('highlights', (x) => x.userId === me).length >= 40) return res.status(400).json({ error: 'En fazla 40 öne çıkanın olabilir.' });
-      h = { id: nanoid(10), userId: me, title: cleanTitle(req.body?.title), items: [], cover: null, at: now() };
+      h = { id: nanoid(10), userId: me, title: cleanTitle(req.body?.title), items: [], at: now() };
     }
     const have = new Set(h.items.map((i) => i.src));
     stories.sort((a, b) => a.at - b.at).forEach((s) => { if (!have.has(s.id)) h.items.push(snap(s)); });
     h.items = h.items.slice(-100);
-    if (!h.cover) h.cover = h.items.map(coverOf).find(Boolean) || null;
     store.put('highlights', h);
     res.json(hlOut(h));
   });
@@ -69,8 +78,10 @@ module.exports = function insta(app, ctx) {
     const b = req.body || {};
     if (b.title != null) h.title = cleanTitle(b.title);
     if (Array.isArray(b.remove)) { const rm = new Set(b.remove.map(String)); h.items = h.items.filter((i) => !rm.has(i.id)); }
-    if (b.cover != null) { const it = h.items.find((i) => i.id === String(b.cover)); if (it && coverOf(it)) h.cover = coverOf(it); }
-    if (h.cover && !h.items.some((i) => coverOf(i) === h.cover)) h.cover = h.items.map(coverOf).find(Boolean) || null;
+    if (b.cover != null) { const it = h.items.find((i) => i.id === String(b.cover)); if (it) { h.coverId = it.id; h.coverMedia = null; } }
+    if (b.coverMedia === null) h.coverMedia = null; else if (b.coverMedia && ctx.isMedia(b.coverMedia)) h.coverMedia = String(b.coverMedia);
+    if (b.coverPos != null) h.coverPos = Math.max(0, Math.min(100, Math.round(+b.coverPos || 0)));
+    if (h.coverId && !h.items.some((i) => i.id === h.coverId)) h.coverId = null;
     if (!h.items.length) { store.del('highlights', h.id); return res.json({ deleted: true }); }
     store.put('highlights', h);
     res.json(hlOut(h));

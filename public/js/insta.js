@@ -1,8 +1,9 @@
 // Instagram tarzı yardımcılar: öne çıkanlar, gönderi anketi, gönderi istatistikleri, görülme takibi, notlar
 import { icon } from './icons.js';
 import {
-  api, esc, toast, sheet, state, num, ago, avatar, nm, on,
+  api, esc, toast, sheet, state, num, ago, avatar, nm, on, filterCss, pickFile, compressImage, uploadFile,
 } from './core.js';
+import { falIcon } from './eg-icons.js';
 
 // ---------- Hikaye küçük resmi (arşiv / öne çıkan kapakları) ----------
 export function storyThumb(it, cls = '') {
@@ -12,7 +13,20 @@ export function storyThumb(it, cls = '') {
   const t = (it.stickers || []).find((x) => x.type === 'text')?.text || '';
   return `<span class="sthumb ${cls} tbg-${esc(it.bg || 'g2')}"><em>${esc(t.slice(0, 40))}</em></span>`;
 }
-const hlCover = (h) => (h.cover ? `<img src="${esc(h.cover)}" alt="" loading="lazy">` : `<span class="hl-ph tbg-${esc(h.bg || 'g2')}">${h.kind === 'card' ? '🔮' : icon('star')}</span>`);
+// Öne çıkan kapağı: fotoğraf / video karesi / yazılı hikayenin mini hali / fal kartı
+export function coverHtml(c) {
+  if (!c) return '<span class="hl-in tbg-g2"></span>';
+  const pos = `object-position:50% ${Number.isFinite(c.pos) ? c.pos : 50}%`;
+  if (c.t === 'image') return `<span class="hl-in"><img src="${esc(c.media)}" alt="" loading="lazy" style="${pos};filter:${filterCss(c.filter)}"></span>`;
+  if (c.t === 'video') return `<span class="hl-in"><video src="${esc(c.media)}#t=0.5" muted playsinline preload="metadata" style="${pos};filter:${filterCss(c.filter)}"></video></span>`;
+  if (c.t === 'card') return `<span class="hl-in hl-fal">${falIcon(c.fal, 40)}</span>`;
+  // Yazılı hikaye: ilk kelimeler, en uzun kelime daireye sığacak boyutta
+  const words = String(c.text || '').trim().split(/\s+/).filter(Boolean).slice(0, 4);
+  const t = words.join(' ').slice(0, 30);
+  const longest = Math.max(1, ...words.map((w) => [...w].length));
+  return `<span class="hl-in hl-tx tbg-${esc(c.bg || 'g2')}">${t ? `<em style="--fs:${Math.min(12, Math.max(6.5, 46 / (longest * 0.6))).toFixed(1)}">${esc(t)}</em>` : icon('star')}</span>`;
+}
+const hlCover = (h) => coverHtml(h.cover);
 
 // ---------- Profildeki öne çıkanlar satırı ----------
 export function hlRowHtml(list, self) {
@@ -35,11 +49,12 @@ export function wireHlRow(root, { self, reload }) {
   row.addEventListener('contextmenu', (e) => { if (e.target.closest('a.hl')) e.preventDefault(); });
 }
 export function hlMenu(id, title, reload) {
-  sheet(title, `<div class="menu"><button data-a="add">${icon('plus')}Hikaye ekle</button><button data-a="ren">${icon('edit')}Adını değiştir</button><button data-a="del" class="danger">${icon('trash')}Öne çıkanı sil</button></div>`, {
+  sheet(title, `<div class="menu"><button data-a="cov">${icon('image')}Kapağı düzenle</button><button data-a="add">${icon('plus')}Hikaye ekle</button><button data-a="ren">${icon('edit')}Adını değiştir</button><button data-a="del" class="danger">${icon('trash')}Öne çıkanı sil</button></div>`, {
     onMount(sh, close) {
       sh.querySelector('.menu').onclick = async (e) => {
         const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return; close();
         try {
+          if (a === 'cov') return coverEditor(id, reload);
           if (a === 'add') return pickStories({ title: 'Hikaye ekle', go: 'Ekle', hlId: id, done: reload });
           if (a === 'ren') {
             const t = prompt('Öne çıkanın adı', title); if (t == null) return;
@@ -48,6 +63,44 @@ export function hlMenu(id, title, reload) {
           if (a === 'del' && confirm(`“${title}” öne çıkanı silinsin mi? Hikayeler arşivinde kalır.`)) { await api(`/highlights/${id}`, { method: 'DELETE' }); toast('Öne çıkan silindi.'); reload?.(); }
         } catch (er) { toast(er.message); }
       };
+    },
+  });
+}
+// Kapak düzenleyici: öne çıkandaki bir hikayeyi seç ya da galeriden fotoğraf yükle, fotoğrafı yukarı-aşağı kaydır
+export function coverEditor(id, done) {
+  sheet('Kapağı düzenle', '<div class="cov-ed"><div class="spinner"></div></div>', {
+    async onMount(sh, close) {
+      const box = sh.querySelector('.cov-ed');
+      let h;
+      try { h = await api(`/highlights/${id}`); } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+      let cover = { ...h.cover }; let pick = { cover: cover.id || null, coverMedia: h.custom ? cover.media : null };
+      const descr = (it) => (it.mediaType === 'card' ? { t: 'card', fal: it.card?.type, id: it.id } : (it.mediaType === 'image' || it.mediaType === 'video') && it.media ? { t: it.mediaType, media: it.media, filter: it.filter, id: it.id, pos: cover.pos ?? 50 }
+        : { t: 'text', bg: it.bg, text: (it.stickers || []).find((x) => x.type === 'text')?.text || '', id: it.id });
+      const paint = () => {
+        const canPos = cover.t === 'image' || cover.t === 'video';
+        box.innerHTML = `<div class="cov-big"><span class="hl-c big">${coverHtml(cover)}</span><b>${esc(h.title)}</b></div>
+          ${canPos ? `<label class="cov-pos"><span>Konum</span><input type="range" min="0" max="100" value="${cover.pos ?? 50}"></label>` : ''}
+          <div class="cov-list"><button type="button" class="cov-up">${icon('image')}<small>Galeriden</small></button>${h.items.map((it) => `<button type="button" class="cov-it ${!pick.coverMedia && pick.cover === it.id ? 'on' : ''}" data-id="${esc(it.id)}"><span class="hl-c sm">${coverHtml(descr(it))}</span></button>`).join('')}</div>
+          <button class="btn primary block cov-ok">Kaydet</button>`;
+      };
+      paint();
+      box.addEventListener('input', (e) => { if (!e.target.matches('.cov-pos input')) return; cover.pos = +e.target.value; const m = box.querySelector('.cov-big img, .cov-big video'); if (m) m.style.objectPosition = `50% ${cover.pos}%`; });
+      box.addEventListener('click', async (e) => {
+        const it = e.target.closest('.cov-it');
+        if (it) { const x = h.items.find((i) => i.id === it.dataset.id); cover = descr(x); pick = { cover: x.id, coverMedia: null }; return paint(); }
+        if (e.target.closest('.cov-up')) {
+          const f = await pickFile('image/*'); if (!f) return;
+          const b = box.querySelector('.cov-up'); b.innerHTML = '<div class="spinner"></div>';
+          try { const up = await uploadFile(await compressImage(f, 640)); cover = { t: 'image', media: up.url, pos: 50 }; pick = { cover: null, coverMedia: up.url }; } catch (er) { toast(er.message); }
+          return paint();
+        }
+        if (e.target.closest('.cov-ok')) {
+          try {
+            await api(`/highlights/${id}`, { method: 'PATCH', body: { ...(pick.coverMedia ? { coverMedia: pick.coverMedia } : { cover: pick.cover, coverMedia: null }), coverPos: cover.pos ?? 50 } });
+            close(); toast('Kapak güncellendi.'); done?.();
+          } catch (er) { toast(er.message); }
+        }
+      });
     },
   });
 }
