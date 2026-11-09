@@ -1,11 +1,13 @@
 import { icon } from '../icons.js';
 import { api, esc, toast, isOn, state, sheet, on, tick, plusSheet, needCoins } from '../core.js';
 import { showMatch } from '../app.js';
+import { egi } from '../eg-icons.js';
 import { voiceChip } from '../extras.js';
 
 export default async function swipe(view) {
   view.innerHTML = `<header class="topbar">
       <h1><span>Keşfet</span></h1>
+
       <button class="ib soft bst" aria-label="Boost">${icon('bolt')}</button>
       <a class="ib soft lk" href="#/likes" aria-label="Seni beğenenler">${icon('heart')}<span class="num-badge lkn" ${state.badges.likes ? '' : 'hidden'}>${state.badges.likes}</span></a>
       <button class="ib soft flt" aria-label="Filtreler">${icon('sliders')}</button>

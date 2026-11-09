@@ -55,4 +55,17 @@ function flag(text) {
   return null;
 }
 
-module.exports = { mask, flag };
+// Gönderilmeden önce "Emin misin?" uyarısı için: tek bir küfür/hakaret bile yeterli
+function warn(text) {
+  if (!text) return null;
+  const f = flag(text);
+  if (f) return f;
+  const n = norm(text);
+  const prof = findSpans(text, PROF_RE).length;
+  const ins = findSpans(text, INS_RE).length;
+  if (prof || ins) return { level: 'low', reason: prof ? 'Küfür içeriyor' : 'Hakaret içeriyor' };
+  if (THREAT.some((t) => n.includes(t))) return { level: 'high', reason: 'Tehdit içeriği' };
+  return null;
+}
+
+module.exports = { mask, flag, warn };

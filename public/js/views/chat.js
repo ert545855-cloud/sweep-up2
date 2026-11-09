@@ -5,6 +5,8 @@ import {
 import { restoreDraft } from '../update.js';
 import { startCall } from '../calls.js';
 import { FAL_TYPES, zodiacOf } from '../fal-data.js';
+import { streakChip, shareFal, shareCard, modCheck } from '../engage.js';
+import { egi, giftIcon, falIcon } from '../eg-icons.js';
 
 const EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
 const planDate = (t) => new Date(t).toLocaleString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
@@ -21,6 +23,38 @@ function mapHtml(lat, lng) {
   let tiles = '';
   for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) tiles += `<img src="https://tile.openstreetmap.org/${z}/${tx + i}/${ty + j}.png" style="left:${(i + 1) * 256}px;top:${(j + 1) * 256}px" alt="" loading="lazy">`;
   return `<span class="map"><span class="tiles" style="transform:translate(${ox}px,${oy}px)">${tiles}</span><span class="pin">${icon('mapPin')}</span><small class="osm">© OpenStreetMap</small></span>`;
+}
+// Buluşma planlayıcı: OpenStreetMap (Overpass) ile yakındaki kafe, restoran, park ve etkinlik yerleri
+const NEAR_Q = {
+  cafe: '["amenity"~"^(cafe|ice_cream)$"]',
+  restaurant: '["amenity"~"^(restaurant|fast_food|pub|bar)$"]',
+  park: '["leisure"~"^(park|garden)$"]["name"]',
+  fun: '["amenity"~"^(cinema|theatre|arts_centre)$"]',
+};
+const NEAR_LBL = { cafe: 'Kafe', ice_cream: 'Dondurmacı', restaurant: 'Restoran', fast_food: 'Hızlı yemek', pub: 'Pub', bar: 'Bar', park: 'Park', garden: 'Bahçe', cinema: 'Sinema', theatre: 'Tiyatro', arts_centre: 'Sanat merkezi', bowling_alley: 'Bowling', escape_game: 'Kaçış oyunu' };
+const nearCache = new Map();
+async function nearbyPlaces(lat, lng, kind) {
+  const k = `${kind}_${lat.toFixed(3)}_${lng.toFixed(3)}`;
+  if (nearCache.has(k)) return nearCache.get(k);
+  const r = kind === 'park' ? 2500 : 1500;
+  const extra = kind === 'fun' ? `nwr(around:${r},${lat},${lng})["leisure"~"^(bowling_alley|escape_game)$"];` : '';
+  const q = `[out:json][timeout:12];(nwr(around:${r},${lat},${lng})${NEAR_Q[kind]}["name"];${extra});out center 40;`;
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 13000);
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: new URLSearchParams({ data: q }), signal: ctl.signal });
+    const j = await res.json();
+    const R = Math.PI / 180;
+    const dist = (a, b) => { const x = Math.sin(((b.lat - a.lat) * R) / 2) ** 2 + Math.cos(a.lat * R) * Math.cos(b.lat * R) * Math.sin(((b.lng - a.lng) * R) / 2) ** 2; return 12742 * Math.asin(Math.sqrt(x)); };
+    const seen = new Set();
+    const out = (j.elements || []).map((e) => {
+      const p = { lat: e.lat ?? e.center?.lat, lng: e.lon ?? e.center?.lon }; const tg = e.tags || {};
+      if (p.lat == null || !tg.name || seen.has(tg.name)) return null; seen.add(tg.name);
+      const type = tg.amenity || tg.leisure; const area = tg['addr:street'] || tg['addr:suburb'] || tg['addr:district'] || '';
+      return { name: tg.name, sub: [NEAR_LBL[type] || 'Mekan', area].filter(Boolean).join(' · '), label: area ? `${tg.name}, ${area}` : tg.name, km: dist({ lat, lng }, p) };
+    }).filter(Boolean).sort((a, b) => a.km - b.km).slice(0, 8);
+    nearCache.set(k, out);
+    return out;
+  } finally { clearTimeout(t); }
 }
 const TTL_OPTS = [[0, 'Kapalı'], [3600000, '1 saat'], [86400000, '24 saat'], [604800000, '7 gün']];
 const ttlLabel = (t) => (TTL_OPTS.find((x) => x[0] === t) || [0, ''])[1];
@@ -53,6 +87,7 @@ export default async function chat(view, chatId) {
       <a class="ib" href="#/chats" aria-label="Geri">${icon('back')}</a>
       <a class="who" href="#/chat/${esc(chatId)}/info">${avatar(other, 40, { ring: true, dot: !isGroup })}
         <div class="grow"><div class="n ellipsis">${nm(other)}</div><div class="s ellipsis"></div></div></a>
+      <a class="stk-h" href="#/seriler" aria-label="Sohbet serisi">${isGroup ? '' : streakChip(data.streak, true)}</a>
       <button class="ib ttl-ind" aria-label="Kaybolan mesajlar" ${ttl ? '' : 'hidden'}>${icon('timer')}</button>
       ${isGroup || falChat ? '' : `<button class="ib vc" aria-label="Sesli ara">${icon('phone')}</button><button class="ib vv" aria-label="Görüntülü ara">${icon('video')}</button>`}
     </header>
@@ -136,7 +171,7 @@ export default async function chat(view, chatId) {
     if (m.fal) {
       const f = m.fal; const t = FAL_TYPES[f.type] || { em: '🔮', name: 'Fal' };
       const z = zodiacOf(f.zodiac);
-      return `<div class="msg fal-msg"><div class="fm-h"><span>${t.em}</span><b>${t.name} isteği</b>${f.status === 'answered' ? '<span class="chip fal-ok">Cevaplandı</span>' : '<span class="chip fal-wait-chip">Bekliyor</span>'}</div>
+      return `<div class="msg fal-msg"><div class="fm-h">${falIcon(f.type, 26)}<b>${t.name} isteği</b>${f.status === 'answered' ? '<span class="chip fal-ok">Cevaplandı</span>' : '<span class="chip fal-wait-chip">Bekliyor</span>'}</div>
         ${f.images?.length ? `<div class="fq-imgs">${f.images.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Fincan fotoğrafı" loading="lazy"></a>`).join('')}</div>` : ''}
         ${f.cards?.length ? `<div class="fq-cards">${f.cards.map((c) => `<span class="chip"><small>${esc(c.pos)}</small> ${c.em} ${esc(c.name)}${c.rev ? ' (ters)' : ''}</span>`).join('')}</div>` : ''}
         ${z ? `<div class="fq-line">${z[2]} ${z[1]}${f.partner ? '' : ''}</div>` : ''}
@@ -151,6 +186,8 @@ export default async function chat(view, chatId) {
         ${m.text ? `<div class="msg">${reply}${esc(m.text)}${meta}</div>` : `<span class="shm-meta">${meta}</span>`}`;
     }
     if (m.game) return `<div class="msg game-msg">${gameHtml(m)}${meta}</div>`;
+    if (m.gift) return `<div class="msg gift-msg">${giftIcon(m.gift, 64, 'gf-em')}<b>${esc(m.gift.name)}</b><small>${m.from === state.me.id ? `${esc(otherName())} kişisine gönderdin` : 'sana hediye gönderdi'} · ${m.gift.coins} jeton</small>${meta}</div>`;
+    if (m.compat) return `<div class="msg compat-msg">${compatHtml(m)}${meta}</div>`;
     if (m.plan) return `<div class="msg plan-msg">${planHtml(m)}${meta}</div>`;
     if (m.viewOnce) {
       const mine = m.from === state.me.id;
@@ -173,8 +210,79 @@ export default async function chat(view, chatId) {
     }
     const quote = m.quote?.kind === 'prompt' ? `<span class="pq-quote"><small>${esc(m.quote.q)}</small>${esc(m.quote.a)}</span>` : m.quote?.kind === 'comment' ? `<a class="pq-quote" href="#/p/${esc(m.quote.postId)}"><small>${esc(m.quote.q)}</small>${esc(m.quote.a)}</a>` : '';
     if (m.superMsg) return `<div class="msg super-msg"><span class="sm-tag">💌 Süper mesaj</span>${esc(m.text)}${meta}</div>`;
-    return `<div class="msg">${story}${quote}${reply}${esc(m.text)}${meta}</div>`;
+    const falAns = !isGroup && other?.role === 'falci' && m.from === other.id && (m.text || '').length >= 60;
+    return `<div class="msg">${story}${quote}${reply}${esc(m.text)}${meta}</div>${falAns ? `<button class="fal-share">${icon('send')} Hikayende paylaş</button>` : ''}`;
   };
+  // ---- Uyum testi (10 soru, Falcı Teyze yorumlar) ----
+  let compatQs = null;
+  const loadCompatQs = async () => { compatQs = compatQs || await api('/compat/questions'); return compatQs; };
+  function compatHtml(m) {
+    const c = m.compat; const me = state.me.id;
+    const head = `<div class="gm-h">${egi('uyum', 26)} <b>Uyum testi</b><small>10 soru · Falcı Teyze yorumlar</small></div>`;
+    if (c.status === 'done') {
+      const q = compatQs || [];
+      const ids = Object.keys(c.answers || {}); const oid = ids.find((x) => x !== me);
+      const rows = q.length && c.answers[me] && c.answers[oid] ? `<details class="cp-det"><summary>Cevapları karşılaştır</summary>${q.map((x, i) => `<div class="bm-row ${c.per?.[i] === 10 ? 'same' : ''}"><span>${esc(x.o[c.answers[me][i]])}</span><i>${c.per?.[i] === 10 ? '💞' : c.per?.[i] === 5 ? '≈' : '↔'}</i><span>${esc(x.o[c.answers[oid][i]])}</span></div>`).join('')}<small class="bm-leg"><span>Sen</span><span>${esc(otherName())}</span></small></details>` : '';
+      return `${head}<div class="cp-pct"><b>%${c.pct}</b><span>uyum</span></div><p class="cp-com">${esc(c.comment || '')}</p>${rows}<button class="btn sm cp-share">${icon('send')} Hikayende paylaş</button>`;
+    }
+    if (c.status === 'scoring') return `${head}<div class="cp-pct"><b>%${c.pct}</b><span>uyum</span></div><p class="gm-s">Falcı Teyze sonucunuzu yorumluyor…</p>`;
+    const done = c.answers?.[me];
+    const n = Object.keys(c.answers || {}).length;
+    if (done) return `${head}<p class="gm-s">Cevapların gönderildi. ${esc(otherName())} de çözünce sonuç ve Falcı Teyze’nin yorumu gelecek.</p>`;
+    return `${head}<p class="gm-s">${n ? `${esc(otherName())} testi çözdü, sıra sende!` : 'İkiniz de 10 soruyu cevaplayın, uyumunuzu görün.'}</p><button class="btn primary sm cp-play">Testi çöz</button>`;
+  }
+  async function compatSheet(m) {
+    let q;
+    try { q = await loadCompatQs(); } catch (er) { toast(er.message); return; }
+    const pick = q.map(() => null);
+    sheet('Uyum testi', `<div class="cp-form">${q.map((x, i) => `<div class="cp-q" data-i="${i}"><b>${i + 1}. ${esc(x.q)}</b><div class="cp-o">${x.o.map((o, j) => `<button type="button" data-v="${j}">${esc(o)}</button>`).join('')}</div></div>`).join('')}
+      <button class="btn primary block cp-send" disabled>Cevapları gönder (0/${q.length})</button></div>`, {
+      onMount(sh, close) {
+        const f = sh.querySelector('.cp-form'); const sendB = f.querySelector('.cp-send');
+        f.onclick = async (e) => {
+          const b = e.target.closest('.cp-o button');
+          if (b) {
+            const row = b.closest('.cp-q'); pick[+row.dataset.i] = +b.dataset.v;
+            row.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+            const k = pick.filter((x) => x !== null).length;
+            sendB.disabled = k < q.length; sendB.textContent = `Cevapları gönder (${k}/${q.length})`;
+            const nx = row.nextElementSibling; if (nx?.classList.contains('cp-q') && pick[+nx.dataset.i] === null) nx.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+          if (e.target.closest('.cp-send')) {
+            sendB.disabled = true;
+            try { upd(await api(`/messages/${m.id}/compat`, { body: { answers: pick } })); close(); toast('Cevapların gönderildi'); } catch (er) { toast(er.message); sendB.disabled = false; }
+          }
+        };
+      },
+    });
+  }
+  async function startCompat() {
+    try { addMsg(await api(`/chats/${chatId}/compat`, { body: {} })); } catch (er) {
+      if (er.status === 409 || /zaten/.test(er.message)) { const o = msgs.find((x) => x.compat?.status === 'open'); if (o && !o.compat.answers?.[state.me.id]) return compatSheet(o); }
+      toast(er.message);
+    }
+  }
+  // ---- Sohbette sanal hediye ----
+  async function giftSheet() {
+    const g = await api('/gifts').catch(() => null); if (!g) return toast('Hediyeler yüklenemedi.');
+    sheet(`${esc(otherName())} kişisine hediye`, `<div class="gift-grid">${g.gifts.map((x) => `<button data-g="${esc(x.id)}">${giftIcon(x, 48, 'em')}<b>${esc(x.name)}</b><small>${x.coins} jeton</small></button>`).join('')}</div>
+      <div class="gift-foot"><span>Bakiye: <b class="bal">${g.coins}</b> jeton</span><a class="link" href="#/store">Jeton al</a></div>`, {
+      onMount(sh, close) {
+        sh.querySelector('.gift-grid').onclick = async (e) => {
+          const b = e.target.closest('[data-g]'); if (!b) return;
+          const gift = g.gifts.find((x) => x.id === b.dataset.g);
+          if (gift.coins > g.coins) { close(); import('../core.js').then((c) => c.needCoins(`${gift.name} ${gift.coins} jeton, bakiyen ${g.coins}.`)); return; }
+          b.disabled = true;
+          try {
+            const r = await api(`/chats/${chatId}/gift`, { body: { giftId: gift.id } });
+            if (r.message) addMsg(r.message);
+            state.me.coins = r.coins; close(); toast(`${gift.name} gönderildi!`);
+          } catch (er) { b.disabled = false; if (er.status === 402) { close(); import('../core.js').then((c) => c.needCoins(er.message)); } else toast(er.message); }
+        };
+      },
+    });
+  }
   const otherName = () => (other?.name || '').split(' ')[0];
   function gameHtml(m) {
     const g = m.game; const me = state.me.id; const mine = m.from === me;
@@ -237,6 +345,8 @@ export default async function chat(view, chatId) {
     w.replaceWith(tmp.querySelector(`[data-id="${CSS.escape(m.id)}"]`));
   };
   paintAll();
+  // Tamamlanmış uyum testi varsa karşılaştırma için soruları yükle
+  if (msgs.some((m) => m.compat?.status === 'done')) loadCompatQs().then(() => msgs.filter((m) => m.compat?.status === 'done').forEach(repaintOne)).catch(() => {});
 
   // ---- Sesli mesaj oynatma ----
   let playing = null;
@@ -269,6 +379,14 @@ export default async function chat(view, chatId) {
       const gb = e.target.closest('.gm-guess');
       if (gb) { upd(await api(`/messages/${m.id}/game`, { body: { guess: +gb.dataset.i } })); return; }
       if (e.target.closest('.bm-play')) { bumuSheet(m); return; }
+      if (e.target.closest('.cp-play')) { compatSheet(m); return; }
+      if (e.target.closest('.cp-share')) { shareCard({ kind: 'compat', icon: 'uyum', big: `%${m.compat.pct}`, title: `${(state.me.name || '').split(' ')[0]} & ${otherName()}`, subtitle: 'Uyum testi · Falcı Teyze yorumladı', text: m.compat.comment || '', cta: 'Sen de uyumuna bak' }, { file: 'swipeup-uyum.png' }); return; }
+      if (e.target.closest('.fal-share')) {
+        const i = msgs.indexOf(m); const req = msgs.slice(0, i).reverse().find((x) => x.fal);
+        const z = zodiacOf(req?.fal?.zodiac || state.me.zodiac);
+        shareFal(m.text, { type: req?.fal?.type || 'fal', zodiac: z ? z[1] : null });
+        return;
+      }
       if (e.target.closest('.vo-open')) { openViewOnce(m); return; }
       if (e.target.closest('.pl-share')) {
         const r = await api(`/messages/${m.id}/safety`, { body: {} });
@@ -404,6 +522,7 @@ export default async function chat(view, chatId) {
 
   const offs = [
     on('falhold', (d) => { if (d?.chatId === chatId) reloadHolds(); }),
+    on('streak', (d) => { if (d?.chatId !== chatId) return; data.streak = { ...(data.streak || {}), count: d.count, done: true }; view.querySelector('.stk-h').innerHTML = streakChip(data.streak, true); navigator.vibrate?.(20); toast(`🔥 ${d.count} günlük seri!`); }),
     on('message', (m) => {
       if (m.chatId !== chatId || msgs.some((x) => x.id === m.id)) return;
       if (m.fal && isFalci) reloadHolds();
@@ -421,6 +540,7 @@ export default async function chat(view, chatId) {
       if (m.chatId !== chatId) return;
       const i = msgs.findIndex((x) => x.id === m.id); if (i < 0) return;
       msgs[i] = m; repaintOne(m);
+      if (m.compat?.status === 'done' && !compatQs) loadCompatQs().then(() => repaintOne(m)).catch(() => {});
     }),
     on('message:hidden', ({ id, chatId: c }) => {
       if (c !== chatId) return;
@@ -527,6 +647,7 @@ export default async function chat(view, chatId) {
     comp.querySelector('form').onsubmit = async (e) => {
       e.preventDefault();
       const text = ta.value.trim(); if (!text) return;
+      if (!falChat && !(await modCheck({ text }))) { ta.focus(); return; }
       ta.value = ''; ta.style.height = 'auto'; paintGo();
       stopTyping();
       await send({ text });
@@ -538,6 +659,7 @@ export default async function chat(view, chatId) {
       try {
         const file = f.type.startsWith('image/') ? await compressImage(f) : f;
         const up = await uploadFile(file);
+        if (!falChat && up.type === 'image' && !(await modCheck({ media: up.url }))) return;
         await send({ media: up.url, mediaType: up.type });
       } catch (er) { toast(er.message); }
     };
@@ -546,7 +668,9 @@ export default async function chat(view, chatId) {
       <button data-a="cam">${icon('camera')}Fotoğraf çek</button>
       <button data-a="once">${icon('eye')}<span class="grow">Tek seferlik fotoğraf<div class="sub muted" style="font-size:12.5px">Bir kez açılır, sonra silinir</div></span></button>
       ${isGroup || falChat ? '' : `<button data-a="game">🎲<span class="grow">Oyun başlat<div class="sub muted" style="font-size:12.5px">İki doğru bir yalan, Bu mu şu mu</div></span></button>
-      <button data-a="plan">📅<span class="grow">Buluşma planla<div class="sub muted" style="font-size:12.5px">Tarih, yer ve arkadaşınla güvenlik paylaşımı</div></span></button>`}
+      <button data-a="plan">${egi('secki', 28)}<span class="grow">Buluşma planla<div class="sub muted" style="font-size:12.5px">Yakındaki kafe ve mekan önerileri, hatırlatma</div></span></button>
+      <button data-a="compat">${egi('uyum', 28)}<span class="grow">Uyum testi<div class="sub muted" style="font-size:12.5px">10 soru, sonucu Falcı Teyze yorumlar</div></span></button>
+      <button data-a="gift">${egi('hediye', 28)}<span class="grow">Hediye gönder<div class="sub muted" style="font-size:12.5px">Gül, yüzük ve daha fazlası jetonla</div></span></button>`}
       <button data-a="loc">${icon('mapPin')}Konum gönder</button>
       <button data-a="ttl">${icon('timer')}<span class="grow">Kaybolan mesajlar</span><span class="muted">${ttlLabel(ttl)}</span></button></div>`, {
       onMount(sh, close) {
@@ -559,6 +683,8 @@ export default async function chat(view, chatId) {
           if (a === 'once') sendOnce();
           if (a === 'game') gameSheet();
           if (a === 'plan') planSheet();
+          if (a === 'compat') startCompat();
+          if (a === 'gift') giftSheet();
         };
       },
     });
@@ -642,13 +768,29 @@ export default async function chat(view, chatId) {
     sheet('Buluşma planla', `<form class="form pl-f">
       <label>Ne zaman<input class="field" type="datetime-local" name="w" value="${localInput(def.getTime())}" min="${localInput(Date.now())}"></label>
       <label>Nerede<input class="field" name="p" maxlength="120" placeholder="Ör. Moda sahili, Kadıköy"></label>
+      <div class="pl-near"><div class="seg pl-k"><button type="button" data-k="cafe" class="on">Kafe</button><button type="button" data-k="restaurant">Yemek</button><button type="button" data-k="park">Park</button><button type="button" data-k="fun">Etkinlik</button></div>
+        <button type="button" class="btn sm block pl-find">${icon('mapPin')} Yakınımdaki yerleri öner</button><div class="pl-sug"></div></div>
       <label>Not (isteğe bağlı)<input class="field" name="n" maxlength="200" placeholder="Kahve içeriz ☕"></label>
       <p class="muted" style="margin:0;font-size:12.5px">💛 İlk buluşmayı kalabalık bir yerde yap. Planı bir arkadaşınla paylaşabilir, sonra “İyiyim” diyerek haber verebilirsin.</p>
       <button class="btn primary block">Planı gönder</button></form>`, {
       onMount(sh, close) {
         const f = sh.querySelector('form');
+        let kind = 'cafe'; let pos = null;
+        const sug = sh.querySelector('.pl-sug');
+        const find = async () => {
+          sug.innerHTML = '<div class="spinner" style="margin:12px auto"></div>';
+          try {
+            pos = pos || await new Promise((res, rej) => navigator.geolocation ? navigator.geolocation.getCurrentPosition((p) => res(p.coords), rej, { timeout: 10000 }) : rej(new Error('yok')));
+            const list = await nearbyPlaces(pos.latitude, pos.longitude, kind);
+            sug.innerHTML = list.length ? list.map((p) => `<button type="button" class="pl-s" data-n="${esc(p.label)}"><b>${esc(p.name)}</b><small>${esc(p.sub)} · ${p.km < 1 ? `${Math.round(p.km * 1000)} m` : `${p.km.toFixed(1)} km`}</small></button>`).join('') : '<p class="muted" style="font-size:13px;margin:8px 2px">Yakında öneri bulunamadı, yeri kendin yazabilirsin.</p>';
+          } catch { sug.innerHTML = '<p class="muted" style="font-size:13px;margin:8px 2px">Konum izni verilmedi ya da öneriler alınamadı. Yeri kendin yazabilirsin.</p>'; }
+        };
+        sh.querySelector('.pl-find').onclick = find;
+        sh.querySelector('.pl-k').onclick = (e) => { const b = e.target.closest('[data-k]'); if (!b) return; kind = b.dataset.k; sh.querySelectorAll('.pl-k button').forEach((x) => x.classList.toggle('on', x === b)); if (pos) find(); };
+        sug.onclick = (e) => { const b = e.target.closest('.pl-s'); if (!b) return; f.p.value = b.dataset.n; sug.querySelectorAll('.pl-s').forEach((x) => x.classList.toggle('on', x === b)); };
         f.onsubmit = async (e) => {
           e.preventDefault();
+          if (!f.p.value.trim()) return toast('Buluşma yerini yaz ya da önerilerden seç.');
           const when = new Date(f.w.value).getTime();
           try { addMsg(await api(`/chats/${chatId}/plan`, { body: { when, place: f.p.value, note: f.n.value } })); close(); } catch (er) { toast(er.message); }
         };

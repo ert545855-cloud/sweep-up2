@@ -332,3 +332,22 @@ tr.sgw td { background: color-mix(in srgb, #ffc926 10%, transparent); }
 .ctprs { display: grid; gap: 8px; }
 .ctpr { display: grid; grid-template-columns: 28px repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; }
 .ctpr label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; }
+
+/* ---- Bildirim: özel kitle ---- */
+.aud-f { border: 1px solid var(--line); border-radius: var(--r); padding: 12px; margin: 0; display: grid; gap: 10px; }
+.aud-f[hidden] { display: none; }
+.aud-f legend { font-size: 12.5px; font-weight: 700; color: var(--muted); padding: 0 6px; }
+.aud-pre { display: flex; flex-wrap: wrap; gap: 6px; }
+.aud-g { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.aud-g .field { color: var(--text); width: 100%; }
+/* ---- Doğrulama: yapay zeka sonucu ---- */
+.vai { font-size: 12.5px; padding: 8px 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); margin: 6px 0; }
+.vai.ok { border-color: color-mix(in srgb, var(--ok, #16a34a) 50%, transparent); }
+.vai.warn { border-color: color-mix(in srgb, var(--warn, #d97706) 60%, transparent); }
+/* ---- Etkileşim ---- */
+.eg-pb { display: grid; gap: 10px; }
+.eg-chk { gap: 10px; align-items: flex-start; cursor: pointer; }
+.eg-chk input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--brand); flex: none; }
+.eg-chk span { display: grid; gap: 2px; font-size: 13.5px; }
+.eg-chk small { font-size: 12px; }
+.eg-form .stats, .main > .stats { margin-bottom: 14px; }

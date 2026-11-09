@@ -2,6 +2,8 @@ import { icon } from '../icons.js';
 import {
   state, api, esc, ago, on, avatar, openChatWith, sheet, refreshBadges, nm,
 } from '../core.js';
+import { streakChip } from '../engage.js';
+import { egi } from '../eg-icons.js';
 
 const preview = (m) => (m.location ? '📍 Konum' : m.fal ? '🔮 Fal isteği' : m.share && !m.text ? `📤 ${m.share.label}` : m.viewOnce ? '📷 Tek seferlik fotoğraf' : m.game ? '🎲 Oyun' : m.plan ? '📅 Buluşma planı' : '') || m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf');
 
@@ -13,6 +15,7 @@ export default async function chats(view) {
     </header>
     <div class="search-bar" style="position:static;padding-top:2px"><label class="sw">${icon('search')}<input class="field q" placeholder="Sohbetlerde ara" aria-label="Sohbetlerde ara"></label></div>
     <a class="genel-row" href="#/genel"><span class="genel-ic">${icon('users')}</span><span class="grow"><b>Genel sohbet</b><small>Tüm üyelerin konuştuğu oda</small></span><span class="go-chip">Katıl</span></a>
+    <a class="stk-entry" href="#/seriler" hidden></a>
     <div class="mrow"></div>
     <div class="clist"><div class="spinner"></div></div>`;
 
@@ -50,13 +53,21 @@ export default async function chats(view) {
     items.sort((a, b) => (b.last?.at || b.lastAt) - (a.last?.at || a.lastAt));
     listEl.innerHTML = items.length ? `<div class="section-t"><span>Sohbetler</span></div>${items.map((c) => `<a class="list-item chat-item" href="#/chat/${esc(c.id)}">
         ${avatar(c.other, 56, { ring: true, dot: !c.isGroup })}
-        <div class="grow"><div class="row" style="gap:6px"><span class="ellipsis grow ${c.unread ? 'b' : ''}" style="font-weight:${c.unread ? 700 : 600}">${nm(c.other)}</span><span class="muted" style="font-size:12px">${c.last ? ago(c.last.at) : ''}</span></div>
+        <div class="grow"><div class="row" style="gap:6px"><span class="ellipsis grow ${c.unread ? 'b' : ''}" style="font-weight:${c.unread ? 700 : 600}">${nm(c.other)}</span>${streakChip(c.streak)}<span class="muted" style="font-size:12px">${c.last ? ago(c.last.at) : ''}</span></div>
         <div class="last ${c.unread ? 'unread' : ''}"><span class="ellipsis grow">${lastText(c)}</span>${c.unread ? `<span class="unread-n">${c.unread}</span>` : ''}</div></div></a>`).join('')}`
       : `<div class="empty"><div class="big">${icon('send')}</div><h2>Henüz sohbet yok</h2>Kaydırıp eşleştiğinde ya da birine yazdığında sohbetlerin burada görünür.<p><a class="btn primary" href="#/swipe">Keşfetmeye başla</a></p></div>`;
   };
   const load = async () => {
     [list, matches] = await Promise.all([api('/chats'), api('/matches')]);
-    paintMatches(); paint();
+    paintMatches(); paint(); paintStk();
+  };
+  // Seri özeti: kaç sohbet serin var, kaçı bu gece bitiyor
+  const stkEl = view.querySelector('.stk-entry');
+  const paintStk = () => {
+    const s = list.filter((c) => c.streak?.count);
+    const risk = s.filter((c) => !c.streak.done).length;
+    stkEl.hidden = !s.length;
+    if (s.length) stkEl.innerHTML = `${egi('seri', 40)}<span class="grow"><b>${s.length} sohbet serin var</b><small>${risk ? `${risk} tanesi bugün bekliyor, bozulmasın!` : 'Bugün hepsini korudun 💪'}</small></span><span class="go-chip">Seriler</span>`;
   };
   await load();
 
@@ -89,6 +100,7 @@ export default async function chats(view) {
     on('presence', paint),
     on('chat:removed', load),
     on('chat:update', load),
+    on('streak', ({ chatId, count }) => { const c = list.find((x) => x.id === chatId); if (c) { c.streak = { ...(c.streak || {}), count, done: true }; paint(); paintStk(); } }),
     on('badges', paintMatches),
     on('reconnected', load),
   ];

@@ -252,7 +252,7 @@ export function connectSocket() {
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',
     'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'people:new', 'likes:new',
     'call:incoming', 'call:accepted', 'call:ended', 'call:taken', 'call:signal',
-    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event', 'maintenance', 'maintenance:plan', 'falai', 'falhold', 'venue', 'support', 'quests', 'market', 'features', 'speed:count', 'speed:paired', 'speed:vote', 'speed:result', 'speed:signal', 'speed:left']
+    'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event', 'maintenance', 'maintenance:plan', 'falai', 'falhold', 'venue', 'support', 'quests', 'market', 'features', 'speed:count', 'speed:paired', 'speed:vote', 'speed:result', 'speed:signal', 'speed:left', 'streak', 'streak:login', 'karaoke', 'karaoke:turn']
     .forEach((ev) => s.on(ev, (d) => emit(ev, d)));
   s.on('presence', (d) => { state.presence.set(d.userId, d); emit('presence', d); });
   s.on('presence:all', (ids) => { ids.forEach((id) => state.presence.set(id, { userId: id, online: true })); emit('presence', {}); });

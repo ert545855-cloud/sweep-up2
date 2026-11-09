@@ -3,7 +3,7 @@ import { icon } from '/js/icons.js';
 
 const S = { token: localStorage.getItem('su_admin'), me: null, counts: {} };
 const can = (p) => S.me?.role === 'owner' || (S.me?.perms || []).includes(p);
-const SEC_PERM = { growth: 'growth', users: 'users', support: 'support', reports: 'reports', appeals: 'appeals', flags: 'flags', verify: 'verify', orders: 'orders', payouts: 'payouts', market: 'market', ledger: 'erp', erp: 'erp', promos: 'promos', quests: 'quests', songs: 'songs', contests: 'contests', fal: 'fal', content: 'content', media: 'content', announce: 'announce', notes: 'notes', audit: 'audit', database: 'database', maintenance: 'maintenance', settings: 'settings', tags: 'tags' };
+const SEC_PERM = { growth: 'growth', users: 'users', support: 'support', reports: 'reports', appeals: 'appeals', flags: 'flags', verify: 'verify', orders: 'orders', payouts: 'payouts', market: 'market', ledger: 'erp', erp: 'erp', promos: 'promos', quests: 'quests', songs: 'songs', contests: 'contests', fal: 'fal', content: 'content', media: 'content', announce: 'announce', notes: 'notes', audit: 'audit', database: 'database', maintenance: 'maintenance', settings: 'settings', tags: 'tags', engage: 'engage' };
 const canSec = (k) => !SEC_PERM[k] || can(SEC_PERM[k]);
 const root = document.getElementById('root');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -54,6 +54,7 @@ const SECTIONS = [
   ['erp', 'Şirket (ERP)', 'wallet'],
   ['promos', 'Reklamlar', 'bolt'],
   ['quests', 'Görevler ve çark', 'check'],
+  ['engage', 'Etkileşim', 'flame'],
   ['fal', 'Fal', 'star', 'falPending'],
   ['songs', 'Şarkı yarışması', 'music', 'songsPending'],
   ['contests', 'Yarışmalar', 'trophy'],
@@ -553,8 +554,15 @@ VIEWS.media = async (main) => {
 // ---- Duyurular ----
 VIEWS.announce = async (main) => {
   const list = await api('/announcements');
-  const LINKS = [['/#/notifications', 'Bildirimler'], ['/#/', 'Ana sayfa'], ['/#/store', 'Mağaza (SwipeUp+ / jeton)'], ['/#/genel', 'Genel sohbet'], ['/#/fal', 'Fal'], ['/#/vitrin', 'Vitrin'], ['/#/swipe', 'Keşfet (kaydır)'], ['/#/create', 'Paylaşım oluştur'], ['/#/verify', 'Profil doğrulama'], ['/#/live', 'Canlı yayın aç']];
-  const AUD = [['all', 'Herkes'], ['online', 'Şu an çevrimiçi olanlar'], ['plus', 'SwipeUp+ üyeleri'], ['free', 'Ücretsiz üyeler'], ['verified', 'Mavi tikliler'], ['new7', 'Son 7 günde katılanlar'], ['inactive', '7 gündür girmeyenler'], ['city', 'Şehre göre…'], ['user', 'Tek kullanıcı…']];
+  const LINKS = [['/#/notifications', 'Bildirimler'], ['/#/', 'Ana sayfa'], ['/#/store', 'Mağaza (SwipeUp+ / jeton)'], ['/#/genel', 'Genel sohbet'], ['/#/fal', 'Fal'], ['/#/vitrin', 'Vitrin'], ['/#/swipe', 'Keşfet (kaydır)'], ['/#/secki', 'Günlük seçki'], ['/#/soru', 'Günün sorusu'], ['/#/kulupler', 'Kulüpler'], ['/#/seriler', 'Seriler'], ['/#/karaoke', 'Karaoke odası'], ['/#/gorevler', 'Günlük görevler'], ['/#/create', 'Paylaşım oluştur'], ['/#/verify', 'Profil doğrulama'], ['/#/live', 'Canlı yayın aç']];
+  const AUD = [['custom', 'Özel kitle (filtrelerle)…'], ['all', 'Herkes'], ['online', 'Şu an çevrimiçi olanlar'], ['plus', 'SwipeUp+ üyeleri'], ['free', 'Ücretsiz üyeler'], ['verified', 'Mavi tikliler'], ['new7', 'Son 7 günde katılanlar'], ['inactive', '7 gündür girmeyenler'], ['city', 'Şehre göre…'], ['user', 'Tek kullanıcı…']];
+  const ZOD = [['koc', 'Koç'], ['boga', 'Boğa'], ['ikizler', 'İkizler'], ['yengec', 'Yengeç'], ['aslan', 'Aslan'], ['basak', 'Başak'], ['terazi', 'Terazi'], ['akrep', 'Akrep'], ['yay', 'Yay'], ['oglak', 'Oğlak'], ['kova', 'Kova'], ['balik', 'Balık']];
+  const PRESETS = [
+    ['Kaybolanlar: İstanbul, 18–25, 7 gündür girmeyen', { city: 'İstanbul', ageMin: 18, ageMax: 25, inactiveDays: 7 }],
+    ['30 gündür girmeyen herkes', { inactiveDays: 30 }],
+    ['Son 3 günde katılan, tiksiz', { newDays: 3, verified: 'no' }],
+    ['Aktif ama ücretsiz üyeler', { activeDays: 3, plan: 'free' }],
+  ];
   main.innerHTML = `${head('Bildirim gönder', 'Seçtiğin kişilere uygulama içi bildirim ve telefonlarına anlık bildirim (push) gönderir. İstersen uygulama açılınca duyuru penceresi de çıkar.')}
     <div class="grid g21">
       <div class="panel"><div class="ph"><h3>Yeni bildirim</h3></div><form class="pb ann" style="display:grid;gap:12px">
@@ -565,6 +573,24 @@ VIEWS.announce = async (main) => {
           <label class="fl xcity" style="flex:1;min-width:160px" hidden>Şehir<input class="field" name="city" placeholder="Örn. İstanbul"></label>
           <label class="fl xuser" style="flex:1;min-width:160px" hidden>Kullanıcı adı<input class="field" name="username" placeholder="@kullanici"></label>
         </div>
+        <fieldset class="xcust aud-f"><legend>Özel kitle · filtrelerin hepsi birlikte uygulanır</legend>
+          <div class="aud-pre">${PRESETS.map(([l], i) => `<button type="button" class="btn sm" data-pre="${i}">${esc(l)}</button>`).join('')}</div>
+          <div class="aud-g">
+            <label class="fl">Şehir(ler)<input class="field" name="fcity" placeholder="İstanbul, İzmir"></label>
+            <label class="fl">Yaş<span class="row" style="gap:6px"><input class="field" type="number" name="fmin" min="18" max="99" placeholder="18"><span>–</span><input class="field" type="number" name="fmax" min="18" max="99" placeholder="25"></span></label>
+            <label class="fl">Cinsiyet<select class="field" name="fgen"><option value="">Hepsi</option><option value="k">Kadın</option><option value="e">Erkek</option><option value="d">Diğer</option></select></label>
+            <label class="fl">Kaç gündür girmeyen<input class="field" type="number" name="fina" min="0" max="365" placeholder="7"></label>
+            <label class="fl">Son kaç günde aktif<input class="field" type="number" name="fact" min="0" max="365" placeholder="—"></label>
+            <label class="fl">Son kaç günde katılan<input class="field" type="number" name="fnew" min="0" max="365" placeholder="—"></label>
+            <label class="fl">Üyelik<select class="field" name="fplan"><option value="">Hepsi</option><option value="plus">SwipeUp+</option><option value="free">Ücretsiz</option></select></label>
+            <label class="fl">Mavi tik<select class="field" name="fver"><option value="">Hepsi</option><option value="yes">Var</option><option value="no">Yok</option></select></label>
+            <label class="fl">Burç<select class="field" name="fzod"><option value="">Hepsi</option>${ZOD.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+            <label class="fl">İlgi alanı<input class="field" name="fint" placeholder="Örn. müzik"></label>
+            <label class="fl">En az jeton<input class="field" type="number" name="fcoin" min="0" placeholder="—"></label>
+            <label class="fl">Push<select class="field" name="fpush"><option value="">Hepsi</option><option value="yes">Sadece push açık olanlar</option></select></label>
+          </div>
+          <div class="muted aud-s" style="font-size:12.5px"></div>
+        </fieldset>
         <label class="fl">Dokununca açılacak yer<select class="field" name="url">${LINKS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
         <label class="row" style="gap:8px;cursor:pointer"><input type="checkbox" name="popup" style="width:18px;height:18px;accent-color:var(--brand)"><span><b>Açılış duyurusu</b> <span class="muted">— uygulamayı açan herkese pencere olarak da gösterilir (7 gün)</span></span></label>
         <div class="row"><span class="muted grow reach">Alıcı sayısı hesaplanıyor…</span><button class="btn primary send">${icon('bell')} Gönder</button></div>
@@ -577,7 +603,11 @@ VIEWS.announce = async (main) => {
     <div class="panel" style="margin-top:14px"><div class="ph"><h3>Gönderilenler</h3><button class="btn sm rmpop">${icon('close')} Açılış duyurusunu kaldır</button></div><div class="tw">${list.length ? `<table class="tbl"><thead><tr><th>Bildirim</th><th>Kime</th><th class="num">Alıcı</th><th class="num">Push açık</th><th>Gönderen</th><th>Tarih</th></tr></thead><tbody>
       ${list.map((a) => `<tr><td style="max-width:420px"><b>${esc(a.title || 'SwipeUp')}</b>${a.popup ? ' <span class="chip info">Açılış duyurusu</span>' : ''}<div class="muted">${esc(a.text)}</div></td><td>${esc(a.audienceLabel || 'Herkes')}</td><td class="num">${a.reach}</td><td class="num">${a.pushReach ?? '—'}</td><td>${esc(a.by)}</td><td>${dt(a.at)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Henüz bildirim gönderilmedi.</div>'}</div></div>`;
   const f = main.querySelector('form');
-  const body = () => ({ title: f.title.value, text: f.t.value, url: f.url.value, audience: f.aud.value, city: f.city.value, username: f.username.value, popup: f.popup.checked });
+  const num = (v) => (v === '' ? undefined : +v);
+  const filters = () => ({ city: f.fcity.value.trim() || undefined, ageMin: num(f.fmin.value), ageMax: num(f.fmax.value), gender: f.fgen.value || undefined, inactiveDays: num(f.fina.value), activeDays: num(f.fact.value), newDays: num(f.fnew.value), plan: f.fplan.value || undefined, verified: f.fver.value || undefined, zodiac: f.fzod.value || undefined, interest: f.fint.value.trim() || undefined, minCoins: num(f.fcoin.value), push: f.fpush.value || undefined });
+  const body = () => ({ title: f.title.value, text: f.t.value, url: f.url.value, audience: f.aud.value, city: f.city.value, username: f.username.value, popup: f.popup.checked, filters: f.aud.value === 'custom' ? filters() : undefined });
+  const setF = (o) => { const map = { city: 'fcity', ageMin: 'fmin', ageMax: 'fmax', gender: 'fgen', inactiveDays: 'fina', activeDays: 'fact', newDays: 'fnew', plan: 'fplan', verified: 'fver', zodiac: 'fzod', interest: 'fint', minCoins: 'fcoin', push: 'fpush' }; Object.values(map).forEach((n) => { f[n].value = ''; }); Object.entries(o).forEach(([k, v]) => { if (map[k]) f[map[k]].value = v; }); };
+  main.querySelector('.aud-pre').onclick = (e) => { const b = e.target.closest('[data-pre]'); if (!b) return; setF(PRESETS[+b.dataset.pre][1]); pv(); reach(); };
   const pv = () => {
     main.querySelectorAll('.pv-t').forEach((x) => { x.textContent = f.title.value || 'SwipeUp'; });
     main.querySelectorAll('.pv-m').forEach((x) => { x.textContent = f.t.value ? `📣 ${f.t.value}` : 'Mesajın burada görünecek.'; });
@@ -585,12 +615,17 @@ VIEWS.announce = async (main) => {
     main.querySelector('.cnt').textContent = `${f.t.value.length} / 300`;
     main.querySelector('.xcity').hidden = f.aud.value !== 'city';
     main.querySelector('.xuser').hidden = f.aud.value !== 'user';
+    main.querySelector('.xcust').hidden = f.aud.value !== 'custom';
   };
   let rt;
   const reach = () => {
     clearTimeout(rt);
     rt = setTimeout(async () => {
-      try { const r = await api('/announcements/preview', { body: body() }); main.querySelector('.reach').textContent = r.count ? `${r.count} kişiye gidecek` : 'Bu seçimde kimse yok'; } catch {}
+      try {
+        const r = await api('/announcements/preview', { body: body() });
+        main.querySelector('.reach').textContent = r.count ? `${r.count} kişiye gidecek · ${r.push} telefona push` : 'Bu seçimde kimse yok';
+        main.querySelector('.aud-s').textContent = f.aud.value === 'custom' && r.sample?.length ? `Örnek: ${r.sample.map((x) => `@${x}`).join(', ')}${r.count > r.sample.length ? '…' : ''}` : '';
+      } catch {}
     }, 250);
   };
   f.oninput = () => { pv(); reach(); };
@@ -727,6 +762,7 @@ VIEWS.verify = async (main) => {
       <div class="pb"><div class="pose-req">${esc(v.poseInfo.em || '')} <b>İstenen poz:</b> ${esc(v.poseInfo.text)}</div>
         <div class="vimgs"><figure><img src="${esc(v.selfie)}" alt=""><figcaption>Selfie</figcaption></figure>
           ${[v.user?.avatar, ...(v.user?.photos || [])].filter(Boolean).slice(0, 4).map((p) => `<figure><img src="${esc(p)}" alt="" loading="lazy"><figcaption>Profil</figcaption></figure>`).join('')}</div>
+        ${v.ai ? (v.ai.error ? `<div class="vai muted">Yapay zeka kontrolü yapılamadı: ${esc(v.ai.error)}</div>` : `<div class="vai ${v.ai.pose && v.ai.live && v.ai.same ? 'ok' : 'warn'}"><b>Yapay zeka:</b> Poz ${v.ai.pose ? '✅' : '❌'} · Canlı ${v.ai.live ? '✅' : '❌'} · Aynı kişi ${v.ai.same === null ? '❔' : v.ai.same ? '✅' : '❌'} · Güven %${Math.round(v.ai.confidence * 100)}${v.ai.note ? `<div class="muted">${esc(v.ai.note)}</div>` : ''}</div>`) : ''}
         <div class="muted" style="font-size:12px">${dt(v.at)}${v.status !== 'pending' ? ` · ${v.status === 'approved' ? 'Onaylandı' : 'Reddedildi'} (${esc(v.by || '')})${v.note ? ` · ${esc(v.note)}` : ''}` : ''}</div>
         ${v.status === 'pending' ? `<div class="acts"><input class="field nt" placeholder="Ret nedeni (kullanıcı görür)"><button class="btn sm ok" data-ok="1">${icon('check')} Onayla</button><button class="btn sm danger" data-ok="0">Reddet</button></div>` : ''}
       </div></div>`).join('')}</div>` : '<div class="panel"><div class="empty">Bu listede başvuru yok.</div></div>';
@@ -1261,6 +1297,96 @@ VIEWS.quests = async (main) => {
     try { await api('/wheel', { method: 'PUT', body: { enabled: wf.en.checked, announce: wf.an.checked, slices } }); toast('Çark kaydedildi.'); VIEWS.quests(main); } catch (er) { toast(er.message); }
   };
 };
+
+const egImg = (k) => `<img src="/img/eg/${k}.svg" width="24" height="24" alt="" style="vertical-align:-6px;margin-right:8px;border-radius:7px">`;
+// ---- Etkileşim: seriler, günün sorusu, kulüpler, seçki, karaoke, paketler, yapay zeka denetimi ----
+VIEWS.engage = async (main) => {
+  const r = await api('/engage');
+  const c = r.settings; const st = r.stats;
+  const owner = S.me.role === 'owner' || can('engage');
+  const dis = owner ? '' : 'disabled';
+  const ms = (o) => Object.entries(o || {}).sort((a, b) => a[0] - b[0]).map(([k, v]) => `${k}:${v}`).join(', ');
+  const chk = (name, on, label, sub = '') => `<label class="row eg-chk"><input type="checkbox" name="${name}" ${on ? 'checked' : ''} ${dis}><span><b>${label}</b>${sub ? `<small class="muted">${sub}</small>` : ''}</span></label>`;
+  const numF = (name, v, label, min, max) => `<label class="fl">${label}<input class="field" type="number" name="${name}" value="${v}" min="${min}" max="${max}" ${dis}></label>`;
+  main.innerHTML = `${head('Etkileşim', 'Kullanıcıları her gün geri getiren özellikler: sohbet ve giriş serileri, günün sorusu, kulüpler, günlük seçki, karaoke, Falcı Teyze paketleri ve yapay zeka denetimi.')}
+    <div class="stats">
+      <div class="stat"><b>${st.chatStreaks}</b><span>Aktif sohbet serisi · en uzun ${st.longestChat} gün</span></div>
+      <div class="stat"><b>${st.loginActive}</b><span>Giriş serisi süren · 7+ gün: ${st.login7}</span></div>
+      <div class="stat"><b>${st.dqToday}</b><span>Bugün günün sorusuna cevap</span></div>
+      <div class="stat"><b>${st.picksToday}</b><span>Bugün seçki açan</span></div>
+      <div class="stat"><b>${st.karaokeWeek}</b><span>Bu hafta karaoke · sırada ${st.karaokeQueue}${st.karaokeLive ? ` · sahnede @${esc(st.karaokeLive)}` : ''}</span></div>
+      <div class="stat"><b>${st.nowPlaying}</b><span>“Şu an dinlediğim” paylaşan</span></div>
+      <div class="stat"><b>${st.packsSold30}</b><span>Son 30 gün fal paketi</span></div>
+      <div class="stat"><b>${st.gifts30}</b><span>Son 30 gün sohbette hediye</span></div>
+      <div class="stat"><b>${st.aiWarnFlags}</b><span>Son 7 gün yapay zeka uyarısına rağmen gönderilen</span></div>
+    </div>
+    <form class="eg-form">
+      <div class="grid g2">
+        <div class="panel"><div class="ph"><h3>${egImg('seri')}Sohbet serisi</h3></div><div class="pb eg-pb">
+          ${chk('sEn', c.streak.enabled, 'Sohbet serileri açık', 'İki kişi aynı gün birbirine yazınca seri bir gün uzar.')}
+          <label class="fl">Ödüller (gün:jeton, ikisine de)<input class="field" name="sMs" value="${esc(ms(c.streak.milestones))}" ${dis}></label>
+          ${numF('sWarn', c.streak.warnHour, '“Serin bitiyor” uyarı saati (TR)', 0, 23)}
+        </div></div>
+        <div class="panel"><div class="ph"><h3>${egImg('koruyucu')}Günlük giriş serisi</h3></div><div class="pb eg-pb">
+          ${chk('lEn', c.login.enabled, 'Giriş serisi açık', 'Her gün uygulamaya giren kullanıcının serisi büyür.')}
+          <label class="fl">Ödüller (gün:jeton)<input class="field" name="lMs" value="${esc(ms(c.login.milestones))}" ${dis}></label>
+          <div class="row" style="gap:10px">${numF('lFz', c.login.freezeCoins, 'Seri koruyucu (jeton)', 0, 10000)}${numF('lMax', c.login.maxFreezes, 'En fazla koruyucu', 0, 10)}${numF('lWarn', c.login.warnHour, 'Uyarı saati', 0, 23)}</div>
+        </div></div>
+        <div class="panel"><div class="ph"><h3>${egImg('secki')}Günlük seçki</h3></div><div class="pb eg-pb">
+          ${chk('pEn', c.picks.enabled, 'Günlük seçki açık', 'Her sabah ilgi alanı, burç ve konuma göre kişiler seçilir, bildirim gider.')}
+          <div class="row" style="gap:10px">${numF('pCnt', c.picks.count, 'Kişi sayısı', 1, 20)}${numF('pHour', c.picks.notifyHour, 'Bildirim saati (TR)', 5, 12)}</div>
+        </div></div>
+        <div class="panel"><div class="ph"><h3>${egImg('karaoke')}Karaoke odası</h3></div><div class="pb eg-pb">
+          ${chk('kEn', c.karaoke.enabled, 'Karaoke açık')}
+          ${numF('kMin', c.karaoke.turnMinutes, 'Sahne süresi (dakika)', 2, 15)}
+        </div></div>
+        <div class="panel"><div class="ph"><h3>${egImg('gorev')}Yapay zeka denetimi (Gemini)</h3><span class="chip ${r.ai.enabled ? 'ok' : 'warn'}">${r.ai.enabled ? 'Bağlı' : 'GEMINI_API_KEY yok'}</span></div><div class="pb eg-pb">
+          ${chk('aTxt', c.ai.textCheck, 'Mesajları kontrol et', 'Hakaret içeren mesajda gönderen “Emin misin?” uyarısı görür. Kelime listesi her zaman açık.')}
+          ${chk('aImg', c.ai.imageCheck, 'Fotoğrafları kontrol et', 'Uygunsuz fotoğrafta uyarı çıkar; yine de gönderilirse Moderasyon’a düşer.')}
+          ${chk('aVer', c.ai.verifyCheck, 'Selfie doğrulamada ön kontrol', 'Poz, canlılık ve profil fotoğrafıyla benzerlik puanı Doğrulama sayfasında görünür.')}
+          ${chk('aAuto', c.ai.verifyAuto, 'Çok emin olunca otomatik mavi tik', 'Poz + canlı + aynı kişi ve güven %85 üstüyse onaylanır.')}
+          <small class="muted">Başarılı çağrı: ${r.ai.ok || 0} · Hata: ${r.ai.fail || 0}${r.ai.lastError ? ` · Son hata: ${esc(r.ai.lastError)}` : ''}</small>
+        </div></div>
+        <div class="panel"><div class="ph"><h3>${egImg('fal-burc')}Falcı Teyze paketleri</h3></div><div class="tw"><table class="tbl"><thead><tr><th>Paket</th><th class="num">Jeton</th><th>Açık</th></tr></thead><tbody>
+          ${c.packs.map((p) => `<tr data-pk="${esc(p.id)}"><td>${egImg(`pack-${p.id}`)}<b>${esc(p.name)}</b><div class="muted" style="font-size:12px">${esc(p.desc)}</div></td><td class="num"><input class="field" type="number" min="0" data-k="coins" value="${p.coins}" style="width:90px" ${dis}></td><td><input type="checkbox" data-k="enabled" ${p.enabled !== false ? 'checked' : ''} ${dis}></td></tr>`).join('')}
+        </tbody></table></div></div>
+      </div>
+      <div class="panel" style="margin-top:14px"><div class="ph"><h3>${egImg('kulup')}Kulüpler</h3>${owner ? `<button type="button" class="btn sm cl-add">${icon('plus')} Kulüp</button>` : ''}</div><div class="tw"><table class="tbl"><thead><tr><th>Simge</th><th>Kimlik</th><th>Ad</th><th>Açıklama</th><th class="num">Üye</th><th class="num">Paylaşım</th><th></th></tr></thead><tbody class="cl-l">
+        ${c.clubs.map((k) => { const x = st.clubs.find((y) => y.id === k.id) || {}; return clubRow(k, x, dis); }).join('')}
+      </tbody></table></div></div>
+      ${owner ? `<div class="row" style="margin:14px 0;justify-content:flex-end"><button class="btn primary">${icon('check')} Ayarları kaydet</button></div>` : ''}
+    </form>
+    <div class="panel"><div class="ph"><h3>${egImg('soru')}Günün sorusu</h3></div><div class="pb">
+      <p style="margin:0 0 10px">Bugün: <b>${esc(st.dqQuestion)}</b> <span class="muted">· ${st.dqToday} cevap</span></p>
+      ${owner ? `<form class="row dq-f" style="gap:8px;flex-wrap:wrap"><input class="field" type="date" name="day" value="${today()}" style="width:auto"><input class="field" name="q" maxlength="160" placeholder="O güne özel soru (boş bırakılırsa havuzdan seçilir)" style="flex:1;min-width:240px"><button class="btn primary">Kaydet</button></form>` : ''}
+      ${Object.keys(c.dq).length ? `<div class="tw" style="margin-top:10px"><table class="tbl"><tbody>${Object.entries(c.dq).sort().map(([k, v]) => `<tr><td style="width:120px">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted" style="font-size:13px;margin:10px 0 0">Özel soru planlanmadı; her gün 40 soruluk havuzdan biri sorulur.</p>'}
+    </div></div>`;
+  const form = main.querySelector('.eg-form');
+  form.querySelector('.cl-add')?.addEventListener('click', () => form.querySelector('.cl-l').insertAdjacentHTML('beforeend', clubRow({ id: '', em: '⭐', name: '', desc: '' }, {}, '')));
+  form.querySelector('.cl-l').onclick = (e) => { if (e.target.closest('.cl-rm') && confirm('Kulüp listeden kaldırılsın mı? Üyelik ve paylaşımlar silinmez.')) e.target.closest('tr').remove(); };
+  form.onsubmit = async (e) => {
+    e.preventDefault(); const f = form;
+    const body = {
+      streak: { enabled: f.sEn.checked, milestones: f.sMs.value, warnHour: +f.sWarn.value },
+      login: { enabled: f.lEn.checked, milestones: f.lMs.value, freezeCoins: +f.lFz.value, maxFreezes: +f.lMax.value, warnHour: +f.lWarn.value },
+      picks: { enabled: f.pEn.checked, count: +f.pCnt.value, notifyHour: +f.pHour.value },
+      karaoke: { enabled: f.kEn.checked, turnMinutes: +f.kMin.value },
+      ai: { textCheck: f.aTxt.checked, imageCheck: f.aImg.checked, verifyCheck: f.aVer.checked, verifyAuto: f.aAuto.checked },
+      packs: [...f.querySelectorAll('[data-pk]')].map((tr) => ({ id: tr.dataset.pk, coins: +tr.querySelector('[data-k="coins"]').value, enabled: tr.querySelector('[data-k="enabled"]').checked })),
+      clubs: [...f.querySelectorAll('.cl-l tr')].map((tr) => Object.fromEntries([...tr.querySelectorAll('[data-k]')].map((x) => [x.dataset.k, x.value.trim()]))),
+    };
+    try { await api('/engage', { method: 'PUT', body }); toast('Etkileşim ayarları kaydedildi.'); VIEWS.engage(main); } catch (er) { toast(er.message); }
+  };
+  main.querySelector('.dq-f')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try { await api('/engage/dq', { method: 'PUT', body: { day: e.target.day.value, q: e.target.q.value } }); toast('Günün sorusu kaydedildi.'); VIEWS.engage(main); } catch (er) { toast(er.message); }
+  });
+};
+function clubRow(k, x, dis) {
+  return `<tr><td><input class="field" data-k="em" value="${esc(k.em)}" maxlength="4" style="width:56px;text-align:center" ${dis}></td><td><input class="field" data-k="id" value="${esc(k.id)}" maxlength="20" placeholder="ornek" style="width:110px" ${k.id ? 'readonly' : ''} ${dis}></td>
+    <td><input class="field" data-k="name" value="${esc(k.name)}" maxlength="30" style="width:150px" ${dis}></td><td><input class="field" data-k="desc" value="${esc(k.desc)}" maxlength="80" style="min-width:220px" ${dis}></td>
+    <td class="num">${x.members ?? '—'}</td><td class="num">${x.posts ?? '—'}</td><td>${dis ? '' : `<button type="button" class="btn sm danger cl-rm">${icon('trash')}</button>`}</td></tr>`;
+}
 
 // ---- Bildirimler (bu cihaz) ----
 function ding() { try { const a = new AudioContext(); const o = a.createOscillator(); const g = a.createGain(); o.frequency.value = 880; g.gain.setValueAtTime(0.12, a.currentTime); g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + 0.5); o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + 0.5); } catch {} }

@@ -6,13 +6,14 @@ const DEFAULT_QUESTS = [
   { id: 'yorum', em: '✍️', title: 'Bir gönderiye yorum yap', goal: 1, coins: 2 },
   { id: 'vitrin', em: '🎬', title: 'Vitrin’de 5 video izle', goal: 5, coins: 2 },
   { id: 'paylas', em: '📸', title: 'Hikaye ya da gönderi paylaş', goal: 1, coins: 5 },
+  { id: 'seri', em: '🔥', title: 'Bir sohbet serisini sürdür', goal: 1, coins: 3 },
 ];
 const DEFAULTS = { enabled: true, bonus: 5, list: DEFAULT_QUESTS };
 
 module.exports = function quests(app, ctx) {
   const { store, auth, eco, emitTo } = ctx;
   const now = () => Date.now();
-  const cfgAll = () => { const s = store.get('settings', 'quests') || {}; return { ...DEFAULTS, ...s, list: s.list || DEFAULT_QUESTS }; };
+  const cfgAll = () => { const s = store.get('settings', 'quests') || {}; return { ...DEFAULTS, ...s, list: s.list ? [...s.list, ...DEFAULT_QUESTS.filter((d) => !s.list.some((x) => x.id === d.id))] : DEFAULT_QUESTS }; };
   const cfg = () => { const c = cfgAll(); return { ...c, list: c.list.filter((q) => q.goal > 0) }; };
   const day = (t = now()) => new Date(t + 3 * 3600000).toISOString().slice(0, 10);
   const docOf = (uid) => { const id = `${uid}_${day()}`; return store.get('quests', id) || { id, uid, day: day(), c: {}, claimed: [], seen: {} }; };

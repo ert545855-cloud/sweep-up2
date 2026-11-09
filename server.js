@@ -85,7 +85,7 @@ const tagsOf = (u) => { const ids = u?.tags || []; if (!ids.length) return []; c
 const shownAge = (u) => (priv(u).hideAge ? null : u.age ?? null);
 function pub(u, viewerId) {
   if (!u) return null;
-  const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, regIp, regDevice, ...rest } = u;
+  const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, regIp, regDevice, falPacks, ...rest } = u;
   const self = viewerId === u.id;
   const hidden = !self && priv(u).hideLastSeen;
   const fdoc = viewerId && !self ? store.get('follows', `${viewerId}_${u.id}`) : null;
@@ -227,7 +227,7 @@ function chatOut(c, me) {
     };
   }
   const otherId = c.members.find((m) => m !== me) || me;
-  return { id: c.id, other: brief(store.get('users', otherId)), last, unread, lastAt: c.lastAt, blocked: isBlocked(me, otherId), ttl: c.ttl || 0 };
+  return { id: c.id, other: brief(store.get('users', otherId)), last, unread, lastAt: c.lastAt, blocked: isBlocked(me, otherId), ttl: c.ttl || 0, streak: featureCtx.streakOf?.(c.id) || null };
 }
 
 let gameOut = (g) => g; // social modülü yüklenince gizli oyun bilgisini saklayan sürümle değişir
@@ -238,6 +238,7 @@ function msgOut(m) {
   // Tek seferlik fotoğraf: dosya adresi listede görünmez, sadece açma isteğiyle bir kez verilir
   if (m.viewOnce) o = { ...o, media: null, viewOnceState: m.mediaGone || (m.openedBy || []).length ? 'opened' : 'new' };
   if (m.game) o = { ...o, game: gameOut(m.game) };
+  if (m.compat && featureCtx.compatOut) o = { ...o, compat: featureCtx.compatOut(m.compat) };
   return o;
 }
 
@@ -252,13 +253,13 @@ function falLock(chat, fromId) {
   if (me?.role === 'falci' && other?.role !== 'falci' && !store.find('messages', (m) => m.chatId === chat.id && m.fal)) return 'Sadece fal isteyenlere yazabilirsin.';
   return null;
 }
-function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal, location, quote, game, plan, superMsg, viewOnce, share }) {
+function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal, location, quote, game, plan, superMsg, viewOnce, share, compat, gift }) {
   text = String(text || '').slice(0, 4000).trim();
   let loc = null;
   if (location && Number.isFinite(+location.lat) && Number.isFinite(+location.lng)) {
     loc = { lat: Math.round(+location.lat * 1e5) / 1e5, lng: Math.round(+location.lng * 1e5) / 1e5, label: String(location.label || '').slice(0, 80) };
   }
-  if (!text && !media && !fal && !loc && !game && !plan && !share) return null;
+  if (!text && !media && !fal && !loc && !game && !plan && !share && !compat && !gift) return null;
   if (!system && !fal && falLock(chat, fromId)) return null;
   if (!chat.isGroup) {
     const other = chat.members.find((m) => m !== fromId);
@@ -276,7 +277,7 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
     media: media || null, mediaType: ['image', 'video', 'audio'].includes(mediaType) ? mediaType : (media ? 'image' : null),
     duration: duration ? Math.min(600, Math.round(duration)) : null,
     reply, story: story || null, fal: fal || null, location: loc, system: !!system, reactions: {},
-    quote: quote || null, game: game || null, plan: plan || null, superMsg: !!superMsg, share: share || null,
+    quote: quote || null, game: game || null, plan: plan || null, superMsg: !!superMsg, share: share || null, compat: compat || null, gift: gift || null,
     viewOnce: !!(viewOnce && media && (mediaType === 'image' || !mediaType)), openedBy: [],
     at: now(), readBy: [fromId], deliveredTo: [fromId],
     expiresAt: chat.ttl && !system ? now() + chat.ttl : null,
@@ -1615,6 +1616,7 @@ require('./server/growth')(app, featureCtx);
 require('./server/songs')(app, featureCtx);
 require('./server/venues')(app, featureCtx);
 require('./server/contests')(app, featureCtx);
+require('./server/engage')(app, featureCtx); // seriler, kulüpler, günün sorusu, seçki, karaoke… (en son yüklenir)
 gameOut = featureCtx.gameOut;
 
 // ---------- Statik ----------
