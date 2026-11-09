@@ -339,6 +339,12 @@ const D = {
   'Pas geç': 'Skip', 'Pas geçtin.': 'You skipped.', 'Bugün kimse gitmedi.': 'Nobody left today.', 'Doktor bu gece birini kurtardı! Kimse ölmedi 🩺': 'The doctor saved someone tonight! Nobody died 🩺',
   'Gece sakin geçti.': 'The night was quiet.', 'Ölüler konuşamaz 👻': 'The dead can’t talk 👻', 'Gece herkes uyuyor 🌙': 'Everyone’s asleep 🌙', 'Dün korudun': 'Protected last night', '✓ Temiz': '✓ Clear', '🧛 Vampir!': '🧛 Vampire!',
   'Köylüler kazandı! 🌞': 'The villagers win! 🌞', 'Vampirler kazandı! 🧛': 'The vampires win! 🧛', 'Ölüler konuşamaz 👻 Oyunu izlemeye devam et.': 'The dead can’t talk 👻 Keep watching.', 'Gece herkes uyuyor 🌙 Sabahı bekle.': 'Everyone’s asleep 🌙 Wait for morning.',
+  // Sohbet içi mini oyunlar
+  'Sohbette oyna': 'Play in chat', 'Birlikte oyna': 'Play together', 'XOX': 'Tic-tac-toe', 'Dört Taş': 'Four in a Row', 'Taş Kağıt Makas': 'Rock Paper Scissors', 'Amiral Battı': 'Battleship',
+  'Üçünü yan yana diz': 'Get three in a row', 'Taşları bırak, dördünü birleştir': 'Drop discs, connect four', '3 turda 2 alan kazanır': 'Best of three', 'Gemileri bul, filoyu batır': 'Find the ships, sink the fleet',
+  'Sıra sende': 'Your turn', 'Sıra sende değil.': 'It’s not your turn.', 'Kazandın! 🎉': 'You won! 🎉', 'Berabere 🤝': 'Draw 🤝', 'Tekrar oyna': 'Play again', 'Gemilerini yerleştir': 'Place your ships',
+  '🔀 Karıştır': '🔀 Shuffle', 'Hazırım': 'Ready', 'Senin filon': 'Your fleet', 'Taş': 'Rock', 'Kağıt': 'Paper', 'Makas': 'Scissors', 'Seçimin': 'Your pick', 'Iska 🌊': 'Miss 🌊',
+  'Vurdun! 🎯 Tekrar at': 'Hit! 🎯 Fire again', 'Batırdın! 💥 Tekrar at': 'Sunk! 💥 Fire again', 'Yükleniyor…': 'Loading…', 'Oyun bulunamadı.': 'Game not found.',
 };
 
 // Sayı / isim içeren metinler
@@ -367,6 +373,11 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^(.+) düşünüyor…$/, (_, u) => `${u} is thinking…`],
+  [/^(.+) kazandı$/, (_, u) => `${u} won`],
+  [/^Batırdığın (\d+)\/(\d+)$/, (_, a, b) => `Sunk ${a}/${b}`],
+  [/^Kaybettiğin (\d+)\/(\d+)$/, (_, a, b) => `Lost ${a}/${b}`],
+  [/^(.+) gemilerini diziyor…$/, (_, u) => `${u} is placing ships…`],
   [/^🌙 (\d+)\. gece$/, (_, n) => `🌙 Night ${n}`],
   [/^☀️ (\d+)\. gün$/, (_, n) => `☀️ Day ${n}`],
   [/^Oylama bekleniyor \((\d+)\/(\d+)\)$/, (_, a, b) => `Waiting to vote (${a}/${b})`],

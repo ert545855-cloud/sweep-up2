@@ -1,4 +1,5 @@
 import { icon } from '../icons.js';
+import { miniHtml, hydrateMini, miniClick } from '../minigames.js';
 import {
   state, api, esc, on, clock, dayLabel, lastSeen, avatar, toast, pickFile, compressImage, uploadFile, refreshBadges, el, sheet, audioRecorder, fmtDur, reportUser, reportMessage, nm, pickGif, inlineHint,
 } from '../core.js';
@@ -188,7 +189,7 @@ ${meta}</div>`;
           <span class="shm-b"><small>${esc(s.label)}</small><b>${esc(s.title)}${s.verified ? ' ✓' : ''}</b>${s.sub ? `<span>${esc(s.sub)}</span>` : ''}</span></a>
         ${m.text ? `<div class="msg">${reply}${esc(m.text)}${meta}</div>` : `<span class="shm-meta">${meta}</span>`}`;
     }
-    if (m.game) return `<div class="msg game-msg">${gameHtml(m)}${meta}</div>`;
+    if (m.game) return `<div class="msg game-msg ${m.game.kind === 'mini' ? 'mini-msg' : ''}">${gameHtml(m)}${meta}</div>`;
     if (m.gift) return `<div class="msg gift-msg">${giftIcon(m.gift, 64, 'gf-em')}<b>${esc(m.gift.name)}</b><small>${m.from === state.me.id ? `${esc(otherName())} kişisine gönderdin` : 'sana hediye gönderdi'} · ${m.gift.coins} jeton</small>${meta}</div>`;
     if (m.compat) return `<div class="msg compat-msg">${compatHtml(m)}${meta}</div>`;
     if (m.plan) return `<div class="msg plan-msg">${planHtml(m)}${meta}</div>`;
@@ -290,6 +291,7 @@ ${meta}</div>`;
   const otherName = () => (other?.name || '').split(' ')[0];
   function gameHtml(m) {
     const g = m.game; const me = state.me.id; const mine = m.from === me;
+    if (g.kind === 'mini') return miniHtml(m);
     if (g.kind === 'ikidogru') {
       const guessed = Object.entries(g.guesses || {})[0];
       const head = `<div class="gm-h">🎲 <b>İki doğru bir yalan</b></div>`;
@@ -438,7 +440,10 @@ ${meta}</div>`;
 
   // ---- Oyun, plan ve tek seferlik fotoğraf ----
   const upd = (m) => { const i = msgs.findIndex((x) => x.id === m.id); if (i >= 0) { msgs[i] = m; repaintOne(m); } };
+  // Mini oyun tahtalarını mesaj balonlarında canlandır
+  const miniObs = new MutationObserver(() => hydrateMini(box)); miniObs.observe(box, { childList: true, subtree: true }); hydrateMini(box);
   box.addEventListener('click', async (e) => {
+    if (await miniClick(e)) return;
     const m = findMsg(e.target); if (!m) return;
     try {
       const gb = e.target.closest('.gm-guess');
@@ -568,7 +573,7 @@ ${meta}</div>`;
   box.addEventListener('pointerup', endSwipe);
   box.addEventListener('pointercancel', endSwipe);
   box.addEventListener('contextmenu', (e) => { const m = findMsg(e.target); if (m) { e.preventDefault(); openMenu(m, e.target.closest('.mwrap')); } });
-  box.addEventListener('dblclick', (e) => { const m = findMsg(e.target); if (m && !m.deleted) { react(m, '❤️'); window.getSelection()?.removeAllRanges(); } });
+  box.addEventListener('dblclick', (e) => { if (e.target.closest('.mg')) return; const m = findMsg(e.target); if (m && !m.deleted) { react(m, '❤️'); window.getSelection()?.removeAllRanges(); } });
 
   // ---- Okundu ----
   const markRead = () => { if (document.visibilityState === 'visible') s?.emit('read', { chatId }); };
@@ -734,7 +739,7 @@ ${meta}</div>`;
     comp.querySelector('.more-b').onclick = () => sheet(null, `<div class="menu">
       <button data-a="cam">${icon('camera')}Fotoğraf çek</button>
       <button data-a="once">${icon('eye')}<span class="grow">Tek seferlik fotoğraf<div class="sub muted" style="font-size:12.5px">Bir kez açılır, sonra silinir</div></span></button>
-      ${isGroup || falChat ? '' : `<button data-a="game">🎲<span class="grow">Oyun başlat<div class="sub muted" style="font-size:12.5px">İki doğru bir yalan, Bu mu şu mu</div></span></button>
+      ${isGroup || falChat ? '' : `<button data-a="game">🎲<span class="grow">Oyun başlat<div class="sub muted" style="font-size:12.5px">XOX, Dört Taş, Amiral Battı, İki doğru bir yalan…</div></span></button>
       <button data-a="plan">${egi('secki', 28)}<span class="grow">Buluşma planla<div class="sub muted" style="font-size:12.5px">Yakındaki kafe ve mekan önerileri, hatırlatma</div></span></button>
       <button data-a="compat">${egi('uyum', 28)}<span class="grow">Uyum testi<div class="sub muted" style="font-size:12.5px">10 soru, sonucu Falcı Teyze yorumlar</div></span></button>
       <button data-a="ideas">${egi('mekan', 28)}<span class="grow">Buluşma fikirleri<div class="sub muted" style="font-size:12.5px">Ortak ilgi alanlarınıza göre öneriler</div></span></button>
@@ -810,10 +815,17 @@ ${meta}</div>`;
   }
   const addMsg = (m) => { if (m?.id && !msgs.some((x) => x.id === m.id)) { msgs.push(m); if (msgs.length === 1) paintAll(); else { box.insertAdjacentHTML('beforeend', bubble(m, msgs[msgs.length - 2])); box.scrollTop = box.scrollHeight; } } };
   function gameSheet() {
-    sheet('Buz kırıcı oyunlar', `<div class="menu"><button data-g="ikidogru">🎲<span class="grow">İki doğru bir yalan<div class="sub muted" style="font-size:12.5px">Kendin hakkında 3 şey yaz, biri yalan olsun</div></span></button>
-      <button data-g="bumu">🤔<span class="grow">Bu mu şu mu?<div class="sub muted" style="font-size:12.5px">5 hızlı soru, ne kadar uyumlusunuz</div></span></button></div>`, {
+    sheet('Sohbette oyna', `<div class="menu"><button data-g="ikidogru">🎲<span class="grow">İki doğru bir yalan<div class="sub muted" style="font-size:12.5px">Kendin hakkında 3 şey yaz, biri yalan olsun</div></span></button>
+      <button data-g="bumu">🤔<span class="grow">Bu mu şu mu?<div class="sub muted" style="font-size:12.5px">5 hızlı soru, ne kadar uyumlusunuz</div></span></button>
+      <div class="menu-sep">Birlikte oyna</div>
+      <button data-m="xox">${egi('xox', 28)}<span class="grow">XOX<div class="sub muted" style="font-size:12.5px">Üçünü yan yana diz</div></span></button>
+      <button data-m="dorttas">${egi('dorttas', 28)}<span class="grow">Dört Taş<div class="sub muted" style="font-size:12.5px">Taşları bırak, dördünü birleştir</div></span></button>
+      <button data-m="tkm">${egi('tkm', 28)}<span class="grow">Taş Kağıt Makas<div class="sub muted" style="font-size:12.5px">3 turda 2 alan kazanır</div></span></button>
+      <button data-m="amiral">${egi('amiral', 28)}<span class="grow">Amiral Battı<div class="sub muted" style="font-size:12.5px">Gemileri bul, filoyu batır</div></span></button></div>`, {
       onMount(sh, close) {
         sh.querySelector('.menu').onclick = async (e) => {
+          const mg = e.target.closest('[data-m]')?.dataset.m;
+          if (mg) { close(); try { addMsg(await api(`/chats/${chatId}/mini`, { body: { type: mg } })); } catch (er) { toast(er.message); } return; }
           const g = e.target.closest('[data-g]')?.dataset.g; if (!g) return;
           close();
           if (g === 'bumu') { try { addMsg(await api(`/chats/${chatId}/game`, { body: { kind: 'bumu' } })); } catch (er) { toast(er.message); } return; }
@@ -896,5 +908,5 @@ ${meta}</div>`;
   }
   view.querySelector('.ttl-ind').onclick = ttlSheet;
 
-  return () => { stopTyping(); offs.forEach((f) => f()); document.removeEventListener('visibilitychange', vis); document.querySelector('.emoji-pop')?.remove(); playing?.a.pause(); refreshBadges(); };
+  return () => { miniObs.disconnect(); stopTyping(); offs.forEach((f) => f()); document.removeEventListener('visibilitychange', vis); document.querySelector('.emoji-pop')?.remove(); playing?.a.pause(); refreshBadges(); };
 }

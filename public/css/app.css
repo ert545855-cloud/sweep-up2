@@ -3670,3 +3670,51 @@ body:has(.pk-wrap) #fx-layer :is(.fx-spider, .fx-bats) { display: none; }
 .vp-end span { display: grid; grid-template-columns: 28px 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center; padding: 6px 8px; border-radius: 12px; background: var(--surface); text-align: left; }
 .vp-end img { grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: #fff; } .vp-end b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .vp-end em { font-style: normal; font-size: 11.5px; color: var(--muted); }
 .vp-end span.dead { opacity: .6; }
+
+/* Sohbet içi mini oyunlar */
+.menu-sep { padding: 10px 16px 4px; font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.msg.game-msg.mini-msg { min-width: 0; width: min(292px, 74vw); padding: 10px 10px 6px; }
+.mg { display: grid; gap: 8px; }
+.mg-h { display: flex; align-items: center; gap: 8px; } .mg-h b { font-size: 14.5px; } .mg-h .eg { flex: 0 0 auto; }
+.mg-sc { margin-left: auto; font-size: 12.5px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--uv) 14%, transparent); color: var(--uv); }
+.mg-load { font-size: 13px; color: var(--muted); padding: 8px 0; }
+.mg-st { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); min-height: 30px; }
+.mg-st b { color: var(--text); } .mg-st b.go { color: #16a34a; } .mg-st b.ok { color: #16a34a; } .mg-st b.no { color: #dc2626; }
+.mg-st.end { justify-content: space-between; } .mg-me { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.mg.mine { animation: mgPulse 2.4s ease-in-out infinite; border-radius: 12px; }
+@keyframes mgPulse { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, #16a34a 22%, transparent); } }
+.mg.busy { opacity: .7; pointer-events: none; }
+.mg-x { font-style: normal; font-weight: 900; color: #ec4899; } .mg-o { font-style: normal; font-weight: 900; color: #3b82f6; }
+.mg-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; } .mg-dot.r { background: #ef4444; } .mg-dot.y { background: #facc15; }
+/* XOX */
+.mg-xox { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; aspect-ratio: 1; }
+.mg-xox button { border: 0; border-radius: 14px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line); font-size: 38px; line-height: 1; display: grid; place-items: center; padding: 0; color: inherit; }
+.mg-xox button:not(:disabled) { cursor: pointer; } .mg-xox button:not(:disabled):active { transform: scale(.95); }
+.mg-xox button.w { background: color-mix(in srgb, #16a34a 18%, var(--bg)); box-shadow: inset 0 0 0 2px #16a34a; }
+.mg-xox button.last i { animation: qzPop .35s ease; }
+/* Dört Taş */
+.mg-c4 { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 6px; border-radius: 14px; background: #1d4ed8; }
+.mg-c4 i { aspect-ratio: 1; border-radius: 50%; background: rgba(255,255,255,.92); box-shadow: inset 0 2px 4px rgba(0,0,0,.25); }
+.mg-c4 i.r { background: radial-gradient(circle at 35% 35%, #fca5a5, #ef4444 55%, #b91c1c); } .mg-c4 i.y { background: radial-gradient(circle at 35% 35%, #fef08a, #facc15 55%, #ca8a04); }
+.mg-c4.can { cursor: pointer; } .mg-c4 i.last { animation: mgDrop .35s cubic-bezier(.3,1.4,.6,1); } .mg-c4 i.w { box-shadow: 0 0 0 3px #fff, 0 0 10px #fff; }
+@keyframes mgDrop { from { transform: translateY(-120%); } }
+/* Taş Kağıt Makas */
+.mg-tkm { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.mg-tkm button { display: grid; justify-items: center; gap: 2px; padding: 10px 4px; border: 0; border-radius: 14px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line); font-size: 30px; color: inherit; }
+.mg-tkm button small { font-size: 11.5px; font-weight: 700; color: var(--muted); } .mg-tkm button:active { transform: scale(.95); }
+.mg-tkm-me { display: grid; justify-items: center; font-size: 40px; padding: 4px; } .mg-tkm-me small { font-size: 12px; color: var(--muted); }
+.mg-tr { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.mg-tr span { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); font-size: 18px; }
+.mg-tr span small { font-size: 12px; font-weight: 900; color: var(--muted); } .mg-tr span.ok { box-shadow: inset 0 0 0 1.5px #16a34a; } .mg-tr span.no { box-shadow: inset 0 0 0 1.5px #dc2626; }
+/* Amiral Battı */
+.mg-sea { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; padding: 4px; border-radius: 12px; background: linear-gradient(160deg, #0e7490, #1e3a8a); }
+.mg-sea i { aspect-ratio: 1; border-radius: 4px; background: rgba(255,255,255,.14); position: relative; }
+.mg-sea i.ship { background: #94a3b8; } .mg-sea i.ship.rv { background: rgba(148,163,184,.55); }
+.mg-sea i.miss::after { content: ""; position: absolute; inset: 36%; border-radius: 50%; background: rgba(255,255,255,.75); }
+.mg-sea i.hit { background: #f97316; } .mg-sea i.hit::after { content: "✕"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: 900; font-size: 11px; }
+.mg-sea i.sunk { background: #b91c1c; } .mg-sea i.sunk::after { content: "✕"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: 900; font-size: 11px; }
+.mg-sea i.last { box-shadow: 0 0 0 2px #facc15; z-index: 1; }
+.mg-sea.can i:not(.hit):not(.miss):not(.sunk) { cursor: crosshair; } .mg-sea.can i:not(.hit):not(.miss):not(.sunk):active { background: rgba(255,255,255,.4); }
+.mg-sea.sm { width: 96px; gap: 1px; padding: 3px; border-radius: 8px; flex: 0 0 auto; } .mg-sea.sm i { border-radius: 2px; } .mg-sea.sm i.hit::after { content: ""; }
+.mg-am { display: flex; gap: 10px; align-items: center; } .mg-am-i { display: grid; gap: 2px; font-size: 12px; } .mg-am-i small { color: var(--muted); font-weight: 700; } .mg-am-i b { font-size: 12.5px; } .mg-am-i span { font-size: 12.5px; font-weight: 700; color: var(--uv); }
+.mg-row { display: flex; gap: 8px; justify-content: center; }

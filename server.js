@@ -1730,6 +1730,7 @@ require('./server/dating')(app, featureCtx); // sohbet başlatıcılar, buluşma
 require('./server/community')(app, featureCtx); // seviye, haftanın en beğenilenleri, QR kod, etkinlikler
 require('./server/games')(app, featureCtx); // oyun salonu: Okey, Çiz Bil
 require('./server/playkit')(app, featureCtx); // oyun altyapısı + server/play/*.js oyunları
+require('./server/minigames')(app, featureCtx); // sohbet içi mini oyunlar: XOX, Dört Taş, TKM, Amiral Battı
 require('./server/engage')(app, featureCtx); // seriler, kulüpler, günün sorusu, seçki, karaoke… (en son yüklenir)
 gameOut = featureCtx.gameOut;
 
