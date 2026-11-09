@@ -3409,3 +3409,60 @@ button.inv-code:active { transform: scale(.97); }
 .tv-hit { fill: transparent; cursor: pointer; }
 .tv-roll { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 17px; padding: 12px 26px; box-shadow: 0 10px 24px -8px rgba(0,0,0,.6); }
 .tv-st { text-align: center; font-size: 13.5px; font-weight: 650; min-height: 20px; color: #ffd45e; }
+
+/* ===== Kart masası (Pişti, Batak, Renk Eşle) ===== */
+.pc { position: relative; flex: 0 0 auto; width: 46px; height: 66px; border-radius: 7px; background: linear-gradient(#fff, #f2f0ea); box-shadow: 0 1px 0 rgba(0,0,0,.25), 0 4px 10px rgba(0,0,0,.28); color: #1b1b1b; font-family: system-ui, sans-serif; display: block; }
+.pc.red { color: #d42222; }
+.pc b { position: absolute; top: 3px; left: 5px; font-size: 15px; font-weight: 900; line-height: 1; }
+.pc i { position: absolute; top: 18px; left: 5px; font-style: normal; font-size: 12px; line-height: 1; }
+.pc em { position: absolute; right: 5px; bottom: 3px; font-style: normal; font-size: 26px; line-height: 1; }
+.pc.big { width: 62px; height: 88px; } .pc.big b { font-size: 19px; } .pc.big i { top: 23px; font-size: 15px; } .pc.big em { font-size: 34px; }
+.pc.back { background: repeating-linear-gradient(45deg, #b8293d 0 5px, #9e1f32 5px 10px); box-shadow: inset 0 0 0 3px #fff, 0 3px 8px rgba(0,0,0,.3); }
+.pc.mini { width: 18px; height: 26px; border-radius: 4px; box-shadow: inset 0 0 0 2px #fff; }
+.pc.dim { filter: brightness(.55) saturate(.6); }
+.pc.trump::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px #f5b400; }
+.pc.going { transform: translateY(-30px) scale(.9); opacity: .4; transition: .2s; }
+.ct { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr minmax(0, 1.7fr) 1fr; grid-template-rows: auto minmax(0, 1fr) auto auto auto; grid-template-areas: ". top ." "left mid right" "last last last" "me me me" "hand hand hand"; gap: 4px; padding: 4px 4px 10px; color: #fff; }
+.ct-op { display: grid; justify-items: center; gap: 3px; align-self: center; position: relative; }
+.ct-op.top { grid-area: top; } .ct-op.left { grid-area: left; } .ct-op.right { grid-area: right; }
+.ct-op .pk-seat small, .ct-me .pk-seat small { display: block; max-width: 96px; }
+.ct .pk-seat { width: 96px; }
+.ct-back { display: flex; gap: 2px; }
+.ct-mid { grid-area: mid; position: relative; display: grid; place-items: center; min-height: 170px; }
+.ct-last { grid-area: last; text-align: center; font-size: 12.5px; opacity: .8; min-height: 17px; }
+.ct-me { grid-area: me; display: flex; align-items: center; justify-content: center; gap: 10px; position: relative; }
+.ct-me .pk-seat { flex-direction: row; display: flex; width: auto; gap: 8px; text-align: left; align-items: center; flex: 0 0 auto; }
+.ct-me .ct-st { flex: 1; min-width: 0; text-align: center; }
+.ct-st { font-size: 13.5px; font-weight: 700; color: #ffd45e; }
+.ct-hand { grid-area: hand; display: flex; justify-content: center; align-items: flex-end; gap: 8px; min-height: 96px; padding-top: 10px; }
+.ct-hand.on .pc:not(.dim):hover, .ct-hand.on .pc:not(.dim):active { transform: translateY(-10px); }
+.ct-hand.on .pc:not(.dim) { cursor: pointer; transition: transform .15s; }
+.ct-hand:not(.on) .pc { filter: brightness(.85); }
+.ps-deck { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); display: grid; justify-items: center; gap: 2px; } .ps-deck small { font-size: 11px; opacity: .8; }
+.ps-pile { position: relative; width: 90px; height: 100px; display: grid; place-items: center; }
+.ps-pile .pc { position: absolute; transform: rotate(4deg) scale(1.15); } .ps-pile .pc.under { transform: rotate(-9deg) translate(-12px, 2px) scale(1.15); }
+.ps-pile .ps-n { position: absolute; bottom: -18px; font-size: 11.5px; opacity: .8; }
+.ps-empty { font-size: 13px; opacity: .65; border: 2px dashed rgba(255,255,255,.3); border-radius: 10px; padding: 26px 12px; }
+.ps-pile.flash .pc { animation: psFlash .9s ease-out; }
+@keyframes psFlash { 0% { transform: scale(1.6) rotate(-6deg); } 100% { transform: rotate(4deg) scale(1.15); } }
+.ps-boom { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font-size: 30px; font-weight: 900; color: #ffd45e; text-shadow: 0 3px 0 #b45309, 0 6px 18px rgba(0,0,0,.5); animation: psBoom 1.4s ease-out forwards; pointer-events: none; }
+@keyframes psBoom { 0% { transform: translateX(-50%) scale(.4); opacity: 0; } 25% { transform: translateX(-50%) scale(1.2); opacity: 1; } 100% { transform: translateX(-50%) translateY(-24px) scale(1); opacity: 0; } }
+/* Batak */
+.bt-hand { gap: 0; padding-left: 21px; }
+.bt-hand .pc { width: 47px; height: 72px; margin-left: -21px; } .bt-hand .pc b { font-size: 16px; } .bt-hand .pc i { top: 21px; } .bt-hand .pc em { font-size: 26px; }
+.bt-mid { min-height: 190px; }
+.bt-info { position: absolute; top: 0; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; white-space: nowrap; font-size: 12px; }
+.bt-info span { padding: 3px 9px; border-radius: 999px; background: rgba(0,0,0,.3); font-weight: 700; }
+.bt-tr { color: #fff; } .bt-tr.red { color: #ff8a8a; }
+.bt-trick { position: relative; width: 150px; height: 160px; margin-top: 16px; }
+.bt-c { position: absolute; transition: transform .2s; }
+.bt-c.bottom { left: 50%; bottom: 0; transform: translateX(-50%); } .bt-c.top { left: 50%; top: 0; transform: translateX(-50%); }
+.bt-c.left { left: 0; top: 50%; transform: translateY(-50%) rotate(-8deg); } .bt-c.right { right: 0; top: 50%; transform: translateY(-50%) rotate(8deg); }
+.bt-c.win .pc { box-shadow: 0 0 0 3px #ffd45e, 0 0 18px #ffd45e; }
+.bt-crown { position: absolute; top: -10px; left: 50%; transform: translateX(14px); font-size: 15px; }
+.ct-me .bt-crown { position: static; transform: none; }
+.bt-panel { grid-area: last; justify-self: center; display: grid; justify-items: center; gap: 8px; padding: 12px 14px; border-radius: 18px; background: rgba(0,0,0,.4); z-index: 2; }
+.bt-panel b { font-size: 15px; } .bt-panel small { font-size: 12px; opacity: .85; }
+.bt-bids { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.bt-bids .btn { min-width: 42px; background: #fff; color: #1b1b1b; } .bt-pass { background: rgba(255,255,255,.18) !important; color: #fff !important; }
+.bt-suit { font-size: 15px; } .bt-suit.red { color: #d42222 !important; }

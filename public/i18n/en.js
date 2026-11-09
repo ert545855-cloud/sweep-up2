@@ -300,6 +300,9 @@ const D = {
   'Arkadaşlarını davet et ya da boş yerlere bot oturtarak hemen başla.': 'Invite friends or fill empty seats with bots and start now.', 'Masayı açan kişi başlatacak.': 'The host will start the game.',
   'Tavla': 'Backgammon', 'Zar at, kapıları kapat, taşlarını topla. Mars 2 puan!': 'Roll, build points, bear off. A gammon is worth 2!', '🎲 Zar at': '🎲 Roll', 'Geri al': 'Undo',
   'Sıra sende, zar at': 'Your turn, roll the dice', 'Parlayan yere dokun': 'Tap a highlighted point', 'Oynatacağın taşa dokun': 'Tap the checker you want to move', 'Tavla nasıl oynanır?': 'How to play backgammon',
+  'Pişti': 'Pishti', 'Batak': 'Batak', 'Yer boş': 'Empty', 'Sıra sende: bir kart at': 'Your turn: play a card', 'İhalen?': 'Your bid?', 'Pas': 'Pass', 'Kozu seç': 'Pick trump', 'İhale sırası sende': 'Your turn to bid',
+  'Sıra sende: parlayan kartlardan birini at': 'Your turn: play a highlighted card', 'Maça': 'Spades', 'Kupa': 'Hearts', 'Karo': 'Diamonds', 'Sinek': 'Clubs',
+  'Herkes pas geçti, en az 4 ile almak zorundasın.': 'Everyone passed; you must take it with at least 4.', 'Pişti nasıl oynanır?': 'How to play Pishti', 'Batak nasıl oynanır?': 'How to play Batak',
 };
 
 // Sayı / isim içeren metinler
