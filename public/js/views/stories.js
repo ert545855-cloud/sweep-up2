@@ -2,7 +2,7 @@ import { icon } from '../icons.js';
 import {
   state, api, esc, ago, toast, sheet, avatar, emit, nm, filterCss, scaleStickerLayer, stkPos,
 } from '../core.js';
-import { musicChip } from '../music.js';
+import { musicChip, musicLine } from '../music.js';
 
 function pollHtml(st, mine) {
   const showRes = mine || st.mine != null;
@@ -18,7 +18,11 @@ function stickersHtml(it, mine) {
     const pos = stkPos(st);
     if (st.type === 'poll') return pollHtml(st, mine);
     if (st.type === 'question') return `<button class="stk q act" data-sid="${esc(st.id)}" style="${pos}"><b>${esc(st.q)}</b><span>${mine ? 'Yanıtları görmek için görüntüleyenlere bak' : 'Yanıtla…'}</span></button>`;
-    if (st.type === 'music') return st.spotifyUrl ? `<a class="stk mu act" href="${esc(st.spotifyUrl)}" target="_blank" rel="noopener" style="${pos}">${musicChip(st)}<em>Spotify</em></a>` : `<div class="stk mu" style="${pos}">${musicChip(st)}</div>`;
+    if (st.type === 'music') {
+      if (st.style === 'hide') return '';
+      const cls = `stk mu ${st.style === 'mini' ? 'mini' : ''}`;
+      return st.spotifyUrl ? `<a class="${cls} act" href="${esc(st.spotifyUrl)}" target="_blank" rel="noopener" style="${pos}">${musicChip(st)}<em>Spotify</em></a>` : `<div class="${cls}" style="${pos}">${musicChip(st)}</div>`;
+    }
     if (st.type === 'text') return `<div class="stk txt sz-${esc(st.size || 'm')} ${st.bgc ? 'bgc' : ''}" style="${pos};color:${esc(st.color)}">${esc(st.text)}</div>`;
     if (st.type === 'emoji') return `<div class="stk em" style="${pos}">${esc(st.em)}</div>`;
     if (st.type === 'gif') return `<img class="stk gif" style="${pos}" src="${esc(st.src)}" alt="">`;
@@ -26,6 +30,10 @@ function stickersHtml(it, mine) {
     return '';
   }).join('');
 }
+
+const muOf = (it) => (it.stickers || []).find((x) => x.type === 'music');
+// Ses tercihi tüm hikayelerde geçerli (Instagram gibi bir kez kapatınca kapalı kalır)
+let soundOff = false;
 
 export default async function stories(view, userId) {
   view.innerHTML = '<div class="story-v"><div class="spinner" style="margin-top:45vh"></div></div>';
@@ -50,7 +58,8 @@ export default async function stories(view, userId) {
       <div class="media">${it.mediaType === 'text' || !it.media ? `<div class="tstory tbg-${esc(it.bg || 'g2')}"></div>` : it.mediaType === 'video' ? `<video src="${esc(it.media)}" playsinline autoplay style="filter:${filterCss(it.filter)}"></video>` : `<img class="blurbg" src="${esc(it.media)}" alt=""><img class="fit" src="${esc(it.media)}" alt="" style="filter:${filterCss(it.filter)}">`}</div>
       <div class="bars">${g.items.map((_, i) => `<i><b style="width:${i < ii ? 100 : 0}%"></b></i>`).join('')}</div>
       <div class="head">
-        <a href="#/u/${esc(g.user.username)}" class="row" style="gap:10px;flex:1;min-width:0"><img class="av av-32" src="${esc(g.user.avatar)}" alt=""><b class="ellipsis">${nm(g.user, 'username')}</b><span style="opacity:.8">${ago(it.at)}</span>${it.reshareOf ? `<span class="rs-of">${icon('repost')} @${esc(it.reshareOf.username)}</span>` : ''}</a>
+        <a href="#/u/${esc(g.user.username)}" class="row hd-u"><img class="av av-32" src="${esc(g.user.avatar)}" alt=""><span class="hd-t"><span class="hd-1"><b class="ellipsis">${nm(g.user, 'username')}</b><span class="hd-ago">${ago(it.at)}</span>${it.reshareOf ? `<span class="rs-of">${icon('repost')} @${esc(it.reshareOf.username)}</span>` : ''}</span>${muOf(it) ? musicLine(muOf(it)) : ''}</span></a>
+        ${muOf(it) || it.mediaType === 'video' ? `<button class="snd-t" aria-label="Sesi aç/kapat">${icon(soundOff ? 'mute' : 'volume')}</button>` : ''}
         ${mine ? `<button class="del" aria-label="Sil">${icon('trash')}</button>` : `<button class="more" aria-label="Diğer">${icon('more')}</button>`}
         <button class="x" aria-label="Kapat">${icon('close')}</button>
       </div>
@@ -66,15 +75,23 @@ export default async function stories(view, userId) {
     const v = view.querySelector('video');
     const mu = (it.stickers || []).find((x) => x.type === 'music');
     dur = mu ? 15000 : 5000;
+    const sndBtn = view.querySelector('.snd-t');
+    const paintSnd = () => { if (sndBtn) sndBtn.innerHTML = icon(soundOff ? 'mute' : 'volume'); };
     if (mu) {
-      music = new Audio(mu.src); music.currentTime = mu.start || 0;
-      music.play().catch(() => {});
+      music = new Audio(mu.src); music.currentTime = mu.start || 0; music.muted = soundOff;
+      // Tarayıcı sesli oynatmayı engellerse sessize al, ses düğmesiyle açılır
+      music.play().catch(() => { soundOff = true; paintSnd(); if (music) { music.muted = true; music.play().catch(() => {}); } });
       if (v) v.muted = true;
     }
+    sndBtn?.addEventListener('click', (e) => {
+      e.stopPropagation(); soundOff = !soundOff; paintSnd();
+      if (music) { music.muted = soundOff; if (!soundOff) music.play().catch(() => {}); } else if (v) { v.muted = soundOff; if (!soundOff) v.play().catch(() => {}); view.querySelector('.snd')?.remove(); }
+    });
     unscale?.(); unscale = scaleStickerLayer(view.querySelector('.stk-layer'));
     // Video yüklenip oynamaya başlayana kadar süre işlemesin; iPhone sesli otomatik oynatmayı
     // engellerse sessiz oynat ve "Sesi aç" düğmesi göster
     let waiting = !!v;
+    if (v && !mu) v.muted = soundOff;
     if (v) {
       view.querySelector('.story-v').classList.add('loading');
       v.onloadedmetadata = () => { dur = Math.min(30000, (v.duration || 5) * 1000); };
@@ -83,7 +100,7 @@ export default async function stories(view, userId) {
       v.addEventListener('error', () => { go(); toast('Bu video bu cihazda oynatılamıyor.'); }, { once: true });
       setTimeout(go, 12000);
       v.play().catch(() => {
-        v.muted = true;
+        v.muted = true; if (!mu) { soundOff = true; paintSnd(); }
         v.play().catch(() => {});
         if (!mu) {
           const b = document.createElement('button'); b.className = 'snd'; b.textContent = '🔇 Sesi aç';
@@ -109,12 +126,18 @@ export default async function stories(view, userId) {
       if (on_ && !paused) { paused = true; pausedAt = performance.now(); v?.pause(); music?.pause(); }
       if (!on_ && paused) { paused = false; t0 += performance.now() - pausedAt; v?.play().catch(() => {}); music?.play().catch(() => {}); }
     };
-    let downAt = 0;
+    // Tek dokunuş: sol üçte bir geri, sağ taraf ileri. Basılı tutunca durur (Instagram gibi).
+    // Yavaş dokunuşlar da sayılsın diye eşik 450 ms; parmak kayarsa dokunuş sayılmaz.
+    let downAt = 0; let dx = 0; let dy = 0; let downOn = null;
     ['tapl', 'tapr'].forEach((c) => {
       const z = view.querySelector('.' + c);
-      z.addEventListener('pointerdown', () => { downAt = Date.now(); pause(true); });
-      z.addEventListener('pointerup', () => { pause(false); if (Date.now() - downAt < 250) (c === 'tapl' ? prev : next)(); });
-      z.addEventListener('pointerleave', () => pause(false));
+      z.addEventListener('pointerdown', (e) => { downAt = Date.now(); dx = e.clientX; dy = e.clientY; downOn = c; try { z.setPointerCapture(e.pointerId); } catch {} pause(true); });
+      z.addEventListener('pointerup', (e) => {
+        if (downOn !== c) return; downOn = null; pause(false);
+        if (Date.now() - downAt < 450 && Math.hypot(e.clientX - dx, e.clientY - dy) < 14) (c === 'tapl' ? prev : next)();
+      });
+      z.addEventListener('pointercancel', () => { downOn = null; pause(false); });
+      z.addEventListener('contextmenu', (e) => e.preventDefault());
     });
     view.querySelector('.x').onclick = close;
     view.querySelectorAll('.stk.poll button[data-o]').forEach((b) => {
@@ -152,7 +175,7 @@ export default async function stories(view, userId) {
       e.stopPropagation(); pause(true);
       if (!confirm(`@${g.user.username} kişisinin seni etiketlediği bu hikaye senin hikayende de paylaşılsın mı?`)) return pause(false);
       try {
-        await api('/stories', { body: { media: it.media, mediaType: it.mediaType, bg: it.bg, filter: it.filter, reshareOf: g.user.id, stickers: (it.stickers || []).filter((x) => ['text', 'emoji', 'gif', 'mention'].includes(x.type)) } });
+        await api('/stories', { body: { media: it.media, mediaType: it.mediaType, bg: it.bg, filter: it.filter, reshareOf: g.user.id, stickers: (it.stickers || []).filter((x) => ['text', 'emoji', 'gif', 'mention', 'music'].includes(x.type)) } });
         toast('Hikayende paylaşıldı.'); emit('stories:update', {});
       } catch (er) { toast(er.message); }
       pause(false);

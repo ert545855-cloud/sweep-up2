@@ -5,7 +5,7 @@ import {
 import { gridTile } from '../components.js';
 import { voiceChip, promptCards, promptReply, superMessage, profileCard } from '../extras.js';
 import { shareSheet } from '../core.js';
-import { eventOn, eventInfo, eventEmoji } from '../event.js';
+import { eventOn, eventInfo, eventEmoji, eventLive, setEventEnabled, eventIcon } from '../event.js';
 import { pickMusic } from '../music.js';
 import { egi } from '../eg-icons.js';
 
@@ -41,14 +41,20 @@ async function setNowPlaying(view, rerender) {
 export function themeMenu() {
   const mode = localStorage.getItem('su_theme') || 'system';
   const cur = currentSkin();
-  sheet('Tema', `${eventOn() ? `<p class="ev-note">${eventEmoji()} Şu an <b>${esc(eventInfo().name)}</b> teması açık. Seçtiğin tema etkinlik bitince görünür; istersen Ayarlar’dan etkinlik temasını kapatabilirsin.</p>` : ''}<div class="skin-grid">${SKINS.map((k) => `<button class="skin-opt ${cur === k.id ? 'on' : ''}" data-s="${k.id}">
+  const evOpt = eventLive() ? `<button class="skin-opt ev ${eventOn() ? 'on' : ''}" data-ev="1"><span class="pv ev-pv">${eventIcon() || eventEmoji()}</span><b>${esc(eventInfo().name)}</b><span>Etkinlik teması · sınırlı süre</span></button>` : '';
+  const evOnNow = eventOn();
+  sheet('Tema', `${eventLive() ? `<p class="ev-note">${eventEmoji()} Başka bir tema seçersen <b>${esc(eventInfo().name)}</b> teması kapanır ve seçtiğin tema hemen uygulanır.</p>` : ''}<div class="skin-grid">${evOpt}${SKINS.map((k) => `<button class="skin-opt ${cur === k.id && !evOnNow ? 'on' : ''}" data-s="${k.id}">
       <span class="pv" style="background:${k.pv}"><i style="background:${k.a}"></i><i style="background:${k.a}"></i></span>
       <b>${esc(k.name)}</b><span>${esc(k.note)}</span></button>`).join('')}</div>
     <div class="mode" ${cur === 'gunbatimi' ? '' : 'hidden'}><div class="group-t" style="padding-left:16px">Gün batımı modu</div>
     <div class="menu">${[['system', 'Sistem ayarı', 'settings'], ['light', 'Açık', 'sun'], ['dark', 'Koyu', 'eye']].map(([k, l, ic]) => `<button data-t="${k}">${icon(ic)}<span class="grow">${l}</span>${mode === k ? icon('check') : ''}</button>`).join('')}</div></div>`, {
     onMount(sh, close) {
       sh.querySelector('.skin-grid').onclick = (e) => {
+        const evb = e.target.closest('[data-ev]');
+        if (evb) { setEventEnabled(true); sh.querySelectorAll('.skin-opt').forEach((x) => x.classList.toggle('on', x === evb)); sh.querySelector('.mode').hidden = true; return; }
         const b = e.target.closest('[data-s]'); if (!b) return;
+        // Etkinlik teması açıksa kapat ki seçilen tema tamamen uygulansın (sadece logo değil)
+        if (eventOn()) setEventEnabled(false);
         const id = applySkin(b.dataset.s);
         sh.querySelectorAll('.skin-opt').forEach((x) => x.classList.toggle('on', x === b));
         sh.querySelector('.mode').hidden = id !== 'gunbatimi';
@@ -56,6 +62,7 @@ export function themeMenu() {
       };
       sh.querySelector('.mode .menu').onclick = (e) => {
         const t = e.target.closest('[data-t]')?.dataset.t; if (!t) return;
+        if (eventOn()) setEventEnabled(false);
         try { localStorage.setItem('su_theme', t); } catch {}
         if (t === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
         close();

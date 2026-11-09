@@ -68,4 +68,6 @@ export function pickMusic({ allowFile = true } = {}) {
 }
 
 // Müzik kartı (hikaye / vitrin)
-export const musicChip = (m) => `${m.cover ? `<img src="${esc(m.cover)}" alt="">` : icon('music')}<span><b>${esc(m.title || 'Müzik')}</b>${m.artist ? `<small>${esc(m.artist)}</small>` : ''}</span>`;
+export const musicChip = (m) => `${m.cover ? `<img src="${esc(m.cover)}" alt="">` : `<span class="mu-art">${icon('music')}</span>`}<span><b>${esc(m.title || 'Müzik')}</b>${m.artist ? `<small>${esc(m.artist)}</small>` : ''}</span><i class="eq" aria-hidden="true"><b></b><b></b><b></b></i>`;
+// Hikaye başlığında (kullanıcı adının altında) kayan şarkı satırı — Instagram gibi
+export const musicLine = (m) => `<span class="mu-line">${icon('music')}<span class="mq"><span>${esc(m.title || 'Müzik')}${m.artist ? ` · ${esc(m.artist)}` : ''}</span></span></span>`;

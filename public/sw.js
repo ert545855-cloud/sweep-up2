@@ -1,6 +1,6 @@
 // SwipeUp service worker: anlık bildirimler + çevrimdışı kabuk
-const CACHE = 'swipeup-v43';
-const SHELL = ['/', '/css/app.css', '/js/app.js', '/js/core.js', '/js/icons.js', '/js/components.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/mark.png', '/js/music.js', '/js/update.js', '/js/event.js'];
+const CACHE = 'swipeup-v44';
+const SHELL = ['/', '/css/app.css', '/js/app.js', '/js/core.js', '/js/icons.js', '/js/components.js', '/icons/icon-192.png', '/icons/mark.png', '/js/music.js', '/js/update.js', '/js/event.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
@@ -15,6 +15,8 @@ self.addEventListener('fetch', (e) => {
   const u = new URL(e.request.url);
   if (e.request.method !== 'GET' || u.origin !== location.origin) return;
   if (/^\/(api|media|socket\.io)/.test(u.pathname)) return;
+  // Uygulama ikonu ve manifest seçili logoya göre sunucudan gelir; önbelleğe alma
+  if (u.pathname === '/manifest.webmanifest' || /^\/(icons\/(apple-touch|favicon)|apple-touch-icon|favicon)/.test(u.pathname)) return;
   // Önce ağ, olmazsa önbellek
   e.respondWith(fetch(e.request).then((res) => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }

@@ -220,6 +220,10 @@ const D = {
   'Profil fotoğrafı eklemesi bekleniyor': 'Waiting for them to add a profile photo', 'Davet kodun · kopyalamak için dokun': 'Your invite code · tap to copy', 'Davet sayfası açılamadı': 'Couldn’t open the invite page', 'Tekrar dene': 'Try again',
   'Arkadaşın bağlantınla ya da davet kodunla kayıt olup profil fotoğrafını eklediğinde jetonlar ikinize de yüklenir.': 'When your friend signs up with your link or invite code and adds a profile photo, you both get the coins.',
   'Aynı ağdan açılan birden fazla hesap ve ayda 30’dan fazla davet ödül kazandırmaz. Davet kodu kayıttan sonraki 7 gün içinde girilebilir.': 'Multiple accounts from the same network and more than 30 invites a month don’t earn rewards. An invite code can be entered within 7 days of signing up.',
+  'Beğendin': 'You liked', 'Yenileniyor…': 'Refreshing…', 'Deste yenilendi.': 'Deck refreshed.', 'Deste yenilendi, geçtiğin kişiler tekrar geldi.': 'Deck refreshed — people you passed are back.',
+  'Şu an desteye yeni kimse yok. Yeni üyeler katıldıkça burada görünecek.': 'No one new in the deck right now. New members will show up here as they join.',
+  'Müzik görünümü': 'Music style', 'Kapaklı kart': 'Card with cover', 'Küçük etiket': 'Small label', 'Sadece üstte göster': 'Show only at the top', 'Müziği kaldır': 'Remove music', 'Sesi aç/kapat': 'Sound on/off',
+  'Etkinlik teması · sınırlı süre': 'Event theme · limited time', 'Günlük burç ve tarot paylaşımı': 'Daily horoscope & tarot post',
   'bonus! Yenilenmesine': 'bonus! Resets in', 'Galeriden seç · 24 saat sonra kaybolur': 'Pick from your gallery · disappears after 24 hours',
 };
 
@@ -238,6 +242,7 @@ export const patterns = [
   [/^Seni davet eden arkadaşının kodunu gir, ikiniz de (\d+) jeton kazanın\.$/, (_, n) => `Enter the code of the friend who invited you and you’ll both earn ${n} coins.`],
   [/^Profil fotoğrafını ekle, ikinize de (\d+) jeton yüklensin\.$/, (_, n) => `Add a profile photo and you’ll both get ${n} coins.`],
   [/^İkinize de (\d+) jeton yüklendi\.$/, (_, n) => `You both got ${n} coins.`],
+  [/^Şu an yeni kimse yok\. Filtrelerin (\d+) kişiyi gizliyor, genişletmeyi dene\.$/, (_, n) => `No one new right now. Your filters hide ${n} people — try widening them.`],
   [/^\+(\d+) jeton$/, (_, n) => `+${n} coin`],
   [/^(\d+) jetona kadar kazan$/, (_, n) => `Earn up to ${n} coins`],
   [/^Fal kuyruğu · (\d+) bekliyor$/, (_, n) => `Reading queue · ${n} waiting`],

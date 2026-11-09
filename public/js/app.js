@@ -1,6 +1,6 @@
 import { icon } from './icons.js';
 import {
-  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin, notifHref, applyLogo,
+  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin, notifHref, applyLogo, refreshStoryMap,
 } from './core.js';
 import { initCalls } from './calls.js';
 import { checkVersion, recover, afterBoot } from './update.js';
@@ -143,6 +143,7 @@ function showBirthGate() {
 }
 
 async function router() {
+  if (state.me) refreshStoryMap();
   if (state.ban) return showBan(state.ban);
   const path = location.hash.replace(/^#/, '') || '/';
   let match = null;

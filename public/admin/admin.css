@@ -351,3 +351,9 @@ tr.sgw td { background: color-mix(in srgb, #ffc926 10%, transparent); }
 .eg-chk span { display: grid; gap: 2px; font-size: 13.5px; }
 .eg-chk small { font-size: 12px; }
 .eg-form .stats, .main > .stats { margin-bottom: 14px; }
+/* Günlük burç / tarot paylaşımı */
+.dyl { display: grid; gap: 10px; }
+.dyi { display: flex; gap: 12px; align-items: flex-start; padding: 10px; border-radius: 12px; background: var(--surface, rgba(127,127,127,.08)); }
+.dyi img, .dyi .dyx { width: 72px; height: 90px; border-radius: 8px; object-fit: cover; flex: none; }
+.dyi .dyx { display: grid; place-items: center; font-size: 11px; color: var(--muted); border: 1px dashed currentColor; }
+.dyi p { margin: 4px 0 0; font-size: 12.5px; white-space: pre-line; }

@@ -31,7 +31,7 @@ export default async function swipe(view) {
       ${u.photos.map((p, i) => `<img class="ph" src="${esc(p)}" alt="" style="${i ? 'display:none' : ''}" ${i ? 'loading="lazy"' : ''} draggable="false">`).join('')}
       ${u.photos.length > 1 ? `<div class="segs">${u.photos.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
       <div class="grad"></div>
-      <div class="tagrow">${u.boosted ? `<span class="boosted">${icon('bolt')}Öne çıkan</span>` : ''}${u.likedYou ? '<span class="liked-you">Seni beğendi</span>' : ''}${isOn(u) ? '<span>Çevrimiçi</span>' : ''}</div>
+      <div class="tagrow">${u.boosted ? `<span class="boosted">${icon('bolt')}Öne çıkan</span>` : ''}${u.likedYou ? '<span class="liked-you">Seni beğendi</span>' : ''}${u.youLiked ? '<span class="you-liked">Beğendin</span>' : ''}${isOn(u) ? '<span>Çevrimiçi</span>' : ''}</div>
       <div class="stamp like">BEĞEN</div><div class="stamp nope">GEÇ</div><div class="stamp super">SÜPER</div>
       <div class="info">
         <h2>${esc(u.name.split(' ')[0])} ${u.age ? `<small>${u.age}</small>` : ''}${tick(u)}</h2>
@@ -50,9 +50,16 @@ export default async function swipe(view) {
       deckEl.innerHTML = `<div class="empty"><div class="big">${icon('flame')}</div><h2>Şimdilik bu kadar</h2>Yakında yeni kişiler gelecek. Geçtiklerini tekrar görmek istersen desteyi yenile.
         <p style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn primary reset">Desteyi yenile</button><button class="btn wf">Filtreleri genişlet</button></p></div>`;
       deckEl.querySelector('.wf').onclick = () => openFilters(async () => { deck = await api('/swipe/deck'); render(); });
-      deckEl.querySelector('.reset').onclick = async () => {
-        await api('/swipe/reset', { body: {} });
-        deck = await api('/swipe/deck'); history = []; render();
+      deckEl.querySelector('.reset').onclick = async (e) => {
+        const b = e.currentTarget; b.disabled = true; b.textContent = 'Yenileniyor…';
+        try {
+          const r = await api('/swipe/reset', { body: {} });
+          // Geçtiklerin geri gelir; yine boşsa beğenip eşleşmediğin kişiler de tekrar gösterilir
+          const x = await api('/swipe/deck?again=1&meta=1');
+          deck = x.items; history = []; render();
+          if (deck.length) toast(r.restored ? 'Deste yenilendi, geçtiğin kişiler tekrar geldi.' : 'Deste yenilendi.');
+          else toast(x.hidden ? `Şu an yeni kimse yok. Filtrelerin ${x.hidden} kişiyi gizliyor, genişletmeyi dene.` : 'Şu an desteye yeni kimse yok. Yeni üyeler katıldıkça burada görünecek.', { ms: 5000 });
+        } catch (er) { toast(er.message); b.disabled = false; b.textContent = 'Desteyi yenile'; }
       };
       return;
     }

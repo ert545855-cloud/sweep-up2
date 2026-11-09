@@ -4,7 +4,7 @@ import {
   stkPos, dragSticker, pickEmoji, pickGif, richText,
 } from '../core.js';
 import { TEXT_BGS } from '../components.js';
-import { pickMusic, musicChip } from '../music.js';
+import { pickMusic, musicChip, musicLine } from '../music.js';
 
 const musicUrl = (m) => (m.file ? (m._url ||= URL.createObjectURL(m.file)) : m.src);
 // Önizlemede yatay kaydırarak filtre değiştir (Instagram gibi)
@@ -287,7 +287,9 @@ export default function create(view, kind) {
   // Dokununca: büyüt / küçült / döndür / kaldır
   function stickerMenu(st, remove, repaint) {
     const movable = ['emoji', 'gif', 'text', 'mention'].includes(st.type);
-    sheet(null, `<div class="menu">${movable ? `<button data-a="up">${icon('plus')}Büyüt</button><button data-a="down">${icon('chevDown')}Küçült</button><button data-a="rot">${icon('undo')}Döndür</button>` : ''}
+    const mus = st.type === 'music';
+    sheet(mus ? 'Müzik görünümü' : null, `<div class="menu">${movable ? `<button data-a="up">${icon('plus')}Büyüt</button><button data-a="down">${icon('chevDown')}Küçült</button><button data-a="rot">${icon('undo')}Döndür</button>` : ''}
+      ${mus ? `<button data-a="card">${icon('music')}Kapaklı kart${(st.style || 'card') === 'card' ? ' ✓' : ''}</button><button data-a="mini">${icon('music')}Küçük etiket${st.style === 'mini' ? ' ✓' : ''}</button><button data-a="hide">${icon('eye')}Sadece üstte göster${st.style === 'hide' ? ' ✓' : ''}</button><button data-a="up">${icon('plus')}Büyüt</button><button data-a="down">${icon('chevDown')}Küçült</button>` : ''}
       ${st.type === 'text' ? `<button data-a="edit">${icon('edit')}Yazıyı düzenle</button>` : ''}<button data-a="rm" class="danger">${icon('trash')}Kaldır</button></div>`, {
       onMount(sh, close) {
         sh.querySelector('.menu').onclick = async (e) => {
@@ -297,6 +299,7 @@ export default function create(view, kind) {
           if (a === 'down') st.s = Math.max(0.4, Math.round(((st.s || 1) - 0.2) * 100) / 100);
           if (a === 'rot') st.r = ((st.r || 0) + 15) > 45 ? -45 : (st.r || 0) + 15;
           if (a === 'edit') { const tx = await textForm(st); if (tx) Object.assign(st, tx); }
+          if (['card', 'mini', 'hide'].includes(a)) st.style = a;
           if (a === 'rm') { remove(); if (st.type === 'music') stopAudio(); }
           repaint();
         };
@@ -310,7 +313,7 @@ export default function create(view, kind) {
     if (s.type === 'gif') return `<img class="stk gif" data-i="${i}" style="${style}" src="${esc(s.src)}" alt="">`;
     if (s.type === 'poll') return `<div class="stk poll" data-i="${i}" style="${style}"><b>${esc(s.q || 'Anket')}</b>${s.options.map((o) => `<span>${esc(o)}</span>`).join('')}</div>`;
     if (s.type === 'question') return `<div class="stk q" data-i="${i}" style="${style}"><b>${esc(s.q)}</b><span>Bir şey yaz…</span></div>`;
-    if (s.type === 'music') return `<div class="stk mu" data-i="${i}" style="${style}">${musicChip(s)}</div>`;
+    if (s.type === 'music') return `<div class="stk mu ${s.style === 'mini' ? 'mini' : s.style === 'hide' ? 'mini hid' : ''}" data-i="${i}" style="${style}">${musicChip(s)}</div>`;
     if (s.type === 'mention') return `<div class="stk men" data-i="${i}" style="${style}">@${esc(s.username)}</div>`;
     return '';
   }
@@ -319,7 +322,9 @@ export default function create(view, kind) {
     const fst = `style="filter:${filterCss(storyFilter)}"`;
     picker.innerHTML = `${!file ? `<div class="tstory tbg-${storyBg}"></div>` : vid ? `<video src="${fileUrl}" autoplay muted loop playsinline class="fit" ${fst}></video>` : `<img src="${fileUrl}" class="blurbg" alt=""><img src="${fileUrl}" alt="Önizleme" class="fit" ${fst}>`}
       <div class="stk-layer">${stickers.map(stickerHtml).join('')}</div>
+      ${stickers.some((x) => x.type === 'music') ? `<div class="mu-top">${musicLine(stickers.find((x) => x.type === 'music'))}<button type="button" class="mu-x" aria-label="Müziği kaldır">${icon('close')}</button></div>` : ''}
       <button class="swap" aria-label="Başka dosya seç">${icon('image')}</button>`;
+    picker.querySelector('.mu-x')?.addEventListener('click', (e) => { e.stopPropagation(); stickers = stickers.filter((x) => x.type !== 'music'); stopAudio(); paint(); });
     picker.querySelector('.swap').onclick = choose;
     unscale?.(); unscale = scaleStickerLayer(picker.querySelector('.stk-layer'));
     tools.innerHTML = `<div class="stk-tools">
@@ -353,7 +358,7 @@ export default function create(view, kind) {
     if (k === 'music') {
       pickMusic().then((m) => {
         if (!m) return;
-        stickers.push({ type: 'music', ...m, x: 50, y: 78 });
+        stickers.push({ type: 'music', ...m, x: 50, y: 30, style: 'card' });
         stopAudio(); paint();
       });
       return;
@@ -465,7 +470,7 @@ export default function create(view, kind) {
         for (const s of stickers) {
           if (s.type === 'music') {
             const src = s.file ? (await uploadFile(s.file, prog(0.8, 0.2))).url : s.src;
-            st.push({ type: 'music', src, title: s.title, artist: s.artist, cover: s.cover, spotifyUrl: s.spotifyUrl, x: s.x, y: s.y });
+            st.push({ type: 'music', src, title: s.title, artist: s.artist, cover: s.cover, spotifyUrl: s.spotifyUrl, x: s.x, y: s.y, s: s.s, style: s.style || 'card', start: s.start || 0 });
           } else st.push(s);
         }
         await api('/stories', { body: { media: up?.url || null, mediaType: isImg ? 'image' : 'video', bg: file ? null : storyBg, stickers: st, filter: storyFilter || null } });

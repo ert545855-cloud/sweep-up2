@@ -437,6 +437,32 @@ export function avatar(u, size = 44, { ring = false, dot = true } = {}) {
   return `<div class="av-wrap${u?.frame ? ` fr fr-${esc(u.frame)}` : ''}" data-presence="${esc(u?.id)}">${inner}${dot && u && isOn(u) ? '<i class="online"></i>' : ''}</div>`;
 }
 
+// Hikayesi olan kişilerin avatarında Instagram gibi renkli halka; dokununca hikaye açılır
+let storyAt = 0; let storyReq = null;
+export function setStoryMap(groups) {
+  state.storyMap = new Map((groups || []).map((g) => [g.user.id, !!g.allSeen])); storyAt = Date.now();
+  markStoryRings(document.body);
+}
+export function refreshStoryMap() {
+  if (!state.token || storyReq || Date.now() - storyAt < 60000) return;
+  storyReq = api('/stories').then(setStoryMap).catch(() => {}).finally(() => { storyReq = null; });
+}
+const RING_SEL = '.post-h .av-wrap[data-presence], .comment > .av-wrap[data-presence]';
+export function markStoryRings(root) {
+  const m = state.storyMap; if (!m || !root?.querySelectorAll) return;
+  const list = root.matches?.(RING_SEL) ? [root] : root.querySelectorAll(RING_SEL);
+  list.forEach((w) => { const id = w.dataset.presence; const has = m.has(id); w.classList.toggle('st', has); w.classList.toggle('st-seen', has && m.get(id)); });
+}
+new MutationObserver((recs) => {
+  if (!state.storyMap) return;
+  for (const r of recs) r.addedNodes.forEach((n) => { if (n.nodeType === 1) markStoryRings(n); });
+}).observe(document.documentElement, { childList: true, subtree: true });
+document.addEventListener('click', (e) => {
+  const w = e.target.closest('.av-wrap.st'); if (!w) return;
+  e.preventDefault(); e.stopPropagation(); location.hash = `#/stories/${w.dataset.presence}`;
+}, true);
+on('stories:update', () => { storyAt = 0; refreshStoryMap(); });
+
 // Çevrimiçi noktalarını canlı güncelle
 on('presence', ({ userId, online }) => {
   document.querySelectorAll(`[data-presence="${CSS.escape(userId)}"]`).forEach((w) => {
@@ -509,17 +535,29 @@ export const currentSkin = () => document.documentElement.dataset.skin || 'gunba
 export const logo = () => '<img class="mark" src="/icons/mark.png" alt=""><span class="wmt">swipeup</span>';
 // SwipeUp+ üyelerine özel logo görünümleri
 export const LOGOS = [['klasik', 'Klasik', 'Herkesin gördüğü logo'], ['altin', 'Altın', 'Parıltılı altın'], ['neon', 'Neon', 'Gece kulübü ışıltısı'], ['gece', 'Gece', 'Siyah beyaz, sade'], ['pastel', 'Pastel', 'Yumuşak pembe-lila'], ['gokkusagi', 'Gökkuşağı', 'Renk değiştiren']];
-export function applyLogo(id) { const v = id && id !== 'klasik' ? id : ''; if (v) document.documentElement.dataset.logo = v; else delete document.documentElement.dataset.logo; try { localStorage.setItem('su_logo', v); } catch {} }
+export function applyLogo(id) {
+  const v = id && id !== 'klasik' ? id : '';
+  if (v) document.documentElement.dataset.logo = v; else delete document.documentElement.dataset.logo;
+  try { localStorage.setItem('su_logo', v); } catch {}
+  // Uygulama dışındaki logo: ana ekran ikonu (manifest), iPhone ana ekran ikonu, sekme ikonu
+  try { document.cookie = `su_logo=${v}; path=/; max-age=${v ? 31536000 : 0}; SameSite=Lax`; } catch {}
+  const base = v ? `/icons/logo/${v}` : '/icons';
+  const set = (sel, href) => document.querySelectorAll(sel).forEach((l) => { if (l.getAttribute('href') !== href) l.setAttribute('href', href); });
+  set('link[rel="manifest"]', v ? `/manifest.webmanifest?logo=${v}` : '/manifest.webmanifest');
+  set('link[rel="apple-touch-icon"]', `${base}/apple-touch.png`);
+  set('link[rel="icon"][sizes="32x32"]', `${base}/favicon-32.png`);
+  set('link[rel="icon"][sizes="64x64"]', `${base}/favicon-64.png`);
+}
 export function logoMenu() {
   const cur = state.me?.logo || 'klasik';
-  sheet('Uygulama logosu', `<p class="muted" style="margin:0 16px 12px;font-size:13.5px">SwipeUp+ üyelerine özel: uygulamanın içindeki logoyu istediğin görünüme çevir.${state.me?.plus ? '' : ' <b>SwipeUp+ ile açılır.</b>'}</p>
+  sheet('Uygulama logosu', `<p class="muted" style="margin:0 16px 12px;font-size:13.5px">SwipeUp+ üyelerine özel: uygulamanın içindeki logo, telefonundaki uygulama simgesi ve bildirim simgesi seçtiğin görünüme döner.${state.me?.plus ? '' : ' <b>SwipeUp+ ile açılır.</b>'}</p>
     <div class="logo-grid">${LOGOS.map(([id, n, d]) => `<button class="logo-opt ${cur === id ? 'on' : ''}" data-l="${id}"><span class="wordmark lgp" data-lp="${id}"><img class="mark" src="/icons/mark.png" alt=""><span class="wmt">swipeup</span></span><b>${n}</b><small>${d}</small>${id !== 'klasik' && !state.me?.plus ? `<i class="lk">${icon('lock')}</i>` : ''}</button>`).join('')}</div>`, {
     onMount(sh, close) {
       sh.querySelector('.logo-grid').onclick = async (e) => {
         const b = e.target.closest('[data-l]'); if (!b) return;
         const id = b.dataset.l;
         if (id !== 'klasik' && !state.me?.plus) { close(); return plusSheet('Logo seçmek SwipeUp+ ayrıcalığıdır.'); }
-        try { const u = await api('/me', { method: 'PATCH', body: { logo: id } }); state.me.logo = u.logo; applyLogo(u.logo); close(); toast('Logo değişti.'); } catch (er) { toast(er.message); }
+        try { const u = await api('/me', { method: 'PATCH', body: { logo: id } }); state.me.logo = u.logo; applyLogo(u.logo); close(); toast(/iPhone|iPad/.test(navigator.userAgent) ? 'Logo değişti. iPhone’da ana ekrandaki simgenin de değişmesi için uygulamayı ana ekrandan silip yeniden eklemen gerekir.' : 'Logo değişti. Telefonundaki uygulama simgesi de kısa süre içinde yenilenir.', { ms: 6000 }); } catch (er) { toast(er.message); }
       };
     },
   });

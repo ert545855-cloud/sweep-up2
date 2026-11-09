@@ -420,7 +420,7 @@ VIEWS.contests = async (main) => {
 
 // ---- Fal ----
 VIEWS.fal = async (main) => {
-  const [r, ai] = await Promise.all([api('/fal'), api('/falai').catch(() => null)]);
+  const [r, ai, dy] = await Promise.all([api('/fal'), api('/falai').catch(() => null), api('/falai/daily').catch(() => null)]);
   S.counts.falPending = r.pending;
   main.innerHTML = `${head('Fal', 'Falcı Teyze hesabına gelen istekler. Cevaplar uygulamada Falcı Teyze hesabından verilir.')}
     <div class="stats"><div class="stat"><b>${r.total}</b><span>Toplam istek</span></div><div class="stat ${r.pending ? 'alert' : ''}"><b>${r.pending}</b><span>Bekleyen</span></div>
@@ -433,6 +433,14 @@ VIEWS.fal = async (main) => {
       <div class="aiout" hidden></div>
       <p class="muted" style="margin:0;font-size:12px">Ücretsiz katmanda günlük istek sınırı vardır; sınır dolunca istekler Falcı Teyze'nin kuyruğunda bekler. Ücretsiz katmanda gönderilen içerik Google tarafından ürün geliştirme için kullanılabilir.</p>
     </div></div>` : ''}
+    ${dy ? `<form class="panel dyp" style="margin-bottom:14px"><div class="ph"><h3>Günlük burç ve tarot paylaşımı</h3><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="on" ${dy.settings.enabled ? 'checked' : ''} ${can('fal') ? '' : 'disabled'}> Açık</label></div><div class="pb" style="display:grid;gap:12px">
+      <div class="muted" style="font-size:12.5px">Falcı Teyze her gün belirlediğin saatte akışa bir görsel paylaşır; herkesin ana sayfasına düşer. Sırayla: ${dy.kinds.map((k) => esc(k.label)).join(', ')}. Metni yapay zeka Falcı Teyze ağzından yazar${dy.hasAi ? '' : ' (anahtar olmadığı için hazır metinler kullanılır)'}.</div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end"><label style="display:grid;gap:4px;font-size:12.5px">Saat (Türkiye)<input class="field" type="time" name="t" value="${String(dy.settings.hour).padStart(2, '0')}:${String(dy.settings.minute).padStart(2, '0')}" style="width:130px"></label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">${dy.kinds.map((k) => `<label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="k_${k.id}" ${dy.settings.kinds.includes(k.id) ? 'checked' : ''}> ${esc(k.label)}</label>`).join('')}</div></div>
+      <div class="muted" style="font-size:12.5px">Sıradaki: <b>${esc(dy.next.label)} · ${esc(dy.next.title)}</b> (${esc(dy.next.date)})</div>
+      ${can('fal') ? `<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary sm">${icon('check')} Kaydet</button><button type="button" class="btn sm dynow">Bugünkünü şimdi paylaş</button><button type="button" class="btn sm dyre">Bugünkünü yeniden oluştur</button></div>` : ''}
+      ${dy.list.length ? `<div class="dyl">${dy.list.map((x) => `<div class="dyi">${x.media ? `<img src="${esc(x.media)}" alt="">` : '<div class="dyx">Silindi</div>'}<div class="grow"><b>${esc(x.label)}</b> <span class="muted">${esc(x.id)} · ${x.ai ? 'yapay zeka' : 'hazır metin'} · ${esc(x.by)}</span><div class="muted" style="font-size:12px">${x.likes} beğeni · ${x.comments} yorum</div><p>${esc(x.caption.slice(0, 220))}${x.caption.length > 220 ? '…' : ''}</p></div></div>`).join('')}</div>` : '<div class="muted" style="font-size:12.5px">Henüz paylaşım yapılmadı.</div>'}
+    </div></form>` : ''}
     ${ai?.delay ? `<form class="panel dlp" style="margin-bottom:14px"><div class="ph"><h3>⏳ Cevap bekleme süresi</h3><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="den" ${ai.delay.enabled ? 'checked' : ''} ${can('fal') ? '' : 'disabled'}> Açık</label></div><div class="pb" style="display:grid;gap:12px">
       <div class="muted" style="font-size:12.5px">Falcı Teyze fala hemen cevap vermez. Her fal için aşağıdaki aralıkta rastgele bir süre seçilir; bu süre dolmadan yazılan cevaplar (yapay zeka, taslak ya da elle yazılan) bekletilir ve zamanı gelince iletilir. Falcı Teyze isterse “Şimdi gönder” diyebilir.${ai.holds ? ` Şu an bekleyen cevap: <b>${ai.holds}</b>` : ''}</div>
       <div class="tw"><table class="tbl"><thead><tr><th>Fal türü</th><th class="num">En az (dk)</th><th class="num">En fazla (dk)</th></tr></thead><tbody>${Object.entries(FAL).map(([k, l]) => `<tr><td>${l}</td><td class="num"><input class="field" type="number" min="0" max="240" name="lo_${k}" value="${ai.delay.ranges[k]?.[0] ?? 15}" style="width:90px" ${can('fal') ? '' : 'disabled'}></td><td class="num"><input class="field" type="number" min="0" max="240" name="hi_${k}" value="${ai.delay.ranges[k]?.[1] ?? 20}" style="width:90px" ${can('fal') ? '' : 'disabled'}></td></tr>`).join('')}</tbody></table></div>
@@ -455,6 +463,19 @@ VIEWS.fal = async (main) => {
     const ranges = Object.fromEntries(Object.keys(FAL).map((k) => [k, [+f[`lo_${k}`].value, +f[`hi_${k}`].value]]));
     try { await api('/falai/delay', { method: 'PUT', body: { enabled: f.den.checked, ranges } }); toast('Cevap süreleri kaydedildi.'); VIEWS.fal(main); } catch (er) { toast(er.message); }
   });
+  const dyf = main.querySelector('.dyp');
+  dyf?.addEventListener('submit', async (e) => {
+    e.preventDefault(); const [h, m] = (dyf.t.value || '10:00').split(':');
+    const kinds = dy.kinds.map((k) => k.id).filter((k) => dyf[`k_${k}`].checked);
+    try { await api('/falai/daily', { method: 'PUT', body: { enabled: dyf.on.checked, hour: +h, minute: +m, kinds } }); toast('Günlük paylaşım ayarı kaydedildi.'); VIEWS.fal(main); } catch (er) { toast(er.message); }
+  });
+  const dyGo = async (b, replace) => {
+    if (replace && !confirm('Bugünkü paylaşım silinip yenisi oluşturulsun mu? Beğeni ve yorumları da silinir.')) return;
+    b.disabled = true; b.textContent = 'Hazırlanıyor…';
+    try { await api('/falai/daily/now', { body: { replace } }); toast('Falcı Teyze paylaştı.'); VIEWS.fal(main); } catch (er) { toast(er.message); b.disabled = false; }
+  };
+  main.querySelector('.dynow')?.addEventListener('click', (e) => dyGo(e.target, false));
+  main.querySelector('.dyre')?.addEventListener('click', (e) => dyGo(e.target, true));
   main.querySelector('.aitest')?.addEventListener('click', async (e) => {
     const t = main.querySelector('.ait'); const out = main.querySelector('.aiout');
     e.target.disabled = true; t.textContent = 'Deneniyor…';

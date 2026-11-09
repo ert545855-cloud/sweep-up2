@@ -193,7 +193,7 @@ async function notify(userId, n) {
   const payload = JSON.stringify({
     title: n.title || (from && n.type !== 'liked' ? from.name : 'SwipeUp'),
     body: n.text,
-    icon: n.type !== 'liked' && from?.avatar && !from.avatar.includes('svg') ? from.avatar : '/icons/icon-192.png',
+    icon: n.type !== 'liked' && from?.avatar && !from.avatar.includes('svg') ? from.avatar : (featureCtx.pushIcon?.(store.get('users', userId)) || '/icons/icon-192.png'),
     url: n.url || '/#/notifications',
     tag: n.tag || n.type,
     call: n.type === 'call',
@@ -901,9 +901,11 @@ function cleanSticker(st) {
   }
   if (st.type === 'question') return { ...base, q: moderation.mask(String(st.q || 'Bana bir soru sor').trim().slice(0, 80)) };
   if (st.type === 'music') {
-    if (isMedia(st.src)) return { ...base, src: st.src, title: String(st.title || 'Müzik').slice(0, 60), artist: String(st.artist || '').slice(0, 60), start: Math.max(0, +st.start || 0) };
+    // style: card (kapaklı kart), mini (küçük etiket), hide (sadece üstte, isim altında)
+    const look = { style: ['card', 'mini', 'hide'].includes(st.style) ? st.style : 'card', s: Math.max(0.6, Math.min(1.6, +st.s || 1)) };
+    if (isMedia(st.src)) return { ...base, ...look, src: st.src, title: String(st.title || 'Müzik').slice(0, 60), artist: String(st.artist || '').slice(0, 60), cover: isMedia(st.cover) ? st.cover : null, start: Math.max(0, +st.start || 0) };
     const m = music.clean(st);
-    return m ? { ...base, ...m, start: 0 } : null;
+    return m ? { ...base, ...look, ...m, start: Math.max(0, Math.min(25, +st.start || 0)) } : null;
   }
   if (st.type === 'text') {
     const text = moderation.mask(String(st.text || '').trim().slice(0, 120));
@@ -1196,8 +1198,14 @@ app.post('/api/users/:id/unmatch', auth, (req, res) => {
 app.get('/api/swipe/deck', auth, (req, res) => {
   const me = req.user;
   const prefs = me.prefs || { ageMin: 18, ageMax: 99, maxKm: null };
-  const swiped = new Set(store.filter('swipes', (s) => s.from === me.id).map((s) => s.to));
-  let deck = store.filter('users', (u) => u.id !== me.id && !SPECIAL.has(u.role) && isActive(u) && !priv(u).hideFromDeck && !swiped.has(u.id) && !isBlocked(me.id, u.id));
+  // again=1: deste bittiğinde beğenip eşleşmediğin kişiler de tekrar gelir
+  const again = req.query.again === '1';
+  const mine = store.filter('swipes', (s) => s.from === me.id);
+  const matched = (uid) => !!store.get('matches', [me.id, uid].sort().join('_'));
+  const swiped = new Set(mine.filter((s) => !again || s.dir === 'left' || matched(s.to)).map((s) => s.to));
+  const youLiked = new Set(mine.filter((s) => s.dir !== 'left').map((s) => s.to));
+  let deck = store.filter('users', (u) => u.id !== me.id && !SPECIAL.has(u.role) && isActive(u) && !priv(u).hideFromDeck && !swiped.has(u.id) && !isBlocked(me.id, u.id) && !matched(u.id));
+  const pool = deck.length;
   if (me.lookingFor && me.lookingFor !== 'all') deck = deck.filter((u) => u.gender === me.lookingFor || !u.gender);
   deck = deck.filter((u) => !u.age || (u.age >= prefs.ageMin && u.age <= prefs.ageMax));
   if (prefs.maxKm && me.lat != null) deck = deck.filter((u) => { const d = distance(me, u); return d == null || d <= prefs.maxKm; });
@@ -1206,7 +1214,10 @@ app.get('/api/swipe/deck', auth, (req, res) => {
   rankPeople(deck);
   const t = now();
   deck.sort((a, b) => ((b.boostUntil || 0) > t) - ((a.boostUntil || 0) > t));
-  res.json(deck.slice(0, 40).map((u) => cardOut(me, u, likedMe.has(u.id))));
+  const items = deck.slice(0, 40).map((u) => ({ ...cardOut(me, u, likedMe.has(u.id)), youLiked: youLiked.has(u.id) }));
+  // meta=1: deste boşsa nedenini de söyle (filtrelere takılan kişi sayısı)
+  if (req.query.meta === '1') return res.json({ items, hidden: Math.max(0, pool - deck.length) });
+  res.json(items);
 });
 function cardOut(me, u, likedYou) {
   const posts = store.filter('posts', (p) => p.userId === u.id && p.type === 'image' && canSee(me.id, u)).slice(0, 3).map((p) => p.media);
@@ -1274,8 +1285,9 @@ app.post('/api/swipe', auth, (req, res) => {
 });
 
 app.post('/api/swipe/reset', auth, (req, res) => {
-  store.filter('swipes', (s) => s.from === req.user.id && s.dir === 'left').forEach((s) => store.del('swipes', s.id));
-  res.json({ ok: true });
+  const left = store.filter('swipes', (s) => s.from === req.user.id && s.dir === 'left');
+  left.forEach((s) => store.del('swipes', s.id));
+  res.json({ ok: true, restored: left.length });
 });
 
 app.get('/api/matches', auth, (req, res) => {
@@ -1611,7 +1623,7 @@ app.post('/api/admin/push/test', adminApi.adminAuth, wrap(async (req, res) => {
 // ---------- Ek özellikler (mağaza, doğrulama, gizlilik, çıkartmalar, etiketler…) ----------
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
-  isBlocked, limited, isMedia, isGif: (u) => GIF_HOSTS.test(String(u || '')), cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
+  isBlocked, limited, isMedia, isGif: (u) => GIF_HOSTS.test(String(u || '')), extractTags, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
   online, appEvent, falci, msgOut, falLock, shownAge, tagsOf, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id), pushAdmins,
 };
 require('./server/features')(app, featureCtx);
@@ -1629,8 +1641,33 @@ require('./server/growth')(app, featureCtx);
 require('./server/songs')(app, featureCtx);
 require('./server/venues')(app, featureCtx);
 require('./server/contests')(app, featureCtx);
+require('./server/daily')(app, featureCtx); // Falcı Teyze günlük burç / tarot paylaşımı
 require('./server/engage')(app, featureCtx); // seriler, kulüpler, günün sorusu, seçki, karaoke… (en son yüklenir)
 gameOut = featureCtx.gameOut;
+
+// ---------- Uygulama ikonu (SwipeUp+ logo seçimi ana ekran ikonuna da yansır) ----------
+const LOGO_ICONS = new Set(['altin', 'neon', 'gece', 'pastel', 'gokkusagi']);
+const logoOf = (req) => { const m = /(?:^|;\s*)su_logo=([a-z]+)/.exec(req.headers.cookie || ''); const q = String(req.query?.logo || ''); const v = LOGO_ICONS.has(q) ? q : m && LOGO_ICONS.has(m[1]) ? m[1] : ''; return v; };
+const iconBase = (v) => (v ? `/icons/logo/${v}` : '/icons');
+const MANIFEST = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'manifest.webmanifest'), 'utf8'));
+app.get('/manifest.webmanifest', (req, res) => {
+  const b = iconBase(logoOf(req));
+  res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache'); res.setHeader('Vary', 'Cookie');
+  res.send(JSON.stringify({ ...MANIFEST, id: '/', icons: [
+    { src: `${b}/icon-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: `${b}/icon-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: `${b}/maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+  ] }));
+});
+// Eski adresleri soran cihazlar (iPhone ana ekran, favicon) seçili logoyu alsın
+app.get(['/icons/apple-touch.png', '/apple-touch-icon.png', '/apple-touch-icon-precomposed.png', '/icons/favicon-32.png', '/icons/favicon-64.png', '/favicon.ico'], (req, res, next) => {
+  const v = logoOf(req);
+  const f = /favicon-32/.test(req.path) ? 'favicon-32.png' : /favicon/.test(req.path) ? 'favicon-64.png' : 'apple-touch.png';
+  res.setHeader('Vary', 'Cookie'); res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'public', v ? `icons/logo/${v}` : 'icons', f), (e) => { if (e) next(); });
+});
+featureCtx.pushIcon = (u) => `${iconBase(LOGO_ICONS.has(u?.logo) && isPlus(u) ? u.logo : '')}/icon-192.png`;
 
 // ---------- Statik ----------
 app.use(express.static(path.join(__dirname, 'public'), {

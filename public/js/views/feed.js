@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, isOn, toast, enablePush, pushSupported, pushEnabled, pushHint, logo, openChatWith, nm,
+  state, api, esc, on, isOn, toast, enablePush, pushSupported, pushEnabled, pushHint, logo, openChatWith, nm, setStoryMap,
 } from '../core.js';
 import { postCard, wirePost, autoplay } from '../components.js';
 import { paintEventBanner } from '../event.js';
@@ -86,7 +86,7 @@ export default async function feed(view) {
     const b = e.target.closest('.msg'); if (b) openChatWith(b.dataset.id).catch((er) => toast(er.message));
   });
 
-  const loadStories = async () => { stories = await api('/stories').catch(() => []); paintStories(); };
+  const loadStories = async () => { stories = await api('/stories').catch(() => []); paintStories(); setStoryMap(stories); };
   const loadPeople = async () => { [people, fresh] = await Promise.all([api('/people').catch(() => []), api('/people?new=1').catch(() => [])]); paintPeople(); };
 
   offs.push(on('lives', paintStories));
