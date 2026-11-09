@@ -294,6 +294,12 @@ const D = {
   'Herkes sırayla çizer, diğerleri yazarak tahmin eder.': 'Everyone takes turns drawing; the others type their guesses.', 'Oyunu başlat': 'Start game', 'En az 2 kişi gerekli': 'At least 2 players needed', 'Davet et': 'Invite', 'Bir kelime seç': 'Pick a word', 'Çizeceğin kelimeyi seç': 'Pick the word to draw',
   'Tahminini yaz…': 'Type your guess…', 'Çizerken sohbet edebilirsin…': 'You can chat while drawing…', 'Yeniden oyna': 'Play again', 'Oyunlara dön': 'Back to games', 'Oyun bitti': 'Game over', 'Bunu çiz! Harf ya da sayı yazma 😉': 'Draw this! No letters or numbers 😉', 'Kelime buydu': 'That was the word', 'Bildin! Diğerlerini bekle': 'You got it! Wait for the others',
   'Kapağı düzenle': 'Edit cover', 'Kapak güncellendi.': 'Cover updated.', 'Galeriden': 'Gallery', 'Konum': 'Position',
+  // Oyun salonu ve masa
+  'Masa oyunları': 'Table games', 'Parti oyunları': 'Party games', 'Sohbette oyna': 'Play in chat', 'Sohbetlere git': 'Go to chats', 'Masan açık': 'Your table', 'Bot yerine geç': 'Take a bot’s seat',
+  'Masa sohbeti': 'Table chat', 'Mesaj yaz…': 'Write a message…', 'Bağlantıyı kopyala': 'Copy link', 'Çık': 'Leave', 'Yeni oyun': 'New game', 'Başlat': 'Start', 'Boş': 'Empty', 'Sen': 'You',
+  'Arkadaşlarını davet et ya da boş yerlere bot oturtarak hemen başla.': 'Invite friends or fill empty seats with bots and start now.', 'Masayı açan kişi başlatacak.': 'The host will start the game.',
+  'Tavla': 'Backgammon', 'Zar at, kapıları kapat, taşlarını topla. Mars 2 puan!': 'Roll, build points, bear off. A gammon is worth 2!', '🎲 Zar at': '🎲 Roll', 'Geri al': 'Undo',
+  'Sıra sende, zar at': 'Your turn, roll the dice', 'Parlayan yere dokun': 'Tap a highlighted point', 'Oynatacağın taşa dokun': 'Tap the checker you want to move', 'Tavla nasıl oynanır?': 'How to play backgammon',
 };
 
 // Sayı / isim içeren metinler
@@ -322,6 +328,8 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^(\d+) oynuyor$/, (_, n) => `${n} playing`],
+  [/^(\d+)\/15 · (\d+) pip$/, (_, a, b) => `${a}/15 · ${b} pips`],
   [/^Sv\. (\d+)$/, (_, n) => `Lv. ${n}`],
   [/^(\d+) katılıyor$/, (_, n) => `${n} going`],
   [/^(\d+) katılıyor \/ (\d+)$/, (_, n, c) => `${n} going / ${c}`],

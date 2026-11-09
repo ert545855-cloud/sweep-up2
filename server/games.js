@@ -443,6 +443,8 @@ module.exports = function games(app, ctx) {
   ctx.gamesSocket = (socket) => {
     const uid = socket.data.userId;
     socket.on('okey:watch', () => socket.join('okey:lobby'));
+    socket.on('play:watch', () => socket.join('play:lobby'));
+    socket.on('play:unwatch', () => socket.leave('play:lobby'));
     socket.on('okey:unwatch', () => socket.leave('okey:lobby'));
     socket.on('cb:lobby', () => socket.join('cb:lobby'));
     socket.on('cb:join', ({ id } = {}) => { const r = rooms.get(id); if (r && r.players.some((p) => p.uid === uid)) socket.join(`cb:${id}`); });

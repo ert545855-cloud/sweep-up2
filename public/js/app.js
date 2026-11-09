@@ -62,6 +62,7 @@ const routes = [
   [/^\/oyunlar$/, 'games', { tab: 'home' }],
   [/^\/oyun\/okey\/([\w-]+)$/, 'okey', { tabs: false, dark: true }],
   [/^\/oyun\/cizbil\/([\w-]+)$/, 'cizbil', { tabs: false }],
+  [/^\/oyun\/([a-z0-9]+)\/([\w-]+)$/, 'play', { tabs: false }],
   [/^\/soru$/, 'dq', { tab: 'home' }],
   [/^\/kulupler$/, 'clubs', { tab: 'home' }],
   [/^\/kulup\/([a-z0-9]+)$/, 'clubs', { tab: 'home' }],
