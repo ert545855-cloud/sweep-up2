@@ -306,6 +306,10 @@ const D = {
   'Kızma Birader': 'Ludo', 'Renk Eşle': 'Color Match', 'Oynatacağın piyona dokun': 'Tap the pawn to move', 'Zar at': 'Roll', 'Kırmızı': 'Red', 'Yeşil': 'Green', 'Sarı': 'Yellow', 'Mavi': 'Blue',
   'Rengi seç': 'Pick a color', 'Geç': 'Pass', 'Tek kart!': 'Last card!', 'Sıra yönü →': 'Turn order →', '← Sıra yönü': '← Turn order', 'Parlayan bir kart at': 'Play a highlighted card',
   'Uyan kartın yok, desteden çek': 'No match, draw from the deck', 'Çektiğin kartı at ya da geç': 'Play the drawn card or pass', 'kart çekti': 'drew a card', 'kart attı': 'played a card',
+  '101 Okey': '101 Okey', 'Henüz kimse açmadı': 'Nobody has opened yet', 'Perle aç': 'Open with sets', 'Çiftle aç': 'Open with pairs', 'Elini aç': 'Open hand', 'Geri koy': 'Put back',
+  'Ortadan çek ya da soldaki taşı al': 'Draw from the middle or take the tile on your left', 'Taş seç: per aç, işle ya da at': 'Pick tiles: open a set, add to the table or discard',
+  'Taşları seçip grupla, 101’i geçince elini aç; ya da bir taş at': 'Select tiles to group them, open when you pass 101; or discard a tile',
+  'Atmak için “At”, işlemek için masadaki bir pere dokun': 'Tap “Discard”, or tap a set on the table to add it', 'İşlemek için önce tek bir taş seç.': 'Select a single tile to add it first.',
 };
 
 // Sayı / isim içeren metinler
@@ -334,6 +338,9 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^Toplam (\d+)\/101$/, (_, n) => `Total ${n}/101`],
+  [/^Gruba ekle \((\d+)\)$/, (_, n) => `Add to group (${n})`],
+  [/^Per aç \((\d+)\)$/, (_, n) => `Open set (${n})`],
   [/^(\d+)\/4 evde$/, (_, n) => `${n}/4 home`],
   [/^(\d+) kart$/, (_, n) => `${n} cards`],
   [/^(\d+) oynuyor$/, (_, n) => `${n} playing`],
