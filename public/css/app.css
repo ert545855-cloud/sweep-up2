@@ -2662,3 +2662,13 @@ a.pq-quote { display: block; text-decoration: none; color: inherit; }
 .me-links a span { overflow: hidden; text-overflow: ellipsis; }
 .me-links a > b:not(.vc) { position: absolute; top: 5px; right: 7px; font-size: 11px; color: var(--hot); }
 .me-links .vc[hidden] { display: none !important; }
+.av-26 { width: 26px; height: 26px; } .av-36 { width: 36px; height: 36px; } .av-84 { width: 84px; height: 84px; }
+img.av { object-fit: cover; flex: none; }
+/* Kulüp paylaşımı */
+.clb-p .dq-ah .grow { min-width: 0; display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.clb-p .dq-ah .b { color: var(--text); text-decoration: none; }
+.clb-p .clb-img { display: block; max-height: 520px; margin-top: 8px; }
+.clb-p .cp-del svg { width: 18px; height: 18px; }
+.av-24 { width: 24px; height: 24px; } .av-60 { width: 60px; height: 60px; } .av-80 { width: 80px; height: 80px; }
+/* Tanımsız boyutta bile avatar dev görünmesin */
+.av-wrap > img.av, .av-wrap > .ring > img.av { max-width: 120px; max-height: 120px; }
