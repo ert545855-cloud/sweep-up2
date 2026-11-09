@@ -11,13 +11,13 @@ const SHORTCUTS = [
   ['seri', '#/seriler', 'Serin'], ['genel', '#/genel', 'Genel sohbet', true], ['soru', '#/soru', 'Günün sorusu'], ['kulup', '#/kulupler', 'Kulüpler'],
   ['odalar', '#/odalar', 'Odalar', true], ['hizli', '#/hizli', 'Hızlı tanış'], ['mekan', '#/mekan', 'Mekandayım'], ['karaoke', '#/karaoke', 'Karaoke'], ['burc', '#/burc', 'Burç kartın'],
 ];
-const RAIL = ['quests', 'wheel', 'contest', 'song', 'fal'];
+const RAIL = ['quests', 'wheel', 'contest', 'song'];
 
 export default async function feed(view) {
   view.innerHTML = `
     <header class="topbar">
       <div class="wordmark">${logo()}</div>
-      <a class="ib" href="#/fal" aria-label="Fal">${icon('orb')}</a>
+      <a class="ib" href="#/fal" aria-label="Fal" style="font-size:22px">🔮</a>
       <a class="ib" href="#/search" aria-label="Ara">${icon('search')}</a>
       <a class="ib" href="#/create" aria-label="Oluştur">${icon('plusSq')}</a>
       <a class="ib" href="#/notifications" aria-label="Bildirimler">${icon('bell')}<i class="dot-badge nb" style="top:8px;right:8px;${state.badges.notifications ? '' : 'display:none'}"></i></a>
@@ -26,6 +26,7 @@ export default async function feed(view) {
     <div class="maint-slot"></div>
     <div class="event-slot"></div>
     <section class="promo-rail" aria-label="Senin için"><div class="pr-track"></div><div class="pr-dots" aria-hidden="true"></div></section>
+    <a class="fal-hero" href="#/fal"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
     <nav class="sc-row" aria-label="Kısayollar">${SHORTCUTS.filter((x) => state.me.role !== 'falci' || x[3]).map(([k, href, label]) => `<a class="sc" href="${href}">${egi(k, 54, 'sc-ic')}${k === 'seri' ? `<b class="sc-n">${state.me.loginStreak?.count || 0}</b>` : ''}<small>${label}</small></a>`).join('')}</nav>
     <div class="vn-friends"></div>
     ${state.config?.features?.market ? `<a class="mk-entry" href="#/market"><span class="mk-ei">${icon('bag')}</span><span class="grow"><b>SwipeUp Store</b><small>İkinci el al, sat · komisyon yok · güvenli ödeme</small></span><span class="go-chip">Göz at</span></a>` : ''}
@@ -100,12 +101,10 @@ export default async function feed(view) {
   const railEl = view.querySelector('.promo-rail'); const track = railEl.querySelector('.pr-track'); const dots = railEl.querySelector('.pr-dots');
   const cards = {};
   const card = (cls, href, ic, title, sub, chip, extra = '') => `<a class="pc ${cls}" href="${href}">${ic}<span class="pc-t"><b>${title}</b><small>${sub}</small></span>${chip ? `<span class="pc-chip">${chip}</span>` : ''}${extra}</a>`;
-  cards.fal = state.me.role === 'falci'
-    ? card('pc-fal', '#/fal', '<span class="pc-ic">☕️</span>', `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}`, 'Gelen fal isteklerini gör ve cevapla.', 'Aç')
-    : card('pc-fal', '#/fal', `<span class="pc-ic">${egi('fal-kahve', 46)}</span>`, 'Falcı Teyze’ye fal baktır', 'Kahve, tarot, burç ve aşk uyumu', 'Baktır');
   const paintRail = () => {
     const list = RAIL.map((k) => cards[k]).filter(Boolean);
     track.innerHTML = list.join('');
+    railEl.hidden = !list.length;
     railEl.classList.toggle('one', list.length < 2);
     dots.innerHTML = list.length > 1 ? list.map(() => '<i></i>').join('') : '';
     syncDots();

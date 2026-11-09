@@ -2844,3 +2844,4 @@ button.inv-code:active { transform: scale(.97); }
 .story-v .head .av { border-radius: 50%; }
 .skin-opt .ev-pv { display: grid; place-items: center; background: radial-gradient(90% 70% at 30% 0, #ff8a2a, #4a1660 60%, #12081c); font-size: 40px; }
 .skin-opt .ev-pv svg { width: 56px; height: 56px; }
+.promo-rail[hidden] { display: none; }
