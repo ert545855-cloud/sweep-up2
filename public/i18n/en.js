@@ -303,6 +303,9 @@ const D = {
   'Pişti': 'Pishti', 'Batak': 'Batak', 'Yer boş': 'Empty', 'Sıra sende: bir kart at': 'Your turn: play a card', 'İhalen?': 'Your bid?', 'Pas': 'Pass', 'Kozu seç': 'Pick trump', 'İhale sırası sende': 'Your turn to bid',
   'Sıra sende: parlayan kartlardan birini at': 'Your turn: play a highlighted card', 'Maça': 'Spades', 'Kupa': 'Hearts', 'Karo': 'Diamonds', 'Sinek': 'Clubs',
   'Herkes pas geçti, en az 4 ile almak zorundasın.': 'Everyone passed; you must take it with at least 4.', 'Pişti nasıl oynanır?': 'How to play Pishti', 'Batak nasıl oynanır?': 'How to play Batak',
+  'Kızma Birader': 'Ludo', 'Renk Eşle': 'Color Match', 'Oynatacağın piyona dokun': 'Tap the pawn to move', 'Zar at': 'Roll', 'Kırmızı': 'Red', 'Yeşil': 'Green', 'Sarı': 'Yellow', 'Mavi': 'Blue',
+  'Rengi seç': 'Pick a color', 'Geç': 'Pass', 'Tek kart!': 'Last card!', 'Sıra yönü →': 'Turn order →', '← Sıra yönü': '← Turn order', 'Parlayan bir kart at': 'Play a highlighted card',
+  'Uyan kartın yok, desteden çek': 'No match, draw from the deck', 'Çektiğin kartı at ya da geç': 'Play the drawn card or pass', 'kart çekti': 'drew a card', 'kart attı': 'played a card',
 };
 
 // Sayı / isim içeren metinler
@@ -331,6 +334,8 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^(\d+)\/4 evde$/, (_, n) => `${n}/4 home`],
+  [/^(\d+) kart$/, (_, n) => `${n} cards`],
   [/^(\d+) oynuyor$/, (_, n) => `${n} playing`],
   [/^(\d+)\/15 · (\d+) pip$/, (_, a, b) => `${a}/15 · ${b} pips`],
   [/^Sv\. (\d+)$/, (_, n) => `Lv. ${n}`],
