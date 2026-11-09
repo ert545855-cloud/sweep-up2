@@ -113,6 +113,7 @@ module.exports = function playkit(app, ctx) {
     push, after, log, say, settle, seatOf, humans, filled, now,
     end(t, over) { t.g.over = over; finish(t); },
     nameOf: (t, i) => t.seats[i]?.name || '',
+    ms: (x) => Math.round(x * (+process.env.PLAY_SPEED || 1)), // test için hızlandırma
     shuffle: (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; },
     ctx,
   };

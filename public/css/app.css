@@ -3547,3 +3547,43 @@ button.inv-code:active { transform: scale(.97); }
 .o1-rack .slot { height: 46px; border-radius: 5px; background: rgba(0,0,0,.14); display: grid; place-items: center; }
 .o1-rack .tile { max-width: 28px; height: 42px; } .o1-rack .tile b { font-size: 17px; margin-top: -5px; } .o1-rack .tile i { width: 6px; height: 6px; bottom: 6px; }
 .o1 .ok-btns .btn.primary { background: #ffd45e; color: #3a2a00; }
+
+/* Parti oyunları: Kim Casus?, İsim Şehir, Yasaklı Kelime */
+.pk-chat.inline.tall .pk-msgs { max-height: 34vh; min-height: 120px; }
+.cs, .is, .yk { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 6px 14px 10px; }
+.cs-top { display: flex; gap: 6px; justify-content: center; } .cs-top .chip { background: rgba(255,255,255,.12); color: inherit; }
+.cs-card { display: grid; justify-items: center; gap: 4px; padding: 16px; border-radius: 20px; text-align: center; background: linear-gradient(140deg, #5b34b0, #2a1b4a); color: #fff; box-shadow: 0 12px 30px -14px rgba(0,0,0,.7); }
+.cs-card b { font-size: 26px; } .cs-card small { font-size: 12.5px; opacity: .8; } .cs-card.spy { background: linear-gradient(140deg, #3a3a3a, #111); } .cs-card .big { font-size: 40px; }
+.cs-clues { display: grid; gap: 6px; }
+.cs-cl { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,.08); font-size: 14px; }
+.cs-cl img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: #fff; } .cs-cl b { font-size: 12.5px; opacity: .8; } .cs-cl span { font-weight: 700; }
+.cs-empty { text-align: center; font-size: 12.5px; margin: 0; }
+.cs-panel { display: grid; gap: 8px; justify-items: center; }
+.cs-hint { margin: 0; font-weight: 700; color: #ffd45e; text-align: center; }
+.cs-clue { display: flex; gap: 8px; width: 100%; } .cs-clue .field { flex: 1; min-width: 0; }
+.cs-votes { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; width: 100%; }
+.cs-v { display: grid; justify-items: center; gap: 4px; padding: 8px 4px; border-radius: 14px; background: rgba(255,255,255,.08); color: inherit; font-size: 12.5px; }
+.cs-v img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #fff; } .cs-v.on { box-shadow: inset 0 0 0 2px #ffd45e; background: rgba(255,212,94,.15); }
+.cs-guess { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.cs-rev { display: grid; gap: 4px; text-align: center; } .cs-rev b { font-size: 18px; } .cs-rev span { font-size: 13.5px; opacity: .85; }
+.cs-sc { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: auto; }
+.cs-sc span { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: rgba(127,127,127,.18); } .cs-sc b { color: #f5b400; }
+.is { color: var(--text); }
+.is-top { display: flex; align-items: center; gap: 14px; }
+.is-letter { width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; font-size: 38px; font-weight: 900; color: #fff; background: var(--grad); box-shadow: 0 10px 22px -10px rgba(255,61,110,.7); }
+.is-top b { display: block; font-size: 16px; } .is-top small { font-size: 13px; color: var(--muted); }
+.is-f { display: grid; gap: 8px; } .is-f label { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; }
+.is-dn { margin: 0; font-size: 12.5px; text-align: center; min-height: 16px; }
+.is-rev { display: grid; gap: 10px; }
+.is-c { display: grid; gap: 4px; padding: 10px; border-radius: 14px; background: var(--surface); } .is-c > b { font-size: 13px; color: var(--muted); }
+.is-a { display: flex; align-items: center; gap: 8px; font-size: 14px; } .is-a i { color: var(--muted); }
+.is-who { width: 70px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.is-a em { font-style: normal; font-weight: 900; } .is-a.ok em { color: #22c55e; } .is-a.no em { color: var(--hot); } .is-a.no .grow { text-decoration: line-through; opacity: .6; }
+.is-vt { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text); } .is-vt.on { background: var(--hot); color: #fff; }
+.is-pts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; } .is-pts span { padding: 4px 10px; border-radius: 999px; background: var(--surface); font-size: 13px; } .is-pts b { color: #16a34a; }
+.yk-card { display: grid; justify-items: center; gap: 8px; padding: 18px 16px; border-radius: 22px; background: #fff; color: #1b1b1b; text-align: center; box-shadow: 0 14px 30px -14px rgba(0,0,0,.6); }
+.yk-card small { font-size: 12px; color: #888; font-weight: 700; text-transform: uppercase; } .yk-card > b { font-size: 30px; color: #7c3aed; }
+.yk-ban { display: grid; gap: 4px; width: 100%; } .yk-ban span { padding: 6px; border-radius: 10px; background: #fde8ec; color: #be123c; font-weight: 700; font-size: 14px; }
+.yk-act { display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 13px; color: #666; }
+.yk-next { display: grid; justify-items: center; gap: 6px; padding: 18px; border-radius: 20px; background: rgba(255,255,255,.08); text-align: center; }
+.yk-next img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: #fff; } .yk-next b { font-size: 17px; } .yk-next small { font-size: 13px; opacity: .8; }

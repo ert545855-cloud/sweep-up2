@@ -73,7 +73,7 @@ const routes = [
   [/^\/market(?:\/(\w+))?(?:\/([\w-]+))?$/, 'market', { tab: 'home' }],
 ];
 
-const view = document.getElementById('view');
+let view = document.getElementById('view');
 const tabbar = document.getElementById('tabbar');
 let cleanup = null;
 let navToken = 0;
@@ -173,7 +173,8 @@ async function router() {
   document.body.classList.toggle('dark-ui', !!match.opts.dark);
   tabbar.dataset.active = match.opts.tab || '';
   if (state.me) renderTabbar(match.opts.tab);
-  view.innerHTML = '';
+  // Her sayfada temiz bir kap: önceki sayfanın view üzerine eklediği dinleyiciler taşınmasın
+  { const fresh = view.cloneNode(false); view.replaceWith(fresh); view = fresh; }
   window.scrollTo(0, 0);
   try {
     const mod = await import(`./views/${match.name}.js`);

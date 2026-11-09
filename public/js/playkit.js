@@ -24,7 +24,7 @@ export async function playTable(view, game, id, opt) {
       <button class="ib pk-inv" aria-label="Arkadaş çağır">${icon('userPlus')}</button>${rules ? `<button class="ib pk-help" aria-label="Kurallar">${icon('question')}</button>` : ''}</header>
     <div class="pk-timer" hidden><i></i></div>
     <div class="pk-board"></div>
-    ${chat === 'inline' ? '<div class="pk-chat inline"><div class="pk-msgs"></div><form class="pk-f"><input class="field" maxlength="160" placeholder="Mesaj yaz…" autocomplete="off" enterkeyhint="send"><button class="btn primary sm">' + icon('send') + '</button></form></div>' : ''}
+    ${chat === 'inline' ? '<div class="pk-chat inline ' + (opt.chatTall ? 'tall' : '') + '"><div class="pk-msgs"></div><form class="pk-f"><input class="field" maxlength="160" placeholder="Mesaj yaz…" autocomplete="off" enterkeyhint="send"><button class="btn primary sm">' + icon('send') + '</button></form></div>' : ''}
     <div class="pk-over" hidden></div>
   </div>`;
   const wrap = view.querySelector('.pk-wrap'); const board = view.querySelector('.pk-board'); const over = view.querySelector('.pk-over');
@@ -35,7 +35,7 @@ export async function playTable(view, game, id, opt) {
       if (busy) return null; busy = true;
       try { v = await api(`/play/${game}/${id}/move`, { body }); paint(); return v; } catch (e) { toast(e.message); return null; } finally { busy = false; }
     },
-    async chat(text) { try { return await api(`/play/${game}/${id}/chat`, { body: { text } }); } catch (e) { toast(e.message); return null; } },
+    async chat(text) { try { const r = await api(`/play/${game}/${id}/chat`, { body: { text } }); if (r?.warn) toast(r.warn); if (r?.correct) { toast('Bildin! 🎉'); navigator.vibrate?.([20, 40, 20]); } return r; } catch (e) { toast(e.message); return null; } },
     paint: () => paint(),
   };
   const timer = () => {
@@ -57,7 +57,16 @@ export async function playTable(view, game, id, opt) {
   function paint() {
     view.querySelector('.pk-title').textContent = `${title}${v.round > 1 || (v.round && v.status !== 'waiting') ? ` · ${v.round}. ${opt.roundWord || 'el'}` : ''}`;
     wrap.classList.toggle('waiting', v.status === 'waiting');
-    if (v.status !== 'waiting') { try { render(ctx); } catch (e) { console.error(e); board.innerHTML = `<div class="empty">Tahta çizilemedi: ${esc(e.message)}</div>`; } } else board.innerHTML = '';
+    if (v.status !== 'waiting') {
+      // Yazılan metin ve odak yeniden çizimde kaybolmasın
+      const keep = [...board.querySelectorAll('input, textarea')].map((el) => ({ k: el.name || el.className, v: el.value, f: el === document.activeElement, s: el.selectionStart }));
+      try { render(ctx); } catch (e) { console.error(e); board.innerHTML = `<div class="empty">Tahta çizilemedi: ${esc(e.message)}</div>`; }
+      keep.forEach((x) => {
+        const el = [...board.querySelectorAll('input, textarea')].find((e) => (e.name || e.className) === x.k); if (!el) return;
+        if (x.v && !el.value && !el.disabled) el.value = x.v;
+        if (x.f && document.activeElement !== el) { el.focus({ preventScroll: true }); try { el.setSelectionRange(x.s, x.s); } catch {} }
+      });
+    } else board.innerHTML = '';
     // Bekleme ekranı
     if (v.status === 'waiting') {
       const people = v.seats.filter(Boolean).length;
