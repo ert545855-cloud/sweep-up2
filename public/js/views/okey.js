@@ -1,6 +1,7 @@
 // Okey masası: ıstaka (sürükle-bırak / dokun-taşı), ortadan ya da soldan taş çekme, taş atma, eli bitirme
 import { icon } from '../icons.js';
 import { api, esc, toast, on, sheet, pickPerson } from '../core.js';
+import { enterLandscape, toLocal, ask } from '../land.js';
 
 const SLOTS = 24;
 const tileHtml = (t, ok, cls = '') => {
@@ -15,6 +16,7 @@ export default async function okey(view, id) {
   let v;
   try { v = await api(`/games/okey/${id}`); } catch (e) { view.innerHTML = `<div class="empty"><div class="big">🀄</div><h2>Masa bulunamadı</h2>${esc(e.message)}<p><a class="btn primary" href="#/oyunlar">Oyunlara dön</a></p></div>`; return null; }
   if (v.seat < 0) { try { v = await api(`/games/okey/${id}/join`, { body: {} }); } catch (e) { toast(e.message); location.hash = '#/oyunlar'; return null; } }
+  const offLand = enterLandscape();
   const key = `su_okey_${id}`;
   let order = []; let selected = null; let tick = 0; let lastRound = 0;
   const loadOrder = () => { try { const o = JSON.parse(sessionStorage.getItem(key) || 'null'); if (o?.round === v.round) order = o.slots; } catch {} };
@@ -69,7 +71,7 @@ export default async function okey(view, id) {
     const canDraw = myTurn && v.phase === 'draw'; const canDiscard = myTurn && v.phase === 'discard';
     const status = v.status === 'waiting' ? 'Oyuncular bekleniyor…' : v.status === 'ended' ? (v.winner != null ? `${esc(v.seats[v.winner].name)} eli bitirdi!` : 'El berabere bitti.')
       : myTurn ? (canDraw ? 'Sıra sende: ortadan ya da soldaki taşı çek' : 'Bir taş at ya da elini bitir') : `${esc(v.seats[v.turn]?.name || '')} oynuyor…`;
-    view.innerHTML = `<div class="ok-wrap">
+    view.innerHTML = `<div class="ok-wrap land">
       <header class="ok-h"><button class="ib ok-x" aria-label="Masadan kalk">${icon('back')}</button><b>Okey${v.round ? ` · ${v.round}. el` : ''}</b><span class="grow"></span>
         <button class="ib ok-inv" aria-label="Arkadaş çağır">${icon('userPlus')}</button><button class="ib ok-help" aria-label="Kurallar">${icon('question')}</button></header>
       <div class="ok-felt">
@@ -118,7 +120,7 @@ export default async function okey(view, id) {
     if (!drag) return;
     if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return;
     if (!drag.moved) { drag.moved = true; drag.ghost = drag.el.cloneNode(true); drag.ghost.classList.add('drag'); document.body.append(drag.ghost); drag.el.classList.add('lift'); }
-    drag.ghost.style.left = `${e.clientX - 17}px`; drag.ghost.style.top = `${e.clientY - 30}px`;
+    const pt = toLocal(e.clientX, e.clientY); drag.ghost.style.left = `${pt.x - 20}px`; drag.ghost.style.top = `${pt.y - 30}px`;
   });
   const endDrag = (e) => {
     if (!drag) return; const d = drag; drag = null;
@@ -147,13 +149,13 @@ export default async function okey(view, id) {
     if (e.target.closest('.ok-pile.can')) return move({ type: 'draw', from: 'pile' });
     if (e.target.closest('.ok-dc.bl.can')) return move({ type: 'draw', from: 'discard' });
     if (e.target.closest('.ok-throw') && selected) return move({ type: 'discard', tile: selected });
-    if (e.target.closest('.ok-fin') && selected) { if (confirm('Seçili taşı atarak eli bitirmek istiyor musun?')) move({ type: 'finish', tile: selected }); return; }
+    if (e.target.closest('.ok-fin') && selected) { const t = selected; if (await ask('Eli bitir', 'Seçili taşı atarak eli bitirmek istiyor musun?', 'Bitir')) move({ type: 'finish', tile: t }); return; }
     if (e.target.closest('.srt-run')) return sortRack('run');
     if (e.target.closest('.srt-pair')) return sortRack('pair');
     if (e.target.closest('.ok-start')) { try { v = await api(`/games/okey/${id}/start`, { body: {} }); paint(); } catch (er) { toast(er.message); } return; }
     if (e.target.closest('.ok-again')) { try { v = await api(`/games/okey/${id}/again`, { body: {} }); paint(); } catch (er) { toast(er.message); } return; }
     if (e.target.closest('.ok-x')) {
-      if (v.status === 'playing' && !confirm('Masadan kalkarsan yerine bot oynar. Emin misin?')) return;
+      if (v.status === 'playing' && !(await ask('Masadan kalk', 'Masadan kalkarsan yerine bot oynar. Emin misin?', 'Kalk', { danger: true }))) return;
       await api(`/games/okey/${id}/leave`, { body: {} }).catch(() => {}); location.hash = '#/oyunlar'; return;
     }
     if (e.target.closest('.ok-inv')) return invite();
@@ -183,5 +185,5 @@ export default async function okey(view, id) {
 
   const offs = [on('okey', (x) => { if (x.id !== id) return; const prevTurn = v.turn; v = x; if (!drag) paint(); if (v.status === 'playing' && v.turn === v.seat && prevTurn !== v.seat) navigator.vibrate?.(15); })];
   paint();
-  return () => { offs.forEach((f) => f()); cancelAnimationFrame(tick); drag?.ghost?.remove(); };
+  return () => { offs.forEach((f) => f()); cancelAnimationFrame(tick); drag?.ghost?.remove(); offLand(); };
 }

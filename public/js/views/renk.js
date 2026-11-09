@@ -17,7 +17,7 @@ export default function renk(view, id) {
     });
   });
   return playTable(view, 'renk', id, {
-    title: 'Renk Eşle', emoji: '🌈', theme: 'pk-night', minSize: 2, maxSize: 6,
+    title: 'Renk Eşle', emoji: '🌈', theme: 'pk-night', land: true, minSize: 2, maxSize: 6,
     rules: `<p><b>Amaç:</b> Elindeki bütün kartları ilk bitiren kazanır.</p>
       <p><b>Oynama:</b> Yerdeki kartla aynı renkte ya da aynı sayı/simgede bir kart at. Atamıyorsan desteden bir kart çek; çektiğin kart uyuyorsa hemen atabilirsin.</p>
       <p><b>Özel kartlar:</b> ⊘ Atla: sıradaki oyuncu atlanır. ⇄ Yön değiştir. +2: sıradaki 2 kart çeker ve atlanır. ◑ Renk seç: rengi sen belirlersin. +4: sıradaki 4 kart çeker, rengi sen seçersin.</p>

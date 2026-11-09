@@ -1,6 +1,7 @@
 // 101 Okey masası: ıstaka (çoklu seçim), el açma hazırlığı, masadaki perlere işleme
 import { playTable } from '../playkit.js';
 import { esc, toast } from '../core.js';
+import { toLocal } from '../land.js';
 
 const SLOTS = 26;
 const tileHtml = (t, ok, cls = '') => {
@@ -34,7 +35,7 @@ export default function okey101(view, id) {
   let dragging = null;
 
   return playTable(view, 'okey101', id, {
-    title: '101 Okey', emoji: '🀄', theme: 'pk-felt',
+    title: '101 Okey', emoji: '🀄', theme: 'pk-felt', land: true,
     rules: `<p><b>Amaç:</b> Elindeki taşları perlere dizip masaya açmak ve son taşını atarak eli ilk bitirmek.</p>
       <p><b>Per:</b> Aynı renk sıralı en az 3 taş (ör. kırmızı 4-5-6) ya da aynı sayının farklı renkleri (3 ya da 4 taş). 13’ten sonra 1 gelmez.</p>
       <p><b>El açma:</b> İlk açışta masaya koyduğun perlerin sayıları toplamı en az <b>101</b> olmalı. Ya da en az <b>5 çiftle</b> açabilirsin (çiftle açan sonra sadece çift açabilir).</p>
@@ -102,7 +103,7 @@ export default function okey101(view, id) {
       b.addEventListener('pointermove', (e) => {
         if (!dragging) return; if (!dragging.moved && Math.hypot(e.clientX - dragging.x, e.clientY - dragging.y) < 8) return;
         if (!dragging.moved) { dragging.moved = true; dragging.ghost = dragging.el.cloneNode(true); dragging.ghost.classList.add('drag'); document.body.append(dragging.ghost); dragging.el.classList.add('lift'); }
-        dragging.ghost.style.left = `${e.clientX - 14}px`; dragging.ghost.style.top = `${e.clientY - 26}px`;
+        const pt = toLocal(e.clientX, e.clientY); dragging.ghost.style.left = `${pt.x - 16}px`; dragging.ghost.style.top = `${pt.y - 26}px`;
       });
       b.addEventListener('pointerup', (e) => {
         if (!dragging) return; const d = dragging; dragging = null; d.ghost?.remove(); d.el.classList.remove('lift');

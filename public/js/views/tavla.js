@@ -11,7 +11,7 @@ const die = (x, y, n, s, dim) => `<g class="tv-die ${dim ? 'used' : ''}"><rect x
 export default function tavla(view, id) {
   let sel = null;
   return playTable(view, 'tavla', id, {
-    title: 'Tavla', emoji: '🎲', theme: 'pk-wood', roundWord: 'oyun', againLabel: 'Yeni oyun',
+    title: 'Tavla', emoji: '🎲', theme: 'pk-wood', land: true, roundWord: 'oyun', againLabel: 'Yeni oyun',
     rules: `<p><b>Amaç:</b> 15 taşının hepsini önce kendi evine (sağ alt çeyrek) getirip sonra toplamak.</p>
       <p><b>Hamle:</b> Zar at, sonra taşına dokun ve parlayan yere dokun. Her zar ayrı bir hamledir; çift atarsan 4 kez oynarsın.</p>
       <p><b>Kırma:</b> Rakibin tek taşının olduğu yere gelirsen onu kırarsın; kırılan taş ortadan yeniden girmek zorundadır. Kırık taşın varken başka taş oynatamazsın.</p>

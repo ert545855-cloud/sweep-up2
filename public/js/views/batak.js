@@ -8,7 +8,7 @@ const SUIT = { S: ['♠', 'Maça'], H: ['♥', 'Kupa'], D: ['♦', 'Karo'], C: [
 export default function batak(view, id) {
   let shownLast = ''; let lastUntil = 0; let tm = 0;
   return playTable(view, 'batak', id, {
-    title: 'Batak', emoji: '♠️', theme: 'pk-felt',
+    title: 'Batak', emoji: '♠️', theme: 'pk-felt', land: true,
     rules: `<p><b>İhale:</b> Herkes sırayla kaç el alacağını söyler (en az 4) ya da pas geçer. En yüksek ihaleyi veren kozu seçer ve ilk kartı atar. Herkes pas geçerse dağıtan 4 ile almak zorundadır.</p>
       <p><b>Oynama:</b> Yerdeki renge uymak zorundasın; uyabiliyorsan mümkünse daha büyük kart atmalısın. O renk yoksa koz atmalısın (yerde koz varsa daha büyüğünü). Koz yoksa istediğini atarsın.</p>
       <p><b>Koz:</b> Koz açılmadan (biri koz atmadan) elinde başka kart varken kozla başlayamazsın.</p>

@@ -1,4 +1,6 @@
 // İsim Şehir (2–8 kişi): harf gelir, kategorileri doldur. Aynı cevap 5, tek cevap 10, kategoride tek cevap veren 20 puan.
+// Cevaplar sözlükle denetlenir; sözlükte olmayan cevap ancak diğer oyuncuların yarısı onaylarsa geçer.
+const dict = require('../isimsehir-words');
 const LETTERS = 'ABCÇDEFGHIİKLMNOÖPRSŞTUÜVYZ'.split('').filter((l) => !['Ğ'].includes(l));
 const HARD = new Set(['Ğ', 'J', 'Q', 'W', 'X']);
 const CATS = [['isim', 'İsim'], ['sehir', 'Şehir'], ['hayvan', 'Hayvan'], ['bitki', 'Bitki'], ['esya', 'Eşya'], ['ulke', 'Ülke']];
@@ -17,17 +19,30 @@ module.exports = (kit) => {
     const g = t.g; g.round++;
     if (g.round > ROUNDS || active(t).length < 2) return finish(t);
     const pool = LETTERS.filter((l) => !g.usedL.has(l) && !HARD.has(l)); g.letter = pool[Math.floor(Math.random() * pool.length)]; g.usedL.add(g.letter);
-    g.ans = {}; g.done = new Set(); g.veto = {}; g.ready = new Set(); g.roundPts = null;
+    g.ans = {}; g.done = new Set(); g.appr = {}; g.ready = new Set(); g.roundPts = null;
     kit.say(t, { sys: true, text: `${g.round}. tur · Harf: ${g.letter}` });
     phase(t, 'write', WRITE_MS, () => startReview(t));
   }
-  const valid = (t, s, cat) => {
-    const g = t.g; const a = norm(g.ans[s]?.[cat]); if (a.length < 2) return false;
-    if (!a.startsWith(g.letter.toLocaleLowerCase('tr-TR'))) return false;
-    const v = Object.keys(g.veto[`${s}:${cat}`] || {}).length; const others = active(t).length - 1;
-    return !(others > 0 && v >= Math.max(1, Math.ceil(others / 2)));
+  // Durum: 'bad' (boş / yanlış harf), 'ok' (sözlükte var), 'ask' (sözlükte yok, onay gerekir)
+  const low1 = (x) => String(x || '').replace(/İ/g, 'i').replace(/I/g, 'ı').toLocaleLowerCase('tr-TR').trim().charAt(0);
+  const isI = (ch) => ch === 'i' || ch === 'ı';
+  const stateOf = (t, s, cat) => {
+    const g = t.g; const raw = g.ans[s]?.[cat]; const a = norm(raw); if (a.length < 2) return 'bad';
+    // Sözlükte varsa harf kontrolü doğru yazımına göre yapılır (ör. "Sanliurfa" → Şanlıurfa)
+    const m = dict.match(cat, raw); const first = low1(m || raw); const L = low1(g.letter);
+    if (!(first === L || (isI(first) && isI(L)))) return 'bad';
+    return m ? 'ok' : 'ask';
   };
-  function startReview(t) { const g = t.g; kit.say(t, { sys: true, text: 'Süre doldu! Cevapları kontrol edin, geçersiz olanları işaretleyin.' }); phase(t, 'review', REVIEW_MS, () => score(t)); }
+  const need = (t) => Math.max(1, Math.ceil((active(t).length - 1) / 2));
+  const valid = (t, s, cat) => {
+    const st = stateOf(t, s, cat); if (st !== 'ask') return st === 'ok';
+    return Object.keys(t.g.appr[`${s}:${cat}`] || {}).length >= need(t);
+  };
+  function startReview(t) {
+    const g = t.g; const asks = active(t).some((s) => CATS.some(([c]) => stateOf(t, s, c) === 'ask'));
+    kit.say(t, { sys: true, text: asks ? 'Süre doldu! Sözlükte olmayan cevaplara bakın: doğruysa onaylayın.' : 'Süre doldu! Cevaplar kontrol edildi.' });
+    phase(t, 'review', asks ? REVIEW_MS : 6000, () => score(t));
+  }
   function score(t) {
     const g = t.g; const seats = active(t); const pts = {};
     seats.forEach((s) => { pts[s] = 0; });
@@ -52,7 +67,7 @@ module.exports = (kit) => {
       return {
         is: {
           phase: g.phase, round: g.round, rounds: ROUNDS, letter: g.letter, cats: CATS, mine: g.ans[me] || {}, done: [...g.done], ready: [...g.ready],
-          all: showAll ? active(t).map((s) => ({ seat: s, a: g.ans[s] || {}, ok: Object.fromEntries(CATS.map(([c]) => [c, valid(t, s, c)])), veto: Object.fromEntries(CATS.map(([c]) => [c, Object.keys(g.veto[`${s}:${c}`] || {}).map(Number)])) })) : null,
+          all: showAll ? active(t).map((s) => ({ seat: s, a: g.ans[s] || {}, ok: Object.fromEntries(CATS.map(([c]) => [c, valid(t, s, c)])), st: Object.fromEntries(CATS.map(([c]) => [c, stateOf(t, s, c)])), appr: Object.fromEntries(CATS.map(([c]) => [c, Object.keys(g.appr[`${s}:${c}`] || {}).map(Number)])) })) : null, need: need(t),
           roundPts: g.roundPts, score: g.score,
         },
       };
@@ -69,10 +84,11 @@ module.exports = (kit) => {
         }
         return null;
       }
-      if (b.type === 'veto') {
+      if (b.type === 'approve') {
         if (g.phase !== 'review') return 'Şu an kontrol zamanı değil.';
-        const s = Number(b.seat); const c = String(b.cat); if (s === seat || !CATS.some(([k]) => k === c)) return 'Geçersiz.';
-        const k = `${s}:${c}`; g.veto[k] = g.veto[k] || {}; if (g.veto[k][seat]) delete g.veto[k][seat]; else g.veto[k][seat] = 1;
+        const s = Number(b.seat); const c = String(b.cat); if (s === seat || !CATS.some(([k]) => k === c)) return 'Kendi cevabını onaylayamazsın.';
+        if (stateOf(t, s, c) !== 'ask') return 'Bu cevap onay gerektirmiyor.';
+        const k = `${s}:${c}`; g.appr[k] = g.appr[k] || {}; if (g.appr[k][seat]) delete g.appr[k][seat]; else g.appr[k][seat] = 1;
         return null;
       }
       if (b.type === 'ready') {

@@ -40,7 +40,7 @@ const BOARD = boardSvg();
 export default function kizma(view, id) {
   let rolling = 0;
   return playTable(view, 'kizma', id, {
-    title: 'Kızma Birader', emoji: '🎲', theme: 'pk-night', minSize: 2, maxSize: 4,
+    title: 'Kızma Birader', emoji: '🎲', theme: 'pk-night', land: true, minSize: 2, maxSize: 4,
     rules: `<p><b>Amaç:</b> 4 piyonunu da yolun sonundaki eve ilk getiren kazanır.</p>
       <p><b>Çıkış:</b> Piyonun avludan çıkması için 6 atmalısın. 6 atınca bir kez daha zar atarsın (üst üste üç 6’da sıra geçer).</p>
       <p><b>Kırma:</b> Rakip piyonun olduğu kareye gelirsen onu avlusuna geri gönderirsin ve bir zar daha atarsın. Yıldızlı ve renkli başlangıç kareleri güvenlidir.</p>

@@ -9,7 +9,7 @@ const SUIT = { S: '♠', H: '♥', D: '♦', C: '♣' };
 export default function pisti(view, id) {
   let flashKey = '';
   return playTable(view, 'pisti', id, {
-    title: 'Pişti', emoji: '🃏', theme: 'pk-felt', minSize: 2, maxSize: 4,
+    title: 'Pişti', emoji: '🃏', theme: 'pk-felt', land: true, minSize: 2, maxSize: 4,
     rules: `<p><b>Amaç:</b> Yerdeki kartları toplayıp en çok puanı almak.</p>
       <p><b>Alma:</b> Yerdeki en üst kartla aynı kartı atarsan ya da <b>vale</b> atarsan yerdeki bütün kartları alırsın.</p>
       <p><b>Pişti:</b> Yerde tek kart varken aynısını atarsan pişti olur: <b>10 puan</b>. Valeye vale ile pişti <b>20 puan</b>.</p>

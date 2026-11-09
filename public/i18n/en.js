@@ -345,6 +345,11 @@ const D = {
   'Sıra sende': 'Your turn', 'Sıra sende değil.': 'It’s not your turn.', 'Kazandın! 🎉': 'You won! 🎉', 'Berabere 🤝': 'Draw 🤝', 'Tekrar oyna': 'Play again', 'Gemilerini yerleştir': 'Place your ships',
   '🔀 Karıştır': '🔀 Shuffle', 'Hazırım': 'Ready', 'Senin filon': 'Your fleet', 'Taş': 'Rock', 'Kağıt': 'Paper', 'Makas': 'Scissors', 'Seçimin': 'Your pick', 'Iska 🌊': 'Miss 🌊',
   'Vurdun! 🎯 Tekrar at': 'Hit! 🎯 Fire again', 'Batırdın! 💥 Tekrar at': 'Sunk! 💥 Fire again', 'Yükleniyor…': 'Loading…', 'Oyun bulunamadı.': 'Game not found.',
+  // Yatay masa, onaylar, İsim Şehir sözlüğü
+  'Masadan kalk': 'Leave table', 'Kalk': 'Leave', 'Eli bitir': 'Finish hand', 'Bitir': 'Finish', 'Vazgeç': 'Cancel', 'Oyundan çık': 'Leave game',
+  'Masadan kalkarsan yerine bot oynar. Emin misin?': 'If you leave, a bot will take your seat. Are you sure?', 'Oyundan çıkmak istiyor musun?': 'Do you want to leave the game?',
+  'Seçili taşı atarak eli bitirmek istiyor musun?': 'Finish the hand by discarding the selected tile?', 'sözlükte yok': 'not in dictionary', 'Onayla': 'Approve', '✓ Onayladın': '✓ Approved',
+  'Süre doldu! Sözlükte olmayan cevaplara bakın: doğruysa onaylayın.': 'Time’s up! Check answers not in the dictionary and approve the correct ones.', 'Süre doldu! Cevaplar kontrol edildi.': 'Time’s up! Answers checked.',
 };
 
 // Sayı / isim içeren metinler
@@ -373,6 +378,9 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^Onay bekliyor (\d+)\/(\d+)$/, (_, a, b) => `Awaiting approval ${a}/${b}`],
+  [/^Onayla (\d+)\/(\d+)$/, (_, a, b) => `Approve ${a}/${b}`],
+  [/^✓ Onayladın (\d+)\/(\d+)$/, (_, a, b) => `✓ Approved ${a}/${b}`],
   [/^(.+) düşünüyor…$/, (_, u) => `${u} is thinking…`],
   [/^(.+) kazandı$/, (_, u) => `${u} won`],
   [/^Batırdığın (\d+)\/(\d+)$/, (_, a, b) => `Sunk ${a}/${b}`],

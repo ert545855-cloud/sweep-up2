@@ -284,7 +284,8 @@ module.exports = function games(app, ctx) {
     + 'top kale_direği raket kupa madalya satranç zar yapboz uçurtma salıncak kaydırak '
     + 'astronot uzaylı korsan prenses kral ejderha dinozor deniz_kızı hayalet vampir sihirbaz ninja süper_kahraman palyaço aşçı itfaiyeci doktor '
     + 'kalp gülümseme göz burun kulak el ayak diş saç bıyık sakal').split(' ').map((w) => w.replace(/_/g, ' '));
-  const norm = (s) => String(s || '').toLocaleLowerCase('tr-TR').replace(/[^a-zçğıöşü0-9]/g, '');
+  // Türkçe büyük/küçük harf ve şapkasız yazımdan bağımsız karşılaştırma (PİL = pil = PIL)
+  const norm = (s) => String(s || '').replace(/İ/g, 'i').replace(/I/g, 'ı').toLocaleLowerCase('tr-TR').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c').replace(/[^a-z0-9]/g, '');
   const lev = (a, b) => { const m = a.length; const n = b.length; if (Math.abs(m - n) > 2) return 9; const d = Array.from({ length: m + 1 }, (_, i) => [i, ...new Array(n).fill(0)]); for (let j = 1; j <= n; j++) d[0][j] = j; for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[m][n]; };
   const rooms = new Map();
   const ROUNDS = 2; const DRAW_MS = 80000; const PICK_MS = 12000;

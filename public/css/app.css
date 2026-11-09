@@ -3486,7 +3486,9 @@ body:has(.pk-wrap) #fx-layer :is(.fx-spider, .fx-bats) { display: none; }
 .kz-dw { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 .kz-die { position: relative; width: 46px; height: 46px; border-radius: 12px; background: #fff; box-shadow: inset 0 0 0 3px var(--c), 0 6px 14px rgba(0,0,0,.4); }
 .kz-die i { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #1b1b1b; }
-.kz-die.empty { opacity: .25; } .kz-die.roll { animation: kzRoll .45s ease-in-out; }
+.kz-die.empty { opacity: .25; padding: 0; }
+/* Genel .empty (boş sayfa) stili oyun öğelerine taşmasın */
+.pk-seat.empty, .ok-seat.empty, .ok-av.empty { padding: 0; color: inherit; } .kz-die.roll { animation: kzRoll .45s ease-in-out; }
 @keyframes kzRoll { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(200deg) scale(1.15); } 100% { transform: rotate(360deg) scale(1); } }
 .kz-st { font-size: 13px; font-weight: 700; color: #ffd45e; max-width: 130px; text-align: right; }
 .kz-roll { padding: 12px 20px; }
@@ -3583,7 +3585,9 @@ body:has(.pk-wrap) #fx-layer :is(.fx-spider, .fx-bats) { display: none; }
 .is-a { display: flex; align-items: center; gap: 8px; font-size: 14px; } .is-a i { color: var(--muted); }
 .is-who { width: 70px; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .is-a em { font-style: normal; font-weight: 900; } .is-a.ok em { color: #22c55e; } .is-a.no em { color: var(--hot); } .is-a.no .grow { text-decoration: line-through; opacity: .6; }
-.is-vt { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text); } .is-vt.on { background: var(--hot); color: #fff; }
+.is-vt { flex: 0 0 auto; font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); color: var(--text); } .is-vt.on { background: #16a34a; color: #fff; }
+.is-a.ask { background: color-mix(in srgb, #f59e0b 12%, transparent); border-radius: 8px; padding: 2px 4px; margin: 0 -4px; }
+.is-q { display: block; font-size: 10.5px; color: #d97706; font-weight: 700; } .is-wait { flex: 0 0 auto; font-size: 11px; color: var(--muted); font-weight: 700; }
 .is-pts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; } .is-pts span { padding: 4px 10px; border-radius: 999px; background: var(--surface); font-size: 13px; } .is-pts b { color: #16a34a; }
 .yk-card { display: grid; justify-items: center; gap: 8px; padding: 18px 16px; border-radius: 22px; background: #fff; color: #1b1b1b; text-align: center; box-shadow: 0 14px 30px -14px rgba(0,0,0,.6); }
 .yk-card small { font-size: 12px; color: #888; font-weight: 700; text-transform: uppercase; } .yk-card > b { font-size: 30px; color: #7c3aed; }
@@ -3674,7 +3678,7 @@ body:has(.pk-wrap) #fx-layer :is(.fx-spider, .fx-bats) { display: none; }
 /* Sohbet içi mini oyunlar */
 .menu-sep { padding: 10px 16px 4px; font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .msg.game-msg.mini-msg { min-width: 0; width: min(292px, 74vw); padding: 10px 10px 6px; }
-.mg { display: grid; gap: 8px; }
+.mg { display: grid; gap: 8px; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
 .mg-h { display: flex; align-items: center; gap: 8px; } .mg-h b { font-size: 14.5px; } .mg-h .eg { flex: 0 0 auto; }
 .mg-sc { margin-left: auto; font-size: 12.5px; font-weight: 800; padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--uv) 14%, transparent); color: var(--uv); }
 .mg-load { font-size: 13px; color: var(--muted); padding: 8px 0; }
@@ -3718,3 +3722,126 @@ body:has(.pk-wrap) #fx-layer :is(.fx-spider, .fx-bats) { display: none; }
 .mg-sea.sm { width: 96px; gap: 1px; padding: 3px; border-radius: 8px; flex: 0 0 auto; } .mg-sea.sm i { border-radius: 2px; } .mg-sea.sm i.hit::after { content: ""; }
 .mg-am { display: flex; gap: 10px; align-items: center; } .mg-am-i { display: grid; gap: 2px; font-size: 12px; } .mg-am-i small { color: var(--muted); font-weight: 700; } .mg-am-i b { font-size: 12.5px; } .mg-am-i span { font-size: 12.5px; font-weight: 700; color: var(--uv); }
 .mg-row { display: flex; gap: 8px; justify-content: center; }
+
+/* ===== Yatay ekran: masa oyunları ===== */
+/* Telefon dikey tutuluyorsa sayfa 90° döndürülür (yön kilidi olmayan cihazlar için) */
+html.force-land { --safe-t: 0px; --safe-b: 0px; --safe-l: env(safe-area-inset-top, 0px); --safe-r: env(safe-area-inset-bottom, 0px); overflow: hidden; }
+html.force-land body { position: fixed; top: 0; left: 100vw; width: 100dvh; height: 100vw; margin: 0; transform-origin: 0 0; transform: rotate(90deg); overflow: hidden; }
+html.force-land #app { min-height: 0; height: 100%; max-width: none; }
+html.force-land #view { min-height: 0; }
+html.force-land .sheet { max-height: 92vw; max-width: min(560px, 100%); }
+html.land-game:not(.force-land) { --safe-l: env(safe-area-inset-left, 0px); --safe-r: env(safe-area-inset-right, 0px); }
+html.land-game #fx-layer { display: none; }
+.ask-b { padding: 0 18px 18px; display: grid; gap: 14px; } .ask-b p { margin: 0; font-size: 15px; line-height: 1.45; }
+.ask-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Ortak kabuk */
+.pk-wrap.pk-land { padding: 0 var(--safe-r, 0px) 0 var(--safe-l, 0px); }
+.pk-land .pk-h { position: absolute; top: 0; left: var(--safe-l, 0px); right: var(--safe-r, 0px); z-index: 12; padding: 4px 6px 0; pointer-events: none; }
+.pk-land .pk-h > * { pointer-events: auto; }
+.pk-land .pk-h .ib { width: 34px; height: 34px; border-radius: 50%; background: rgba(0,0,0,.26); }
+.pk-land .pk-h .ib svg { width: 18px; height: 18px; }
+.pk-land .pk-title { font-size: 12px; font-weight: 700; opacity: .7; margin-left: 6px; pointer-events: none; }
+.pk-land .pk-timer { position: absolute; top: 0; left: 0; right: 0; margin: 0; height: 3px; border-radius: 0; z-index: 13; }
+.pk-land .pk-over { padding: 10px; }
+.pk-land .pk-card { width: min(560px, 100%); max-height: calc(100% - 12px); gap: 8px; padding: 14px 18px; }
+.pk-land .pk-card .big { font-size: 32px; }
+.pk-land .pk-score { grid-template-columns: 1fr 1fr; }
+.pk-land .pk-seat .pk-av { width: 40px; height: 40px; } .pk-land .pk-seat .pk-av img { width: 36px; height: 36px; }
+/* Yatay oyuncu kartı (avatar solda, isim sağda) */
+.pk-land :is(.ct-op.top, .ct-me, .tv-p, .kz-me, .rk-me) > .pk-seat { display: grid; grid-template-columns: auto auto; grid-auto-flow: column; grid-template-rows: auto auto; justify-items: start; align-items: center; column-gap: 8px; row-gap: 0; width: auto; text-align: left; }
+.pk-land :is(.ct-op.top, .ct-me, .tv-p, .kz-me, .rk-me) > .pk-seat .pk-av { grid-row: 1 / span 2; }
+.pk-land :is(.ct-op.top, .ct-me, .tv-p, .kz-me, .rk-me) > .pk-seat b { align-self: end; max-width: 110px; }
+.pk-land :is(.ct-op.top, .ct-me, .tv-p, .kz-me, .rk-me) > .pk-seat small { align-self: start; max-width: 140px; }
+.pk-land :is(.ct-op.top, .ct-me, .tv-p, .kz-me, .rk-me) > .pk-seat .pk-sc { position: absolute; top: -4px; left: 28px; right: auto; }
+
+/* Kart masası: Batak, Pişti */
+.pk-land .ct { padding: 4px 10px 4px; gap: 0 8px; grid-template-columns: minmax(96px, 1fr) minmax(0, 3.6fr) minmax(96px, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "left top right" "left mid right" "me hand ."; }
+.pk-land .ct-op.left, .pk-land .ct-op.right { align-self: center; }
+.pk-land .ct-op.top { display: flex; align-items: center; gap: 10px; justify-self: center; padding-top: 2px; }
+.pk-land .ct-mid { min-height: 0; }
+.pk-land .ct-last { grid-area: mid; align-self: start; justify-self: center; font-size: 12px; z-index: 1; pointer-events: none; }
+.pk-land .ct-me { display: contents; }
+.pk-land .ct-me > .pk-seat { grid-area: me; align-self: center; justify-self: start; }
+.pk-land .ct-me .bt-crown { grid-area: me; align-self: start; justify-self: start; margin-left: 30px; }
+.pk-land .ct-st { grid-area: mid; align-self: end; justify-self: center; margin-bottom: 2px; z-index: 1; pointer-events: none; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.pk-land .ct-hand { grid-area: hand; min-height: 0; padding: 12px 0 2px; }
+.pk-land .ps-deck { left: 0; }
+.pk-land .ps-pile { width: 96px; height: 96px; }
+.pk-land .bt-mid { min-height: 0; }
+.pk-land .bt-trick { width: 210px; height: calc(100% - 26px); max-height: 160px; min-height: 134px; margin-top: 22px; }
+.pk-land .bt-panel { grid-area: mid; align-self: center; padding: 10px 14px; }
+.pk-land .bt-hand { padding-left: 0; gap: 0; }
+.pk-land .bt-hand .pc { width: 52px; height: 76px; margin-left: max(-34px, min(-8px, calc((100% - 676px) / 12))); }
+.pk-land .bt-hand .pc:first-child { margin-left: 0; }
+.pk-land .bt-hand .pc i { top: 22px; }
+
+/* Renk Eşle */
+.pk-land .rk-t { display: grid; gap: 0 8px; padding: 4px 10px 4px; grid-template-columns: minmax(100px, 1fr) minmax(0, 3.4fr) minmax(100px, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "ops ops ops" "dir mid side" "me hand hand"; }
+.pk-land .rk-ops { grid-area: ops; padding: 2px 120px 0; gap: 2px 8px; }
+.pk-land .rk-op .pk-seat { width: 76px; }
+.pk-land .rk-dir { grid-area: dir; align-self: center; }
+.pk-land .rk-mid { grid-area: mid; min-height: 0; gap: 26px; }
+.pk-land .rk-last { grid-area: mid; align-self: end; justify-self: center; font-size: 12px; pointer-events: none; }
+.pk-land .rk-me { display: contents; }
+.pk-land .rk-me > .pk-seat { grid-area: me; align-self: center; }
+.pk-land .rk-st { grid-area: side; align-self: center; text-align: center; font-size: 12.5px; }
+.pk-land .rk-pass { grid-area: side; align-self: end; justify-self: center; margin-bottom: 8px; }
+.pk-land .rk-hand { grid-area: hand; min-height: 0; padding: 12px 4px 2px; }
+.pk-land .rk-top .rk.big { width: 66px; height: 98px; }
+
+/* Kızma Birader: tahta ortada, rakipler solda, sen sağda */
+.pk-land .kz { container-type: size; display: grid; gap: 6px 14px; padding: 6px 10px; align-items: center; justify-content: center; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); grid-template-rows: 1fr auto auto auto 1fr; grid-template-areas: "ops board ." "ops board me" "ops board dw" "ops board last" "ops board ."; }
+.pk-land .kz-ops { grid-area: ops; flex-direction: column; align-items: flex-end; gap: 8px; }
+.pk-land .kz-board { grid-area: board; width: min(calc(100cqh - 12px), 56cqw); max-width: none; }
+.pk-land .kz-me { display: contents; }
+.pk-land .kz-me > .pk-seat { grid-area: me; }
+.pk-land .kz-dw { grid-area: dw; margin: 0; flex-wrap: wrap; }
+.pk-land .kz-last { grid-area: last; text-align: left; }
+.pk-land .kz-st { max-width: 160px; text-align: left; }
+
+/* Tavla: tahta ortada */
+.pk-land .tv { container-type: size; display: grid; gap: 8px 14px; padding: 6px 10px; justify-content: center; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); grid-template-rows: 1fr 1fr; grid-template-areas: "op board st" "me board undo"; }
+.pk-land .tv > .tv-p:first-child { grid-area: op; align-self: start; margin-top: 46px; }
+.pk-land .tv > .tv-p:nth-child(3) { grid-area: me; align-self: end; flex-direction: column; align-items: flex-start; gap: 10px; padding: 0; }
+.pk-land .tv > .tv-p:nth-child(3) .grow { display: none; }
+.pk-land .tv-p { padding: 0; justify-self: end; }
+.pk-land .tv-board { grid-area: board; width: min(calc((100cqh - 12px) * 1.1667), 62cqw); max-width: none; align-self: center; }
+.pk-land .tv-st { grid-area: st; align-self: center; text-align: left; }
+
+/* 101 Okey */
+.pk-land .o1 { display: grid; gap: 2px 8px; padding: 2px 6px 4px; grid-template-columns: minmax(0, 1fr) minmax(170px, 29%); grid-template-rows: minmax(0, 1fr) auto auto; grid-template-areas: "felt melds" "st st" "rack btns"; }
+.pk-land .o1-felt { grid-area: felt; height: auto; min-height: 0; margin: 0; }
+.pk-land .o1-melds { grid-area: melds; max-height: none; margin: 40px 0 0; }
+.pk-land .o1-stage { grid-area: felt; align-self: end; z-index: 4; margin: 0; background: rgba(0,0,0,.6); }
+.pk-land .o1 .ok-status { grid-area: st; padding: 1px 8px; font-size: 12.5px; }
+.pk-land .o1-rack { grid-area: rack; margin: 0; }
+.pk-land .o1-rack .slot { height: 44px; }
+.pk-land .o1-rack .tile { max-width: 32px; height: 41px; }
+.pk-land .o1 .ok-btns { grid-area: btns; display: grid; grid-template-columns: 1fr 1fr; align-content: center; gap: 5px; padding: 0; }
+.pk-land .o1 .ok-btns .grow { display: none; }
+.pk-land .o1 .ok-btns .btn { padding-inline: 6px; }
+.pk-land .o1-felt .ok-seat.top { top: 0; } .pk-land .o1-felt .ok-dc.tl, .pk-land .o1-felt .ok-dc.tr { top: 50px; }
+.pk-land .o1-felt .ok-seat.left, .pk-land .o1-felt .ok-seat.right { top: 46%; }
+
+/* Okey (klasik) */
+.ok-wrap.land { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) auto auto; grid-template-areas: "felt felt" "st st" "rack btns"; padding: 0 var(--safe-r, 0px) 4px var(--safe-l, 0px); }
+.ok-wrap.land .ok-h { position: absolute; top: 0; left: var(--safe-l, 0px); right: var(--safe-r, 0px); z-index: 6; padding: 4px 6px 0; pointer-events: none; }
+.ok-wrap.land .ok-h > * { pointer-events: auto; } .ok-wrap.land .ok-h b { font-size: 12px; opacity: .7; pointer-events: none; }
+.ok-wrap.land .ok-h .ib { width: 34px; height: 34px; border-radius: 50%; background: rgba(0,0,0,.26); }
+.ok-wrap.land .ok-felt { grid-area: felt; min-height: 0; margin: 0 6px; }
+.ok-wrap.land .ok-seat.top { top: 0; }
+.ok-wrap.land .ok-seat.left { left: 6px; top: 50%; } .ok-wrap.land .ok-seat.right { right: 6px; top: 50%; }
+.ok-wrap.land .ok-av { width: 44px; height: 44px; } .ok-wrap.land .ok-av img { width: 38px; height: 38px; }
+.ok-wrap.land .ok-dc.tl { top: 8px; left: 26%; } .ok-wrap.land .ok-dc.tr { top: 8px; right: 26%; }
+.ok-wrap.land .ok-dc.bl { bottom: 4px; left: 120px; } .ok-wrap.land .ok-dc.br { bottom: 4px; right: 120px; }
+.ok-wrap.land .ok-center { top: 52%; }
+.ok-wrap.land .ok-timer { bottom: 2px; }
+.ok-wrap.land .ok-status { grid-area: st; padding: 1px 8px; font-size: 12.5px; }
+.ok-wrap.land .ok-rack { grid-area: rack; width: min(100%, 720px); justify-self: center; margin: 0 4px; padding: 5px; gap: 3px; }
+.ok-wrap.land .ok-rack .slot { height: 46px; }
+.ok-wrap.land .ok-rack .tile { max-width: 38px; height: 43px; }
+.ok-wrap.land .ok-btns { grid-area: btns; display: grid; grid-template-columns: 1fr 1fr; align-content: center; gap: 5px; padding: 0 6px 0 2px; }
+.ok-wrap.land .ok-btns .grow { display: none; }
+.ok-wrap.land .ok-end-c { max-height: 100%; overflow-y: auto; width: min(520px, 100%); padding: 14px 18px; gap: 8px; }
+.ok-wrap.land .ok-end-c .big { font-size: 32px; }

@@ -8,7 +8,7 @@ export default function isimsehir(view, id) {
     title: 'İsim Şehir', emoji: '📝', theme: '', chat: 'drawer', bots: false, minHumans: 2, party: true, roundWord: 'oyun', againLabel: 'Yeniden oyna',
     rules: `<p><b>Oynanış:</b> Her turda bir harf gelir. İsim, şehir, hayvan, bitki, eşya ve ülke kategorilerine o harfle başlayan birer cevap yaz.</p>
       <p><b>Bitti:</b> İlk bitiren “Bitti!” derse diğerlerine 8 saniye kalır.</p>
-      <p><b>Kontrol:</b> Süre bitince herkes cevapları görür. Uygunsuz cevapları işaretleyin; diğer oyuncuların yarısı işaretlerse cevap geçersiz olur.</p>
+      <p><b>Kontrol:</b> Cevaplar sözlükle denetlenir. Sözlükte olan cevap ✓ alır; harfi tutmayan ya da boş cevap geçersizdir. Sözlükte olmayan cevap (ör. az bilinen bir yer) ancak diğer oyuncuların yarısı onaylarsa geçerli olur.</p>
       <p><b>Puan:</b> Kategoride tek cevap veren 20, kimseyle aynı olmayan cevap 10, aynı cevap 5 puan. 5 tur sonunda en çok puan kazanır.</p>`,
     render(ctx) {
       const v = ctx.v; const s = v.is; if (!s) return;
@@ -29,7 +29,12 @@ export default function isimsehir(view, id) {
           <button class="btn primary block is-done" ${done ? 'disabled' : ''}>${done ? 'Bitirdin, diğerleri bekleniyor…' : 'Bitti!'}</button></form>
           <p class="muted is-dn">${s.done.length ? `Bitirenler: ${s.done.map((i) => esc(nm(i))).join(', ')}` : ''}</p>`;
       } else if (s.phase === 'review' || s.phase === 'result') {
-        body = `<div class="is-rev">${s.cats.map(([k, n]) => `<div class="is-c"><b>${n}</b>${s.all.map((p) => { const a = p.a[k] || ''; const ok = p.ok[k]; const vetoed = p.veto[k].includes(me); return `<div class="is-a ${ok ? 'ok' : 'no'}"><span class="is-who">${esc(nm(p.seat))}</span><span class="grow">${a ? esc(a) : '<i>boş</i>'}</span>${s.phase === 'review' && p.seat !== me && a ? `<button class="is-vt ${vetoed ? 'on' : ''}" data-seat="${p.seat}" data-cat="${k}">${vetoed ? 'Geçersiz dedin' : 'Geçersiz'}</button>` : ''}<em>${ok ? '✓' : '✗'}</em></div>`; }).join('')}</div>`).join('')}</div>
+        body = `<div class="is-rev">${s.cats.map(([k, n]) => `<div class="is-c"><b>${n}</b>${s.all.map((p) => {
+          const a = p.a[k] || ''; const ok = p.ok[k]; const st = p.st[k]; const ap = p.appr[k] || []; const mine = ap.includes(me);
+          let tail = `<em>${ok ? '✓' : '✗'}</em>`;
+          if (st === 'ask' && s.phase === 'review') tail = p.seat === me ? `<small class="is-wait">Onay bekliyor ${ap.length}/${s.need}</small>` : `<button class="is-vt ${mine ? 'on' : ''}" data-seat="${p.seat}" data-cat="${k}">${mine ? '✓ Onayladın' : 'Onayla'} ${ap.length}/${s.need}</button>`;
+          return `<div class="is-a ${st === 'ask' && s.phase === 'review' ? 'ask' : ok ? 'ok' : 'no'}"><span class="is-who">${esc(nm(p.seat))}</span><span class="grow">${a ? esc(a) : '<i>boş</i>'}${st === 'ask' ? '<small class="is-q">sözlükte yok</small>' : ''}</span>${tail}</div>`;
+        }).join('')}</div>`).join('')}</div>
           ${s.phase === 'review' ? `<button class="btn primary block is-ready" ${s.ready.includes(me) ? 'disabled' : ''}>${s.ready.includes(me) ? 'Hazırsın, diğerleri bekleniyor…' : 'Kontrol ettim'}</button>` : `<div class="is-pts">${Object.entries(s.roundPts || {}).map(([i, p]) => `<span>${esc(nm(+i))} <b>+${p}</b></span>`).join('')}</div>`}`;
       }
       ctx.board.innerHTML = `<div class="is">
@@ -43,7 +48,7 @@ export default function isimsehir(view, id) {
       ctx.board.addEventListener('input', (e) => { if (!e.target.matches('.is-f input')) return; local[e.target.name] = e.target.value; clearTimeout(tmr); tmr = setTimeout(() => send(false), 700); });
       ctx.board.addEventListener('submit', (e) => { if (!e.target.matches('.is-f')) return; e.preventDefault(); clearTimeout(tmr); send(true); });
       ctx.board.addEventListener('click', (e) => {
-        const vt = e.target.closest('.is-vt'); if (vt) return ctx.move({ type: 'veto', seat: +vt.dataset.seat, cat: vt.dataset.cat });
+        const vt = e.target.closest('.is-vt'); if (vt) return ctx.move({ type: 'approve', seat: +vt.dataset.seat, cat: vt.dataset.cat });
         if (e.target.closest('.is-ready')) return ctx.move({ type: 'ready' });
       });
     },

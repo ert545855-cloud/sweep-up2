@@ -2,6 +2,7 @@
 // Her oyun kendi tahtasını render(ctx) ile çizer.
 import { icon } from './icons.js';
 import { api, esc, toast, on, sheet, pickPerson, state } from './core.js';
+import { enterLandscape, ask } from './land.js';
 
 export const GAME_INFO = {};
 export function seatChip(v, i, { cls = '', extra = '' } = {}) {
@@ -18,7 +19,8 @@ export async function playTable(view, game, id, opt) {
   let v;
   try { v = await api(`/play/${game}/${id}`); } catch (e) { view.innerHTML = `<div class="empty"><div class="big">🎮</div><h2>Masa bulunamadı</h2>${esc(e.message)}<p><a class="btn primary" href="#/oyunlar">Oyunlara dön</a></p></div>`; return null; }
   if (v.me < 0) { try { v = await api(`/play/${game}/${id}/join`, { body: {} }); } catch (e) { toast(e.message); location.hash = '#/oyunlar'; return null; } }
-  view.innerHTML = `<div class="pk-wrap ${theme}">
+  const offLand = opt.land ? enterLandscape() : null;
+  view.innerHTML = `<div class="pk-wrap ${theme} ${opt.land ? 'pk-land' : ''}">
     <header class="pk-h"><button class="ib pk-x" aria-label="Çık">${icon('back')}</button><b class="pk-title"></b><span class="grow"></span>
       ${chat === 'drawer' ? `<button class="ib pk-chat-b" aria-label="Sohbet">${icon('comment')}<i class="pk-dot" hidden></i></button>` : ''}
       <button class="ib pk-inv" aria-label="Arkadaş çağır">${icon('userPlus')}</button>${rules ? `<button class="ib pk-help" aria-label="Kurallar">${icon('question')}</button>` : ''}</header>
@@ -114,7 +116,7 @@ export async function playTable(view, game, id, opt) {
   };
   wrap.addEventListener('click', async (e) => {
     if (e.target.closest('.pk-x')) {
-      if (v.status === 'playing' && !confirm(opt.party ? 'Oyundan çıkmak istiyor musun?' : 'Masadan kalkarsan yerine bot oynar. Emin misin?')) return;
+      if (v.status === 'playing' && !(await ask(opt.party ? 'Oyundan çık' : 'Masadan kalk', opt.party ? 'Oyundan çıkmak istiyor musun?' : 'Masadan kalkarsan yerine bot oynar. Emin misin?', 'Çık', { danger: true }))) return;
       await api(`/play/${game}/${id}/leave`, { body: {} }).catch(() => {}); location.hash = '#/oyunlar'; return;
     }
     if (e.target.closest('.pk-inv, .pk-inv2')) return invite();
@@ -135,7 +137,7 @@ export async function playTable(view, game, id, opt) {
     if (v.status === 'playing' && v.turn === v.me && !myTurnBefore) navigator.vibrate?.(15);
   })];
   paint();
-  return () => { offs.forEach((f) => f()); cancelAnimationFrame(raf); opt.cleanup?.(); };
+  return () => { offs.forEach((f) => f()); cancelAnimationFrame(raf); opt.cleanup?.(); offLand?.(); };
 }
 
 // Kart görünümü (Pişti, Batak, Renk Eşle için ortak)

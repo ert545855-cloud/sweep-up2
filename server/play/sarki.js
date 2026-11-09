@@ -38,22 +38,37 @@ module.exports = (kit) => {
     }
     return out;
   }
-  async function pool(cat) {
-    const hit = pools.get(cat);
-    if (hit?.items && Date.now() - hit.at < POOL_MS) return hit.items;
-    if (hit?.loading) return hit.loading;
-    const saved = store.get('settings', `sarki_${cat}`);
-    if (saved?.items?.length >= 20 && Date.now() - saved.at < POOL_MS) { pools.set(cat, { at: saved.at, items: saved.items }); return saved.items; }
-    const loading = build(cat).then((items) => {
-      if (items.length >= 20) { pools.set(cat, { at: Date.now(), items }); if (!process.env.PLAY_FAKE_SONGS) store.put('settings', { id: `sarki_${cat}`, at: Date.now(), items }); console.log(`[sarki] ${cat} havuzu: ${items.length} şarkı`); }
-      else { pools.delete(cat); if (saved?.items?.length) return saved.items; console.error(`[sarki] ${cat} havuzu yetersiz: ${items.length}`); }
-      return items;
-    }).catch((e) => { pools.delete(cat); console.error('[sarki] havuz', e.message); return saved?.items || []; });
-    pools.set(cat, { loading });
+  // Havuz: bellekte / veritabanında varsa hemen döner (eskiyse arkada yenilenir). Aynı anda tek yükleme (iTunes sınırı).
+  let chain = Promise.resolve();
+  const queued = (fn) => { const p = chain.then(fn, fn); chain = p.catch(() => {}); return p; };
+  const fromStore = (cat) => { const sv = store.get('settings', `sarki_${cat}`); return sv?.items?.length >= 20 ? { at: sv.at || 0, items: sv.items } : null; };
+  function refresh(cat) {
+    const hit = pools.get(cat); if (hit?.loading) return hit.loading;
+    const loading = queued(() => build(cat)).then((items) => {
+      const prev = pools.get(cat);
+      if (items.length >= 20) {
+        pools.set(cat, { at: Date.now(), items });
+        if (!process.env.PLAY_FAKE_SONGS) store.put('settings', { id: `sarki_${cat}`, at: Date.now(), items });
+        console.log(`[sarki] ${cat} havuzu: ${items.length} şarkı`);
+        return items;
+      }
+      console.error(`[sarki] ${cat} havuzu yetersiz: ${items.length}`);
+      const old = prev?.items || fromStore(cat)?.items || [];
+      if (old.length) pools.set(cat, { at: Date.now() - POOL_MS + 30 * 60000, items: old }); else pools.delete(cat); // 30 dk sonra yeniden dene
+      return old;
+    }).catch((e) => { console.error('[sarki] havuz', e.message); const old = fromStore(cat)?.items || []; if (old.length) pools.set(cat, { at: Date.now(), items: old }); else pools.delete(cat); return old; });
+    pools.set(cat, { ...(hit || {}), loading });
     return loading;
   }
-  // Açılışta bir havuzu ısıt (ilk oyuncu beklemesin)
-  if (!process.env.PLAY_FAKE_SONGS) setTimeout(() => pool('pop').catch(() => {}), 25000).unref?.();
+  async function pool(cat) {
+    let hit = pools.get(cat);
+    if (!hit?.items) { const sv = fromStore(cat); if (sv) { hit = { ...sv }; pools.set(cat, hit); } }
+    if (hit?.items) { if (Date.now() - hit.at > POOL_MS && !hit.loading) refresh(cat); return hit.items; }
+    return hit?.loading || refresh(cat);
+  }
+  const ready = () => Object.keys(ARTISTS).filter((c) => pools.get(c)?.items?.length || fromStore(c));
+  // Açılışta kategorileri sırayla ısıt (ilk oyuncu beklemesin, iTunes'u zorlamadan)
+  if (!process.env.PLAY_FAKE_SONGS) Object.keys(ARTISTS).forEach((c, i) => setTimeout(() => pool(c).catch(() => {}), 20000 + i * 75000).unref?.());
 
   quiz(kit, {
     key: 'sarki', name: 'Şarkıyı Tahmin Et', emoji: '🎵', cats: CATS, count: 10, qMs: 20000, preMs: 3000, aMs: 5000,
@@ -61,7 +76,8 @@ module.exports = (kit) => {
     failText: 'Şarkılar şu an yüklenemedi, biraz sonra tekrar dene.',
     revealSay: (q) => `🎵 ${q.info.title} · ${q.info.artist}`,
     async load(t, cat, used) {
-      const cats = cat === 'karisik' ? kit.shuffle(Object.keys(ARTISTS)).slice(0, 3) : [cat];
+      // Karışık: hazır olan kategorilerden (yoksa pop) karıştır
+      const have = ready(); const cats = cat === 'karisik' ? (have.length ? kit.shuffle(have).slice(0, 3) : ['pop']) : [cat];
       const items = (await Promise.all(cats.map((c) => pool(c)))).flat();
       if (items.length < 14) return [];
       let fresh = items.filter((x) => !used.has(x.id));
