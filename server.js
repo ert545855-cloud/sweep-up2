@@ -85,7 +85,7 @@ const tagsOf = (u) => { const ids = u?.tags || []; if (!ids.length) return []; c
 const shownAge = (u) => (priv(u).hideAge ? null : u.age ?? null);
 function pub(u, viewerId) {
   if (!u) return null;
-  const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, regIp, regDevice, falPacks, ...rest } = u;
+  const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, regIp, regDevice, falPacks, closeFriends, xp, level, ...rest } = u;
   const self = viewerId === u.id;
   const hidden = !self && priv(u).hideLastSeen;
   const fdoc = viewerId && !self ? store.get('follows', `${viewerId}_${u.id}`) : null;
@@ -95,7 +95,8 @@ function pub(u, viewerId) {
     online: hidden ? false : isOnline(u.id),
     lastSeen: hidden ? null : u.lastSeen,
     live: lives.has(u.id),
-    plus: isPlus(u), verified: !!u.verified,
+    plus: isPlus(u), verified: !!u.verified, level: featureCtx.levelOf?.(u) || null,
+    ...(self ? { closeFriendsCount: (closeFriends || []).length } : {}),
     age: self ? u.age ?? null : shownAge(u), ageHidden: !!priv(u).hideAge, tags: tagsOf(u),
     prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
     badges: (u.badges || []).filter((b) => self || !b.hidden).map(({ no, ...b }) => b),
@@ -1631,6 +1632,12 @@ function shareRef(viewer, ref) {
     if (!it || !store.get('settings', 'market')?.enabled) return null;
     return { kind: 'market', id: it.id, label: 'Store ilanı', title: it.title, sub: `${Number(it.price || 0).toLocaleString('tr-TR')} ₺ · SwipeUp Store`, image: (it.photos || [])[0] || null, url: `/#/market/i/${it.id}` };
   }
+  if (k === 'event') {
+    const e = store.get('events', id); const o = e && store.get('users', e.userId);
+    if (!e || !o || e.status === 'cancelled' || isBlocked(viewer.id, o.id)) return null;
+    const d = new Date(e.startAt).toLocaleString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+    return { kind: 'event', id: e.id, label: 'Etkinlik', title: e.title, sub: `${d} · ${e.place}`, image: e.cover || o.avatar, url: `/#/etkinlik/${e.id}` };
+  }
   return null;
 }
 app.get('/api/share/targets', auth, (req, res) => {
@@ -1700,7 +1707,7 @@ const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
   isBlocked, limited, isMedia, isGif: (u) => GIF_HOSTS.test(String(u || '')), extractTags, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
   online, appEvent, falci, msgOut, falLock, shownAge, tagsOf, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id), pushAdmins,
-  storyItem, storyVisible, storyAlive, createPost: (u, b) => createPost(u, b), cleanSticker,
+  storyItem, storyVisible, storyAlive, createPost: (u, b) => createPost(u, b), cleanSticker, systemMsg: (c, t) => systemMsg(c, t), groupAvatar,
 };
 require('./server/features')(app, featureCtx);
 require('./server/genel')(app, featureCtx);
@@ -1720,6 +1727,7 @@ require('./server/contests')(app, featureCtx);
 require('./server/daily')(app, featureCtx); // Falcı Teyze günlük burç / tarot paylaşımı
 require('./server/insta')(app, featureCtx); // öne çıkanlar, yakın arkadaşlar, notlar, anket, planlı gönderi, istatistik
 require('./server/dating')(app, featureCtx); // sohbet başlatıcılar, buluşma fikirleri, ikinci şans
+require('./server/community')(app, featureCtx); // seviye, haftanın en beğenilenleri, QR kod, etkinlikler
 require('./server/engage')(app, featureCtx); // seriler, kulüpler, günün sorusu, seçki, karaoke… (en son yüklenir)
 gameOut = featureCtx.gameOut;
 

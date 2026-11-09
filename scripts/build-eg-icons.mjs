@@ -69,6 +69,11 @@ const PHONES = '<path d="M18 40v-7a14 14 0 0 1 28 0v7" fill="none" stroke="#fff"
 const BOLT = '<path d="M35.6 13.5 19.5 35.2h10.4L27.6 50.5 44.5 28H33.8z" fill="#fff" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/>';
 const DREAM = '<path d="M37 15.5a17 17 0 1 0 12 28.6A14 14 0 0 1 37 15.5z" fill="#fff"/><path d="M44 18l1.3 3.2 3.2 1.3-3.2 1.3L44 27l-1.3-3.2-3.2-1.3 3.2-1.3z" fill="#fff" fill-opacity=".85"/><circle cx="49.5" cy="32" r="1.8" fill="#fff" fill-opacity=".7"/>';
 const PIN = '<path d="M32 13.5c-7.5 0-13.5 5.8-13.5 13.1 0 9.6 13.5 23.4 13.5 23.4s13.5-13.8 13.5-23.4c0-7.3-6-13.1-13.5-13.1z" fill="#fff"/><circle cx="32" cy="26.8" r="5.2" fill="url(#g)"/>';
+const CAL = '<rect x="14.5" y="17.5" width="35" height="32" rx="7" fill="#fff"/><path d="M14.5 26.5h35" stroke="url(#g)" stroke-width="2.6"/><rect x="21.6" y="12.5" width="4.6" height="9.5" rx="2.3" fill="#fff" stroke="url(#g)" stroke-width="1.4"/><rect x="37.8" y="12.5" width="4.6" height="9.5" rx="2.3" fill="#fff" stroke="url(#g)" stroke-width="1.4"/><g fill="url(#g)"><circle cx="24" cy="34" r="2.5"/><circle cx="32" cy="34" r="2.5"/><circle cx="40" cy="34" r="2.5"/><circle cx="24" cy="41.6" r="2.5"/><circle cx="32" cy="41.6" r="2.5"/></g>';
+const CUP = '<path d="M21.5 14.5h21v10a10.5 10.5 0 0 1-21 0z" fill="#fff"/><path d="M21.5 18H17a5.6 5.6 0 0 0 5.4 8M42.5 18H47a5.6 5.6 0 0 1-5.4 8" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/><path d="M29.4 34.2h5.2l1 6.3h-7.2z" fill="#fff"/><rect x="22" y="40" width="20" height="8" rx="2.8" fill="#fff"/><path d="m32 18.2 1.7 3.5 3.8.5-2.8 2.7.7 3.8-3.4-1.8-3.4 1.8.7-3.8-2.8-2.7 3.8-.5z" fill="url(#g)"/>';
+const LVL = '<path d="M32 11.5 49.5 21v22L32 52.5 14.5 43V21z" fill="#fff"/><path d="m23.5 38 8.5-6.6 8.5 6.6M23.5 30.4l8.5-6.6 8.5 6.6" fill="none" stroke="url(#g)" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>';
+const TILE = '<rect x="15" y="16" width="20" height="32" rx="4.5" fill="#fff" fill-opacity=".6" transform="rotate(-10 25 32)"/><rect x="27" y="13" width="22" height="36" rx="5" fill="#fff"/><path d="M33 20.5h10l-6.4 12.5" fill="none" stroke="url(#g)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="38" cy="41.5" r="3.4" fill="url(#g)"/>';
+const DRAW = '<path d="M32 13.5c-10.5 0-19 7.6-19 17.6 0 9.3 7.6 17.4 17 17.4 2.5 0 3.6-1.5 3.6-3.1 0-2.4-1.8-3-1.8-5.2 0-2 1.6-3.2 3.6-3.2h4.2c6.3 0 11.4-4.3 11.4-10.3C51 19.4 42.5 13.5 32 13.5z" fill="#fff"/><g fill="url(#g)"><circle cx="23" cy="29" r="3"/><circle cx="29.5" cy="21.8" r="3"/><circle cx="38.6" cy="22.4" r="3"/><circle cx="44" cy="29.4" r="2.6"/></g>';
 
 // [ad, glif, palet, şekil]
 const ICONS = [
@@ -76,6 +81,7 @@ const ICONS = [
   ['burc', 'burc', 'grape'], ['koruyucu', 'koruyucu', 'ice'], ['odul', 'odul', 'gold'], ['hediye', 'hediye', 'pink'], ['uyum', 'uyum', 'rose'],
   ['gorev', 'gorev', 'mint'], ['dinle', 'dinle', 'teal'],
   ['genel', CHATS, 'indigo'], ['odalar', PHONES, 'pink'], ['hizli', BOLT, 'sun'], ['mekan', PIN, 'mint'],
+  ['etkinlik', CAL, 'rose'], ['enler', CUP, 'gold'], ['seviye', LVL, 'violet'], ['okey', TILE, 'teal'], ['cizbil', DRAW, 'sunset'],
   ['club-muzik', 'club-muzik', 'pink'], ['club-oyun', 'club-oyun', 'violet'], ['club-burc', 'club-burc', 'indigo'], ['club-futbol', 'club-futbol', 'mint'],
   ['club-dizi', 'club-dizi', 'red'], ['club-kitap', 'club-kitap', 'amber'], ['club-seyahat', 'club-seyahat', 'sky'], ['club-spor', 'club-spor', 'orange'],
   ['club-yemek', 'club-yemek', 'sunset'], ['club-teknoloji', 'club-teknoloji', 'teal'],

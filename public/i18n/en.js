@@ -269,6 +269,21 @@ const D = {
   'Öner': 'Suggest', '📅 Buluşma planı gönder': '📅 Send a date plan', '💛 İlk buluşmayı kalabalık, herkese açık bir yerde yap.': '💛 Meet in a busy public place for your first date.', 'İkinizin ortasında, SwipeUp’ta popüler': 'Popular on SwipeUp, halfway between you', 'İlk buluşma için ideal': 'Great for a first date',
   'İkinci şans': 'Second chance', '💫 İkinci şans': '💫 Second chance', 'Geçtiğin kişilerden bu hafta senin için seçtiklerimiz. Bir kez daha bak; beğenirsen ve o da seni beğendiyse eşleşirsiniz.': 'People you passed, picked for you this week. Take another look; if you like them and they liked you, you match.',
   'Geç': 'Pass', 'Eşleşme şansınız yüksek ✨': 'Good chance of a match ✨', 'Bir kez daha bak': 'Take another look', 'Keşfetmeye dön': 'Back to discover', 'Bu haftanın ikinci şanslarını gördün': 'You’ve seen this week’s second chances', 'Bu hafta ikinci şans yok': 'No second chances this week',
+  // Topluluk: seviye, haftanın enleri, QR, etkinlikler
+  'Seviyen': 'Your level', 'Seviye': 'Level', 'Puan kazanma yolları': 'Ways to earn points', 'bugün': 'today', 'Unvanlar': 'Titles', 'Takip ettiklerin arasında': 'Among people you follow',
+  'Yeni gelen': 'Newcomer', 'Sosyal': 'Social', 'Popüler': 'Popular', 'Yıldız': 'Star', 'Süperstar': 'Superstar', 'Efsane': 'Legend', 'SwipeUp Efsanesi': 'SwipeUp Legend',
+  'Günlük giriş': 'Daily check-in', 'Gönderi ya da hikaye paylaşmak': 'Sharing a post or story', 'Yorum yapmak': 'Commenting', 'Mesajlaşmak': 'Messaging', 'Kaydırmada beğenmek': 'Liking while swiping', 'Vitrin izlemek': 'Watching Showcase',
+  'Sohbet serisini sürdürmek': 'Keeping a chat streak', 'Gönderilerinin beğenilmesi': 'Getting likes on your posts', 'Etkinlik oluşturmak': 'Creating an event', 'Etkinliğe katılmak': 'Joining an event', 'Haftanın en beğenilenlerine girmek': 'Making the weekly top posts',
+  'Puanlar günlük sınırlarla verilir; sahte etkileşimle kazanılan puanlar silinebilir.': 'Points have daily limits; points earned through fake activity may be removed.',
+  'Haftanın en beğenilenleri': 'Top posts of the week', 'Haftanın enleri': 'Weekly top', 'Bu haftanın yıldızları': 'This week’s stars', 'Sıralamanın devamı': 'The rest of the ranking', 'Geçen haftanın kazananları': 'Last week’s winners',
+  'Gizli hesapların gönderileri sıralamaya girmez. Puan: beğeni + yorum + yeniden paylaşım.': 'Posts from private accounts aren’t ranked. Score: likes + comments + reposts.', 'İlk 3 gönderi her pazartesi jeton kazanır': 'The top 3 posts win coins every Monday',
+  'QR kod': 'QR code', 'QR tara': 'Scan QR', 'SwipeUp’ta beni bul': 'Find me on SwipeUp', 'Arkadaşın telefon kamerasıyla bu kodu okutunca profilin açılır.': 'When a friend scans this code with their phone camera, your profile opens.', 'Bir SwipeUp QR kodunu çerçeveye getir': 'Point the frame at a SwipeUp QR code',
+  'Etkinlikler': 'Events', 'Etkinlik': 'Event', 'Gerçek hayatta buluş': 'Meet in real life', 'Kahve, yürüyüş, maç, oyun gecesi… Bir etkinlik oluştur ya da birine katıl.': 'Coffee, walks, matches, game nights… Create an event or join one.',
+  'Yaklaşan': 'Upcoming', 'Katıldıklarım': 'Joined', 'Benimkiler': 'Mine', 'Şehre göre filtrele': 'Filter by city', 'Etkinlik oluştur': 'Create event', 'Yeni etkinlik': 'New event', 'Etkinliği düzenle': 'Edit event',
+  'Kapak fotoğrafı ekle (isteğe bağlı)': 'Add a cover photo (optional)', 'Etkinliğin adı': 'Event name', 'Ne zaman': 'When', 'Nerede': 'Where', 'Şehir': 'City', 'Açıklama': 'Description', 'Kişi sınırı': 'Capacity',
+  'Herkese açık': 'Public', 'Sadece takipçilerim': 'Only my followers', 'Etkinlik sohbeti aç': 'Open an event chat', 'Katılanlar otomatik olarak grup sohbetine eklenir': 'People who join are added to a group chat automatically', 'Etkinliği oluştur': 'Create event',
+  '🎉 Katılıyorum': '🎉 I’m going', '✓ Katılıyorsun': '✓ You’re going', '☆ İlgileniyorum': '☆ Interested', '★ İlgileniyorsun': '★ Interested', 'Etkinlik dolu': 'Event is full', 'Katılıyorsun': 'Going', 'İlgileniyorsun': 'Interested',
+  'Etkinlik sohbeti': 'Event chat', 'Katılanlarla konuş, planı netleştir': 'Talk to attendees and firm up the plan', 'Düzenleyen': 'Organizer', 'Harita': 'Map', 'Etkinliği iptal et': 'Cancel event', 'Etkinliği bildir': 'Report event', 'Düzenle': 'Edit', 'Etkinlik oluşturuldu 🎉': 'Event created 🎉',
 };
 
 // Sayı / isim içeren metinler
@@ -297,6 +312,10 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^Sv\. (\d+)$/, (_, n) => `Lv. ${n}`],
+  [/^(\d+) katılıyor$/, (_, n) => `${n} going`],
+  [/^(\d+) katılıyor \/ (\d+)$/, (_, n, c) => `${n} going / ${c}`],
+  [/^(\d+) ilgileniyor$/, (_, n) => `${n} interested`],
   [/^(\d+) oy$/, (_, n) => `${n} votes`],
   [/^(\d+) seçenek$/, (_, n) => `${n} options`],
   [/^Listen · (\d+)$/, (_, n) => `Your list · ${n}`],

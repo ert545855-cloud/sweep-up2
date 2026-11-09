@@ -55,6 +55,10 @@ const routes = [
   [/^\/seriler$/, 'streaks', { tabs: false }],
   [/^\/(yakin|planli|arsiv)$/, 'insta', { tabs: false }],
   [/^\/ikinci-sans$/, 'sans', { tab: 'swipe' }],
+  [/^\/etkinlikler$/, 'events', { tab: 'home' }],
+  [/^\/etkinlik\/([\w-]+)(?:\/(duzenle))?$/, 'events', { tabs: false }],
+  [/^\/seviye$/, 'level', { tabs: false }],
+  [/^\/haftanin-enleri$/, 'best', { tab: 'home' }],
   [/^\/soru$/, 'dq', { tab: 'home' }],
   [/^\/kulupler$/, 'clubs', { tab: 'home' }],
   [/^\/kulup\/([a-z0-9]+)$/, 'clubs', { tab: 'home' }],
@@ -203,6 +207,7 @@ function wireRealtime() {
     toast(d.coins ? `${d.count} günlük giriş serisi! +${d.coins} jeton` : `${d.count}. gün! Serin devam ediyor${d.freezeUsed ? ' (seri koruyucu kullanıldı)' : ''}`, { title: 'Seri', img: '/img/eg/seri.svg', href: '#/seriler', ms: 4200 });
   });
   on('karaoke:turn', (d) => { if (location.hash !== '#/karaoke') toast(`Karaoke sırası sende! "${d?.song || ''}"`, { title: 'Karaoke', img: '/img/eg/karaoke.svg', href: '#/karaoke', ms: 9000 }); });
+  on('level', (d) => { if (d?.level) toast(`${d.em} Seviye atladın! Artık ${d.level}. seviyedesin · ${d.title} · +${d.coins} jeton`, { href: '#/seviye', ms: 5000 }); });
   on('quests', (d) => { if (d?.done && location.hash !== '#/gorevler') toast(`✅ Görev tamamlandı: ${d.title}. Ödülünü al!`, { href: '#/gorevler', ms: 4500 }); });
   on('message', (m) => {
     if (m.from === state.me.id || m.system) return;

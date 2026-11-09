@@ -105,6 +105,58 @@ function peopleSheet(title, userId, which) {
   });
 }
 
+// Profil QR kodu: tara, kaydet, paylaş (Instagram'daki gibi)
+function qrSheet(u) {
+  const src = `/qr/${encodeURIComponent(u.username)}.svg?c=1a1027`;
+  const canScan = 'BarcodeDetector' in window && navigator.mediaDevices?.getUserMedia;
+  sheet(null, `<div class="qr-wrap"><div class="qr-card"><img class="qr-av" src="${esc(u.avatar)}" alt=""><img class="qr-img" src="${src}" alt="QR kod"><b>@${esc(u.username)}</b><small>SwipeUp’ta beni bul</small></div>
+    <div class="qr-act"><button class="btn sv">${icon('download')} Kaydet</button><button class="btn sh">${icon('share')} Paylaş</button>${canScan ? `<button class="btn sc">${icon('scan')} QR tara</button>` : ''}</div>
+    <p class="muted qr-note">Arkadaşın telefon kamerasıyla bu kodu okutunca profilin açılır.</p></div>`, {
+    onMount(sh, close) {
+      const toPng = async () => {
+        const c = document.createElement('canvas'); c.width = 1080; c.height = 1350; const g = c.getContext('2d');
+        const grad = g.createLinearGradient(0, 0, 1080, 1350); grad.addColorStop(0, '#ff8a3d'); grad.addColorStop(0.55, '#ff3d6e'); grad.addColorStop(1, '#a24bff');
+        g.fillStyle = grad; g.fillRect(0, 0, 1080, 1350);
+        g.fillStyle = '#fff'; g.beginPath(); g.roundRect(140, 200, 800, 920, 64); g.fill();
+        const load = (s) => new Promise((ok, no) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => ok(i); i.onerror = no; i.src = s; });
+        const q = await load(src); g.drawImage(q, 240, 330, 600, 600);
+        g.fillStyle = '#1a1027'; g.font = '800 58px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(`@${u.username}`, 540, 1010);
+        g.fillStyle = '#6c6c75'; g.font = '500 36px system-ui, sans-serif'; g.fillText('SwipeUp’ta beni bul', 540, 1066);
+        return new Promise((ok) => c.toBlob(ok, 'image/png'));
+      };
+      sh.querySelector('.sv').onclick = async () => {
+        try { const b = await toPng(); const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(b), download: `swipeup-${u.username}-qr.png` }); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); } catch { toast('Kaydedilemedi.'); }
+      };
+      sh.querySelector('.sh').onclick = async () => {
+        const url = `${location.origin}/#/u/${u.username}`;
+        try { const b = await toPng(); const f = new File([b], 'swipeup-qr.png', { type: 'image/png' }); if (navigator.canShare?.({ files: [f] })) return await navigator.share({ files: [f], title: 'SwipeUp', text: url }); } catch (e) { if (e?.name === 'AbortError') return; }
+        try { await navigator.clipboard.writeText(url); toast('Profil bağlantısı kopyalandı.'); } catch { toast(url); }
+      };
+      sh.querySelector('.sc')?.addEventListener('click', () => { close(); scanQr(); });
+    },
+  });
+}
+async function scanQr() {
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); } catch { return toast('Kamera izni verilmedi.'); }
+  const det = new window.BarcodeDetector({ formats: ['qr_code'] });
+  let done = false; let raf = 0;
+  const closeS = sheet('QR tara', '<div class="qr-scan"><video playsinline muted autoplay></video><i class="qr-frame"></i><p class="muted">Bir SwipeUp QR kodunu çerçeveye getir</p></div>', {
+    onClose() { done = true; cancelAnimationFrame(raf); stream.getTracks().forEach((t) => t.stop()); },
+  });
+  const v = document.querySelector('.qr-scan video'); v.srcObject = stream;
+  const tick = async () => {
+    if (done) return;
+    try {
+      const r = await det.detect(v);
+      const hit = r.map((x) => x.rawValue).find((x) => /#\/u\/[\w.]+/.test(x));
+      if (hit) { done = true; closeS(); location.hash = hit.slice(hit.indexOf('#')); return; }
+    } catch {}
+    raf = requestAnimationFrame(tick);
+  };
+  v.onplaying = tick;
+}
+
 export default async function profile(view, username) {
   const self = !username || username === state.me.username;
   view.innerHTML = '<div class="spinner" style="margin-top:40vh"></div>';
@@ -137,7 +189,7 @@ export default async function profile(view, username) {
         </div>
       </div>
       <div class="ig-info">
-        <h2>${nm(u)}${u.plus ? `<span class="plus-chip">${icon('crown')}+</span>` : ''}</h2>
+        <h2>${nm(u)}${u.plus ? `<span class="plus-chip">${icon('crown')}+</span>` : ''}${u.level ? `<${self ? 'a href="#/seviye"' : 'span'} class="lvl-chip" title="${esc(u.level.title)}">${u.level.em} Sv. ${u.level.n}</${self ? 'a' : 'span'}>` : ''}</h2>
         ${u.role === 'falci' || u.role === 'official' || (u.tags || []).length || (u.badges || []).length ? `<div class="utags">
           ${u.role === 'falci' ? '<span class="chip uv">🔮 Falcı</span>' : ''}${u.role === 'official' ? '<span class="chip official">🛡️ SwipeUp resmi hesabı</span>' : ''}
           ${(u.tags || []).map((t) => `<span class="utag t-${esc(t.color)}">${t.em} ${esc(t.name)}</span>`).join('')}
@@ -216,7 +268,7 @@ export default async function profile(view, username) {
   const share = () => shareSheet({
     ref: { kind: 'profile', id: u.id }, url: `${location.origin}/#/u/${u.username}`, title: `${u.name} (@${u.username})`,
     text: self ? 'SwipeUp’ta beni bul 💘' : `${u.name} SwipeUp’ta`,
-    extra: [['image', 'Profil kartı', 'c-card', () => { toast('Kart hazırlanıyor…', { ms: 1500 }); profileCard(u).catch((er) => toast(er.message)); }]],
+    extra: [['qr', 'QR kod', 'c-qr', () => qrSheet(u)], ['image', 'Profil kartı', 'c-card', () => { toast('Kart hazırlanıyor…', { ms: 1500 }); profileCard(u).catch((er) => toast(er.message)); }]],
   });
   view.querySelector('.share')?.addEventListener('click', share);
   view.querySelector('.smsg')?.addEventListener('click', () => superMessage(u));
