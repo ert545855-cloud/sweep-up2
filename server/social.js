@@ -337,27 +337,54 @@ module.exports = function social(app, ctx) {
     store.update('users', u.id, { refCode: c });
     return c;
   };
+  const REDEEM_DAYS = 7;
   app.get('/api/invite', auth, (req, res) => {
     const code = ensureRef(req.user);
     const invited = store.filter('users', (u) => u.invitedBy === req.user.id).sort((a, b) => b.createdAt - a.createdAt);
+    const by = req.user.invitedBy ? user(req.user.invitedBy) : null;
     res.json({
       code, coins: eco.get().inviteCoins, rewarded: invited.filter((u) => u.inviteRewarded).length,
       items: invited.slice(0, 50).map((u) => ({ ...brief(u), rewarded: !!u.inviteRewarded })),
+      // Davet bağlantısı kayıtta kaybolduysa kod 7 gün içinde elle girilebilir
+      canRedeem: !req.user.invitedBy && now() - (req.user.createdAt || 0) < REDEEM_DAYS * DAY,
+      invitedBy: by ? { ...brief(by), rewarded: !!req.user.inviteRewarded, needsPhoto: !hasOwnPhoto(req.user) } : null,
     });
   });
+  app.post('/api/invite/redeem', auth, (req, res) => {
+    const u = req.user;
+    if (u.invitedBy) return res.status(400).json({ error: 'Zaten bir davet koduyla katıldın.' });
+    if (now() - (u.createdAt || 0) >= REDEEM_DAYS * DAY) return res.status(400).json({ error: `Davet kodu sadece kayıttan sonraki ${REDEEM_DAYS} gün içinde girilebilir.` });
+    if (limited('redeem:' + u.id, 8, 3600000)) return res.status(429).json({ error: 'Çok fazla deneme yaptın, biraz sonra tekrar dene.' });
+    const err = ctx.attachInvite(u, req.body?.code, (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim());
+    if (err) return res.status(400).json({ error: err });
+    const fresh = user(u.id);
+    ctx.checkInviteReward(fresh);
+    const after = user(u.id);
+    res.json({ ok: true, rewarded: !!after.inviteRewarded, needsPhoto: !hasOwnPhoto(after), coins: eco.get().inviteCoins });
+  });
+  // Bekleyen davet ödüllerini tamamla (örn. sadece profil fotoğrafı ekleyip ödül alamayanlar)
+  setTimeout(() => {
+    store.filter('users', (u) => u.invitedBy && !u.inviteRewarded && hasOwnPhoto(u)).forEach((u) => { try { ctx.checkInviteReward(u); } catch (e) { console.error('[davet]', e.message); } });
+  }, 20000).unref?.();
   // Kayıtta davet kodunu bağla
+  // Kayıtta (ya da kayıttan sonraki 7 gün içinde elle) davet kodunu bağla. Hata metni döner, başarıda null.
   ctx.attachInvite = (u, code, ip) => {
-    const c = String(code || '').toUpperCase().trim();
-    if (!/^[A-Z0-9]{6}$/.test(c)) return;
+    const c = String(code || '').toUpperCase().replace(/\s+/g, '');
+    if (!c) return 'Davet kodunu yaz.';
+    if (!/^[A-Z0-9]{6}$/.test(c)) return 'Davet kodu 6 harf ve rakamdan oluşur.';
     const inviter = store.find('users', (x) => x.refCode === c);
-    if (!inviter || inviter.id === u.id) return;
+    if (!inviter) return 'Bu davet koduna ait bir hesap bulunamadı.';
+    if (inviter.id === u.id) return 'Kendi davet kodunu kullanamazsın.';
     const month = store.filter('users', (x) => x.invitedBy === inviter.id && x.createdAt > now() - 30 * DAY).length;
-    if (month >= 30) return;
+    if (month >= 30) return 'Bu davet kodu bu ay için doldu.';
     store.update('users', u.id, { invitedBy: inviter.id, inviteIp: ip || null });
+    return null;
   };
+  // Profil fotoğrafı (yüklenen) ya da kaydırma fotoğrafı eklenmiş mi
+  const hasOwnPhoto = (u) => (u.photos || []).length > 0 || /^\/media\//.test(u.avatar || '');
   // Davet edilen ilk fotoğrafını ekleyince iki tarafa ödül
   ctx.checkInviteReward = (u) => {
-    if (!u?.invitedBy || u.inviteRewarded || !(u.photos || []).length) return;
+    if (!u?.invitedBy || u.inviteRewarded || !hasOwnPhoto(u)) return;
     const inviter = user(u.invitedBy);
     if (!inviter) return;
     // aynı ağdan açılan ikinci hesap ödül kazandırmaz

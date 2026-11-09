@@ -63,6 +63,7 @@ export default function auth(view, mode) {
       <label class="ic-field">${icon('person')}<input class="field" name="username" placeholder="${reg ? 'Kullanıcı adı' : 'Kullanıcı adı veya e-posta'}" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
       ${reg ? `<label class="ic-field">${icon('mail')}<input class="field" name="email" type="email" placeholder="E-posta (şifre sıfırlama için, isteğe bağlı)" autocomplete="email"></label>` : ''}
       <label class="ic-field">${icon('lock')}<input class="field" name="password" type="password" placeholder="Şifre" autocomplete="${reg ? 'new-password' : 'current-password'}" required></label>
+      ${reg ? `<label class="ic-field">${icon('gift')}<input class="field" name="ref" placeholder="Davet kodu (varsa)" value="${esc(pendingRef())}" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="6"></label>` : ''}
       ${reg ? `<label class="bd-field"><span>Doğum tarihin</span><input class="field" name="birthdate" type="date" max="${maxBirth()}" min="1920-01-01" required></label>
       <p class="muted" style="font-size:12.5px;margin:-4px 4px 0">SwipeUp 18 yaş ve üzeri içindir. Doğum tarihin profilinde gösterilmez, sadece yaşın görünür.</p>
       <label class="consent"><input type="checkbox" name="accept"><span><a class="link" data-doc="kosullar">Kullanım Koşulları</a>’nı ve <a class="link" data-doc="gizlilik">Gizlilik Politikası</a>’nı okudum, kabul ediyorum. <a class="link" data-doc="kvkk">KVKK aydınlatma metni</a>ni okudum.</span></label>` : ''}
@@ -83,7 +84,7 @@ export default function auth(view, mode) {
     try {
       if (reg && !f.birthdate.value) throw new Error('Doğum tarihini gir.');
       if (reg && !f.accept.checked) throw new Error('Devam etmek için koşulları kabul etmelisin.');
-      const body = { username: f.username.value, password: f.password.value, ...(reg ? { name: f.name.value, email: f.email.value, birthdate: f.birthdate.value, accept: f.accept.checked, ref: pendingRef() } : {}) };
+      const body = { username: f.username.value, password: f.password.value, ...(reg ? { name: f.name.value, email: f.email.value, birthdate: f.birthdate.value, accept: f.accept.checked, ref: (f.ref?.value || pendingRef()).trim().toUpperCase() } : {}) };
       const r = await api(reg ? '/auth/register' : '/auth/login', { body });
       setSession(r.token, r.user);
       if (reg) { try { localStorage.removeItem('su_ref'); } catch {} }

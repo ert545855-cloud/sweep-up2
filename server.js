@@ -568,7 +568,7 @@ app.patch('/api/me', auth, (req, res) => {
     patch.username = un;
   }
   const saved = store.update('users', req.user.id, patch);
-  if (patch.photos) featureCtx.checkInviteReward?.(saved);
+  if (patch.photos || patch.avatar) featureCtx.checkInviteReward?.(saved);
   const out = pub(store.get('users', req.user.id), req.user.id);
   if (patch.privacy) broadcastPresence(req.user.id);
   res.json(out);
