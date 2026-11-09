@@ -330,6 +330,15 @@ const D = {
   'Hazır ol!': 'Get ready!', 'Bu şarkı hangisi?': 'Which song is this?', '🔊 Dinlemek için dokun': '🔊 Tap to listen', '50:50 joker': '50:50 lifeline', 'Süre doldu': 'Time’s up',
   'Yanlış cevap': 'Wrong answer', 'Şarkılar hazırlanıyor…': 'Loading songs…', 'Sorular hazırlanıyor…': 'Loading questions…', 'Şarkı çalınamadı, seçeneklerden tahmin et.': 'Couldn’t play the song, guess from the options.',
   'Şarkının başı çalar, adını ilk sen bil.': 'A song plays — name it first.', 'Genel kültür soruları, hızlı olan kazanır.': 'Trivia questions — the fastest wins.', 'Soru': 'Question', 'Şarkı': 'Song',
+  // Vampir Köylü
+  'Vampir Köylü': 'Vampires & Villagers', 'Vampir': 'Vampire', 'Doktor': 'Doctor', 'Gözcü': 'Seer', 'Köylü': 'Villager', 'Vampirsin!': 'You’re a vampire!', 'Doktorsun!': 'You’re the doctor!',
+  'Gözcüsün!': 'You’re the seer!', 'Köylüsün!': 'You’re a villager!', 'Roller': 'Roles', '☀️ Sabah': '☀️ Morning', '🗳️ Oylama': '🗳️ Vote', '⚖️ Karar': '⚖️ Verdict', 'Botlar': 'Bots',
+  '6 kişiye botla tamamla': 'Fill to 6 with bots', 'Sadece insanlar': 'Humans only', 'Öldün 👻 Oyunu izlemeye devam et.': 'You died 👻 Keep watching.', 'Uyuyorsun… 😴 Vampirler avlanıyor.': 'You’re asleep… 😴 The vampires are hunting.',
+  'Bu gece kimi avlayacaksınız? Birine dokun.': 'Who will you hunt tonight? Tap someone.', 'Bu gece kimi koruyacaksın?': 'Who will you protect tonight?', 'Kimi sorgulamak istiyorsun?': 'Who do you want to check?',
+  'Konuşun! Kim vampir olabilir? Sohbete yaz.': 'Talk! Who could be a vampire? Write in the chat.', 'Oylamaya geçelim': 'Let’s vote', 'Vampir olduğunu düşündüğün kişiye dokun.': 'Tap who you think is a vampire.',
+  'Pas geç': 'Skip', 'Pas geçtin.': 'You skipped.', 'Bugün kimse gitmedi.': 'Nobody left today.', 'Doktor bu gece birini kurtardı! Kimse ölmedi 🩺': 'The doctor saved someone tonight! Nobody died 🩺',
+  'Gece sakin geçti.': 'The night was quiet.', 'Ölüler konuşamaz 👻': 'The dead can’t talk 👻', 'Gece herkes uyuyor 🌙': 'Everyone’s asleep 🌙', 'Dün korudun': 'Protected last night', '✓ Temiz': '✓ Clear', '🧛 Vampir!': '🧛 Vampire!',
+  'Köylüler kazandı! 🌞': 'The villagers win! 🌞', 'Vampirler kazandı! 🧛': 'The vampires win! 🧛', 'Ölüler konuşamaz 👻 Oyunu izlemeye devam et.': 'The dead can’t talk 👻 Keep watching.', 'Gece herkes uyuyor 🌙 Sabahı bekle.': 'Everyone’s asleep 🌙 Wait for morning.',
 };
 
 // Sayı / isim içeren metinler
@@ -358,6 +367,11 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^🌙 (\d+)\. gece$/, (_, n) => `🌙 Night ${n}`],
+  [/^☀️ (\d+)\. gün$/, (_, n) => `☀️ Day ${n}`],
+  [/^Oylama bekleniyor \((\d+)\/(\d+)\)$/, (_, a, b) => `Waiting to vote (${a}/${b})`],
+  [/^(.+) köyden gitti\. Rolü: (.+)$/, (_, u, r) => `${u} left the village. Role: ${r}`],
+  [/^(.+) gece vampirlerin kurbanı oldu\.$/, (_, u) => `${u} was taken by the vampires last night.`],
   [/^(Soru|Şarkı) (\d+)\/(\d+)$/, (_, u, a, b) => `${u === 'Soru' ? 'Question' : 'Song'} ${a}/${b}`],
   [/^Doğru! \+(\d+) puan$/, (_, n) => `Correct! +${n} points`],
   [/^(\d+)\/(\d+) cevapladı$/, (_, a, b) => `${a}/${b} answered`],
