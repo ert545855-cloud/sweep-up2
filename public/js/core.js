@@ -276,7 +276,7 @@ export function connectSocket() {
   s.on('connect', () => s.emit('visibility', document.visibilityState === 'visible'));
   document.addEventListener('visibilitychange', () => s.emit('visibility', document.visibilityState === 'visible'));
   ['message', 'typing', 'read', 'delivered', 'notification', 'match', 'post:likes',
-    'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'people:new', 'likes:new',
+    'message:update', 'message:hidden', 'chat:removed', 'chat:update', 'blocked', 'stories:update', 'notes:update', 'post:poll', 'people:new', 'likes:new',
     'call:incoming', 'call:accepted', 'call:ended', 'call:taken', 'call:signal',
     'live:viewer', 'live:viewer-left', 'live:signal', 'live:comment', 'live:heart', 'live:count', 'live:ended', 'live:gift', 'live:filter', 'wallet', 'people:gone', 'genel:msg', 'genel:update', 'genel:online', 'genel:typing', 'app:version', 'announce:popup', 'event', 'maintenance', 'maintenance:plan', 'falai', 'falhold', 'venue', 'support', 'quests', 'market', 'features', 'speed:count', 'speed:paired', 'speed:vote', 'speed:result', 'speed:signal', 'speed:left', 'streak', 'streak:login', 'karaoke', 'karaoke:turn']
     .forEach((ev) => s.on(ev, (d) => emit(ev, d)));
@@ -441,6 +441,7 @@ export function avatar(u, size = 44, { ring = false, dot = true } = {}) {
 let storyAt = 0; let storyReq = null;
 export function setStoryMap(groups) {
   state.storyMap = new Map((groups || []).map((g) => [g.user.id, !!g.allSeen])); storyAt = Date.now();
+  state.storyClose = new Set((groups || []).filter((g) => g.close).map((g) => g.user.id));
   markStoryRings(document.body);
 }
 export function refreshStoryMap() {
@@ -451,7 +452,7 @@ const RING_SEL = '.post-h .av-wrap[data-presence], .comment > .av-wrap[data-pres
 export function markStoryRings(root) {
   const m = state.storyMap; if (!m || !root?.querySelectorAll) return;
   const list = root.matches?.(RING_SEL) ? [root] : root.querySelectorAll(RING_SEL);
-  list.forEach((w) => { const id = w.dataset.presence; const has = m.has(id); w.classList.toggle('st', has); w.classList.toggle('st-seen', has && m.get(id)); });
+  list.forEach((w) => { const id = w.dataset.presence; const has = m.has(id); w.classList.toggle('st', has); w.classList.toggle('st-seen', has && m.get(id)); w.classList.toggle('st-close', has && !m.get(id) && !!state.storyClose?.has(id)); });
 }
 new MutationObserver((recs) => {
   if (!state.storyMap) return;

@@ -3,6 +3,7 @@ import {
   state, api, esc, on, isOn, toast, enablePush, pushSupported, pushEnabled, pushHint, logo, openChatWith, nm, setStoryMap,
 } from '../core.js';
 import { postCard, wirePost, autoplay } from '../components.js';
+import { trackSeen } from '../insta.js';
 import { paintEventBanner } from '../event.js';
 import { egi } from '../eg-icons.js';
 
@@ -57,7 +58,7 @@ export default async function feed(view) {
         <div class="ring live"><img src="${esc(l.user.avatar)}" alt=""></div>
         <span class="live-tag">CANLI</span><span class="name">${esc(l.user.username)}</span></a>`).join('')}
       ${others.filter((g) => !liveIds.has(g.user.id)).map((g) => `<a class="story" href="#/stories/${esc(g.user.id)}">
-        <div class="ring ${g.allSeen ? 'seen' : ''}"><img src="${esc(g.user.avatar)}" alt=""></div>
+        <div class="ring ${g.allSeen ? 'seen' : g.close ? 'close' : ''}"><img src="${esc(g.user.avatar)}" alt=""></div>
         ${isOn(g.user) ? '<i class="online"></i>' : ''}<span class="name">${esc(g.user.username)}</span></a>`).join('')}`;
   };
 
@@ -183,6 +184,7 @@ export default async function feed(view) {
     list.innerHTML = `<div class="section-t"><span>Akış</span></div>${posts.map(postCard).join('')}`;
     posts.forEach((p) => wirePost(list.querySelector(`[data-post="${p.id}"]`), p));
     offs.push(autoplay(list));
+    offs.push(trackSeen(list, 'feed'));
     list.insertAdjacentHTML('beforeend', `<div class="empty" style="padding:24px">Takip ettiklerinin paylaşımlarının hepsini gördün. <a class="link" href="#/search">Yeni kişiler keşfet</a></div>`);
   }
   return () => offs.forEach((f) => f());

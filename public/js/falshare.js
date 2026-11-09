@@ -24,15 +24,16 @@ export function falCardHtml(c) {
     <div class="fc-brand">SwipeUp · Kalbinin soramadıklarını, Falcı Teyze’ye sor</div></div>`;
 }
 
-export async function falStorySheet(messageId) {
+export async function falStorySheet(messageId, { alt } = {}) {
   let f = null;
   try { f = (await api('/fal/history')).find((x) => x.messageId === messageId); } catch (e) { return toast(e.message); }
   if (!f?.answer) return toast('Falının cevabı henüz gelmedi kuzum.');
   const card = { kind: 'fal', type: f.type, text: excerpt(f.answer.text), zodiac: f.zodiac, cards: f.cards };
   sheet('Hikayende paylaş', `<div class="fs-prev"><div class="fs-frame">${falCardHtml(card)}</div></div>
     <p class="muted fs-note">Falcı Teyze’nin yorumundan bir bölüm hikayende paylaşılır. Görenler “Sen de fal baktır”a dokunup kendi falına baktırabilir.</p>
-    <div class="fs-go"><button class="btn primary block go">${icon('plus')} Hikayende paylaş</button></div>`, {
+    <div class="fs-go"><button class="btn primary block go">${icon('plus')} Hikayende paylaş</button>${alt ? `<button class="btn block alt">${icon('share')} Resim olarak paylaş</button>` : ''}</div>`, {
     onMount(sh, close) {
+      sh.querySelector('.alt')?.addEventListener('click', () => { close(); alt(); });
       sh.querySelector('.go').onclick = async (e) => {
         const b = e.currentTarget; b.disabled = true; b.textContent = 'Paylaşılıyor…';
         try {

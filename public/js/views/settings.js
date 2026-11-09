@@ -26,6 +26,9 @@ export default function settings(view) {
       <a class="it" href="#/fal">${icon('star')}<span class="grow">${me.role === 'falci' ? 'Fal kuyruğu' : 'Fal'}<div class="sub">${me.role === 'falci' ? 'Gelen fal isteklerini cevapla' : 'Falcı Teyze’ye kahve falı, tarot, burç, aşk uyumu'}</div></span></a>
       <a class="it" href="#/edit">${icon('edit')}<span class="grow">Profili düzenle<div class="sub">Fotoğraflar, sesli tanıtım, profil soruları</div></span></a>
       <a class="it" href="#/gorunum">${icon('crown')}<span class="grow">Çerçeve ve rozetler<div class="sub">Profil fotoğrafına çerçeve, sınırlı etkinlik rozetleri</div></span></a>
+      <a class="it" href="#/yakin">${icon('star')}<span class="grow">Yakın arkadaşlar<div class="sub">Hikayeni ve notunu sadece onlarla paylaş</div></span></a>
+      <a class="it" href="#/arsiv">${icon('timer')}<span class="grow">Hikaye arşivi ve öne çıkanlar<div class="sub">Son 30 günün hikayeleri, profilinde öne çıkar</div></span></a>
+      <a class="it" href="#/planli">${icon('send')}<span class="grow">Planlı gönderiler<div class="sub">İleri bir saate planladığın gönderiler</div></span></a>
       <a class="it" href="#/ziyaretciler">${icon('eye')}<span class="grow">Profilini kimler gördü<div class="sub">Son 7 günün ziyaretçileri</div></span></a>
       <a class="it" href="#/odalar">${icon('users')}<span class="grow">Etkinlik odaları ve hızlı tanışma<div class="sub">Konu odaları, 3 dakikalık görüntülü turlar</div></span></a>
       <a class="it" href="#/reklam">${icon('rocket')}<span class="grow">Öne çıkarmalarım<div class="sub">Gönderilerini jetonla daha çok kişiye göster</div></span></a>

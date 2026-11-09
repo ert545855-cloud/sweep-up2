@@ -8,6 +8,7 @@ import { shareSheet } from '../core.js';
 import { eventOn, eventInfo, eventEmoji, eventLive, setEventEnabled, eventIcon } from '../event.js';
 import { pickMusic } from '../music.js';
 import { egi } from '../eg-icons.js';
+import { hlRowHtml, wireHlRow } from '../insta.js';
 
 // "Şu an dinlediğim": aynı şarkıyı ve aynı sanatçıyı dinleyenler
 function npSheet(uid) {
@@ -163,6 +164,7 @@ export default async function profile(view, username) {
         ? `<button class="btn ${u.isFollowing ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : 'Takip et'}</button><a class="btn" href="#/fal">🔮 Fal baktır</a>`
         : `<button class="btn ${u.isFollowing || u.requested ? '' : 'primary'} follow">${u.isFollowing ? 'Takiptesin' : u.requested ? 'İstek gönderildi' : (u.followsYou ? 'Sen de takip et' : 'Takip et')}</button>${u.role === 'official' ? '<a class="btn fal-go" href="#/destek">🎧 Destek</a>' : state.me.role === 'falci' ? '' : `<button class="btn msg">Mesaj</button>`}${u.matched || ['falci', 'official'].includes(u.role) || ['falci', 'official'].includes(state.me.role) ? '' : '<button class="btn sq smsg" aria-label="Süper mesaj" title="Süper mesaj">💌</button>'}`}
     </div>
+    ${u.locked || u.blockedByMe ? '' : hlRowHtml(u.highlights, self)}
     ${(u.prompts || []).length ? `<div class="pqs">${promptCards(u, { reply: !self && !u.blockedByMe })}</div>` : self ? '<a class="pq-cta" href="#/edit">💬 Profil sorularını cevapla, sohbetler kendiliğinden başlasın</a>' : ''}
     ${self ? `<div class="me-links">
       <a href="#/ziyaretciler">${icon('eye')}<span>Ziyaretçiler</span><b class="vc" hidden></b></a>
@@ -202,6 +204,7 @@ export default async function profile(view, username) {
   view.querySelector('.tabs').onclick = (e) => { const b = e.target.closest('[data-t]'); if (b) showTab(b.dataset.t); };
   showTab('grid');
 
+  wireHlRow(view, { self, reload: () => profile(view, username) });
   view.querySelector('.fl').onclick = () => peopleSheet('Takipçiler', u.id, 'followers');
   view.querySelector('.np-add')?.addEventListener('click', () => setNowPlaying(view, () => profile(view, username)));
   view.querySelector('.np-open')?.addEventListener('click', async (e) => {

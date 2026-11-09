@@ -178,7 +178,7 @@ export default async function chat(view, chatId) {
         ${f.partner ? `<div class="fq-line">💞 ${esc(f.name)} & ${esc(f.partner.name)}${zodiacOf(f.partner.zodiac) ? ` (${zodiacOf(f.partner.zodiac)[2]} ${zodiacOf(f.partner.zodiac)[1]})` : ''}</div>` : ''}
         ${f.dream ? `<p class="fq-note fq-dream">🌙 ${esc(f.dream)}</p>` : ''}
         ${f.note && f.note !== f.dream ? `<p class="fq-note">${esc(f.note)}</p>` : ''}
-        ${f.status === 'answered' && m.from === state.me.id ? `<button type="button" class="fm-share" data-fal="${esc(m.id)}">${icon('plus')} Falını hikayende paylaş</button>` : ''}${meta}</div>`;
+${meta}</div>`;
     }
     if (m.share) {
       const s = m.share;
@@ -211,7 +211,7 @@ export default async function chat(view, chatId) {
         : `<a href="${esc(m.media)}" target="_blank" rel="noopener"><img src="${esc(m.media)}" alt="Fotoğraf" loading="lazy"></a>`}${m.text ? '' : meta}</div>
         ${m.text ? `<div class="msg">${reply}${esc(m.text)}${meta}</div>` : ''}`;
     }
-    const quote = m.quote?.kind === 'prompt' ? `<span class="pq-quote"><small>${esc(m.quote.q)}</small>${esc(m.quote.a)}</span>` : m.quote?.kind === 'comment' ? `<a class="pq-quote" href="#/p/${esc(m.quote.postId)}"><small>${esc(m.quote.q)}</small>${esc(m.quote.a)}</a>` : '';
+    const quote = m.quote?.kind === 'prompt' || m.quote?.kind === 'note' ? `<span class="pq-quote"><small>${esc(m.quote.q)}</small>${esc(m.quote.a)}</span>` : m.quote?.kind === 'comment' ? `<a class="pq-quote" href="#/p/${esc(m.quote.postId)}"><small>${esc(m.quote.q)}</small>${esc(m.quote.a)}</a>` : '';
     if (m.superMsg) return `<div class="msg super-msg"><span class="sm-tag">💌 Süper mesaj</span>${esc(m.text)}${meta}</div>`;
     const falAns = !isGroup && other?.role === 'falci' && m.from === other.id && (m.text || '').length >= 60;
     return `<div class="msg">${story}${quote}${reply}${esc(m.text)}${meta}</div>${falAns ? `<button class="fal-share">${icon('send')} Hikayende paylaş</button>` : ''}`;
@@ -387,7 +387,9 @@ export default async function chat(view, chatId) {
       if (e.target.closest('.fal-share')) {
         const i = msgs.indexOf(m); const req = msgs.slice(0, i).reverse().find((x) => x.fal);
         const z = zodiacOf(req?.fal?.zodiac || state.me.zodiac);
-        shareFal(m.text, { type: req?.fal?.type || 'fal', zodiac: z ? z[1] : null });
+        const asImage = () => shareFal(m.text, { type: req?.fal?.type || 'fal', zodiac: z ? z[1] : null });
+        if (req && req.from === state.me.id) import('../falshare.js').then((x) => x.falStorySheet(req.id, { alt: asImage }));
+        else asImage();
         return;
       }
       if (e.target.closest('.vo-open')) { openViewOnce(m); return; }
@@ -663,7 +665,6 @@ export default async function chat(view, chatId) {
       } catch (er) { toast(er.message); }
     };
     comp.querySelector('.pic').onclick = () => sendMedia('image/*,video/*');
-    if (!view.dataset.fsw) { view.dataset.fsw = '1'; view.addEventListener('click', (e) => { const b = e.target.closest('.fm-share'); if (!b) return; e.stopPropagation(); import('../falshare.js').then((x) => x.falStorySheet(b.dataset.fal)); }); }
     comp.querySelector('.gifb')?.addEventListener('click', async () => {
       const src = await pickGif({ title: 'GIF gönder', upload: false }); if (!src) return;
       try { await send({ media: src, mediaType: src.startsWith('/media/') ? 'image' : 'gif' }); } catch (er) { toast(er.message); }

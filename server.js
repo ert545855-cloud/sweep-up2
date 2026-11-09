@@ -117,6 +117,10 @@ function distance(a, b) {
   return Math.max(1, Math.round(2 * R * Math.asin(Math.sqrt(x))));
 }
 
+const pollOut = (x, me) => {
+  const v = Object.values(x.votes || {});
+  return { q: x.q, options: x.options, counts: x.options.map((_, i) => v.filter((k) => k === i).length), total: v.length, mine: (x.votes || {})[me] ?? null };
+};
 function postOut(p, viewerId) {
   return {
     ...p,
@@ -126,6 +130,7 @@ function postOut(p, viewerId) {
     reposted: (p.reposts || []).includes(viewerId),
     likeCount: p.likes.length,
     liked: p.likes.includes(viewerId),
+    poll: p.poll ? pollOut(p.poll, viewerId) : undefined,
     commentCount: p.comments.filter((c) => !isBlocked(viewerId, c.userId)).length,
     comments: undefined,
     likes: undefined,
@@ -713,24 +718,34 @@ app.get('/api/explore', auth, (req, res) => {
   res.json(posts.slice(0, 60).map((p) => postOut(p, req.user.id)));
 });
 
-app.post('/api/posts', auth, (req, res) => {
-  const b = req.body || {};
+// Gönderiye anket (2–4 seçenek)
+function cleanPoll(x) {
+  if (!x || typeof x !== 'object') return null;
+  const options = (Array.isArray(x.options) ? x.options : []).map((o) => moderation.mask(String(o || '').trim().slice(0, 40))).filter(Boolean).slice(0, 4);
+  if (options.length < 2) return null;
+  return { q: moderation.mask(String(x.q || '').trim().slice(0, 100)), options, votes: {} };
+}
+// Gönderi oluştur (hemen ya da planlı gönderinin saati gelince); hata varsa { error } döner
+function createPost(user, b) {
+  const req = { user };
+  const fail = (x) => ({ error: x.error });
   const type = b.type;
   const raw = Array.isArray(b.items) && b.items.length ? b.items : (b.media ? [{ media: b.media, type: type === 'reel' ? 'video' : 'image', poster: b.poster }] : []);
   const items = raw.filter((i) => i && isMedia(i.media)).slice(0, type === 'reel' ? 1 : 10).map((i) => ({
     media: String(i.media), type: i.type === 'video' ? 'video' : 'image', poster: isMedia(i.poster) ? i.poster : null, filter: FILTERS.includes(i.filter) ? i.filter : null,
   }));
   const TEXT_BG = ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8'];
+  const poll = type === 'reel' ? null : cleanPoll(b.poll);
   if (type === 'text') {
     const text = moderation.mask(String(b.caption || '').trim().slice(0, 2200));
-    if (text.length < 1) return res.status(400).json({ error: 'Bir şey yaz.' });
-    const p = store.put('posts', { id: nanoid(10), userId: req.user.id, type: 'text', media: null, poster: null, items: [], bg: TEXT_BG.includes(b.bg) ? b.bg : 'g1', caption: text, tags: extractTags(text), likes: [], comments: [], reposts: [], createdAt: now() });
+    if (text.length < 1) return fail({ error: 'Bir şey yaz.' });
+    const p = store.put('posts', { id: nanoid(10), userId: req.user.id, type: 'text', media: null, poster: null, items: [], bg: TEXT_BG.includes(b.bg) ? b.bg : 'g1', caption: text, tags: extractTags(text), likes: [], comments: [], reposts: [], createdAt: now(), ...(poll ? { poll } : {}) });
     featureCtx.quest?.(req.user.id, 'paylas'); featureCtx.track?.('post'); featureCtx.contestEvent?.('post', req.user.id);
     notifyMentions(text, req.user, `/#/p/${p.id}`, 'bir gönderide');
     store.filter('follows', (f) => f.to === req.user.id && f.status !== 'pending').forEach((f) => notify(f.from, { type: 'post', fromId: req.user.id, ref: p.id, text: `${req.user.username} yeni bir gönderi paylaştı.`, url: `/#/p/${p.id}` }));
-    return res.json(postOut(p, req.user.id));
+    return p;
   }
-  if (!['image', 'reel'].includes(type) || !items.length) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç.' });
+  if (!['image', 'reel'].includes(type) || !items.length) return fail({ error: 'Önce bir fotoğraf veya video seç.' });
   let edit = null;
   if (type === 'reel' && b.edit && typeof b.edit === 'object') {
     const e = b.edit;
@@ -749,7 +764,7 @@ app.post('/api/posts', auth, (req, res) => {
   const caption = moderation.mask(String(b.caption || '').slice(0, 2200));
   const p = store.put('posts', {
     id: nanoid(10), userId: req.user.id, type, media: items[0].media, poster: items[0].poster || null, items, edit,
-    caption, tags: extractTags(caption), likes: [], comments: [], reposts: [], createdAt: now(),
+    caption, tags: extractTags(caption), likes: [], comments: [], reposts: [], createdAt: now(), ...(poll ? { poll } : {}),
   });
   featureCtx.quest?.(req.user.id, 'paylas'); featureCtx.track?.(type === 'reel' ? 'reel' : 'post'); featureCtx.contestEvent?.(type === 'reel' ? 'reel' : 'post', req.user.id);
   notifyMentions(caption, req.user, type === 'reel' ? `/#/vitrin/${p.id}` : `/#/p/${p.id}`, type === 'reel' ? 'bir vitrin videosunda' : 'bir gönderide');
@@ -758,6 +773,23 @@ app.post('/api/posts', auth, (req, res) => {
     text: type === 'reel' ? `${req.user.username} vitrinine yeni bir video ekledi.` : `${req.user.username} yeni bir gönderi paylaştı.`,
     url: type === 'reel' ? `/#/vitrin/${p.id}` : `/#/p/${p.id}`,
   }));
+  return p;
+}
+app.post('/api/posts', auth, (req, res) => {
+  const b = req.body || {};
+  // İleri bir saate planla: gönderi o saatte kendiliğinden paylaşılır
+  if (b.publishAt != null && b.publishAt !== '') {
+    const at = +new Date(b.publishAt);
+    if (!Number.isFinite(at) || at < now() + 4 * 60000) return res.status(400).json({ error: 'Planlama saati en az 5 dakika sonrası olmalı.' });
+    if (at > now() + 60 * DAY) return res.status(400).json({ error: 'En fazla 60 gün sonrasına planlayabilirsin.' });
+    if (store.filter('post_queue', (q) => q.userId === req.user.id).length >= 25) return res.status(400).json({ error: 'En fazla 25 planlı gönderin olabilir.' });
+    const { publishAt, ...body } = b;
+    if (b.type === 'text' ? !String(b.caption || '').trim() : !(Array.isArray(b.items) ? b.items : []).some((i) => i && isMedia(i.media))) return res.status(400).json({ error: b.type === 'text' ? 'Bir şey yaz.' : 'Önce bir fotoğraf seç.' });
+    const q = store.put('post_queue', { id: nanoid(10), userId: req.user.id, body, publishAt: at, at: now() });
+    return res.json({ scheduled: true, id: q.id, publishAt: at });
+  }
+  const p = createPost(req.user, b);
+  if (p.error) return res.status(400).json(p);
   res.json(postOut(p, req.user.id));
 });
 
@@ -772,6 +804,7 @@ app.delete('/api/posts/:id', auth, (req, res) => {
   if (!p || p.userId !== req.user.id) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
   store.del('posts', p.id);
   store.filter('reposts', (r) => r.postId === p.id).forEach((r) => store.del('reposts', r.id));
+  featureCtx.postStatsDrop?.(p.id);
   res.json({ ok: true });
 });
 
@@ -925,20 +958,27 @@ function stickersOut(s, me) {
     return { ...st, counts, total: votes.length, mine: (s.votes || {})[me]?.sticker === st.id ? s.votes[me].option : null };
   });
 }
+// Yakın arkadaşlar hikayesi sadece sahibinin yakın arkadaş listesindekilere görünür
+const storyVisible = (s, me) => {
+  if (s.userId === me) return true;
+  const o = store.get('users', s.userId);
+  if (!o || isBlocked(me, s.userId) || !canSee(me, o)) return false;
+  return s.audience !== 'close' || (o.closeFriends || []).includes(me);
+};
+const storyItem = (s, me) => ({
+  id: s.id, media: s.media, mediaType: s.mediaType, bg: s.bg || null, filter: s.filter || null, at: s.at, card: s.card || null, audience: s.audience || 'all', reshareOf: s.reshareOf ? brief(store.get('users', s.reshareOf)) : null, seen: s.viewers.includes(me), myReaction: (s.reactions || {})[me]?.emoji || null, viewerCount: s.userId === me ? s.viewers.length : undefined,
+  stickers: stickersOut(s, me),
+});
 app.get('/api/stories', auth, (req, res) => {
   const me = req.user.id;
-  const following = new Set(store.filter('follows', (f) => f.from === me).map((f) => f.to));
   const byUser = new Map();
-  store.filter('stories', (s) => storyAlive(s) && !isBlocked(me, s.userId) && canSee(me, store.get('users', s.userId)))
+  store.filter('stories', (s) => storyAlive(s) && storyVisible(s, me))
     .sort((a, b) => a.at - b.at)
     .forEach((s) => {
       if (!byUser.has(s.userId)) byUser.set(s.userId, []);
-      byUser.get(s.userId).push({
-        id: s.id, media: s.media, mediaType: s.mediaType, bg: s.bg || null, filter: s.filter || null, at: s.at, card: s.card || null, audience: s.audience || 'all', reshareOf: s.reshareOf ? brief(store.get('users', s.reshareOf)) : null, seen: s.viewers.includes(me), myReaction: (s.reactions || {})[me]?.emoji || null, viewerCount: s.userId === me ? s.viewers.length : undefined,
-        stickers: stickersOut(s, me),
-      });
+      byUser.get(s.userId).push(storyItem(s, me));
     });
-  const out = [...byUser.entries()].map(([uid, items]) => ({ user: brief(store.get('users', uid)), items, allSeen: items.every((i) => i.seen) }));
+  const out = [...byUser.entries()].map(([uid, items]) => ({ user: brief(store.get('users', uid)), items, allSeen: items.every((i) => i.seen), close: uid !== me && items.some((i) => i.audience === 'close' && !i.seen) }));
   out.sort((a, b) => (b.user.id === me) - (a.user.id === me) || a.allSeen - b.allSeen || (b.items.at(-1).at - a.items.at(-1).at));
   res.json(out);
 });
@@ -953,6 +993,7 @@ app.post('/api/stories', auth, (req, res) => {
     if (!card) return res.status(400).json({ error: 'Bu fal hikayede paylaşılamıyor.' });
   }
   if (!media && !bg && !card) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç ya da yazı yaz.' });
+  if (req.body?.audience === 'close' && !(req.user.closeFriends || []).length) return res.status(400).json({ error: 'Yakın arkadaş listen boş. Önce Ayarlar → Yakın arkadaşlar’dan kişi ekle.' });
   if (media && !isMedia(media)) return res.status(400).json({ error: 'Dosya bulunamadı.' });
   const stickers = (Array.isArray(req.body.stickers) ? req.body.stickers : []).slice(0, 12).map(cleanSticker).filter(Boolean);
   if (!media && !card && !stickers.some((x) => ['text', 'emoji', 'gif', 'poll', 'question', 'mention'].includes(x.type))) return res.status(400).json({ error: 'Yazı hikayesine bir şey yaz.' });
@@ -973,7 +1014,7 @@ app.post('/api/stories', auth, (req, res) => {
 });
 app.post('/api/stories/:id/view', auth, (req, res) => {
   const s = store.get('stories', req.params.id);
-  if (!s) return res.status(404).json({ error: 'Hikaye bulunamadı.' });
+  if (!s || !storyVisible(s, req.user.id)) return res.status(404).json({ error: 'Hikaye bulunamadı.' });
   if (s.userId !== req.user.id && !s.viewers.includes(req.user.id)) { s.viewers.push(req.user.id); store.update('stories', s.id, {}); }
   res.json({ ok: true });
 });
@@ -1000,7 +1041,7 @@ app.delete('/api/stories/:id', auth, (req, res) => {
 app.post('/api/stories/:id/reply', auth, (req, res) => {
   const s = store.get('stories', req.params.id);
   const text = String(req.body?.text || '').trim();
-  if (!s || !text || s.userId === req.user.id) return res.status(400).json({ error: 'Yanıt gönderilemedi.' });
+  if (!s || !text || s.userId === req.user.id || !storyVisible(s, req.user.id)) return res.status(400).json({ error: 'Yanıt gönderilemedi.' });
   const owner = store.get('users', s.userId);
   if (owner?.role === 'official') return res.status(403).json({ error: 'Yönetim hesabına yanıt gönderilemez.' });
   if (owner?.role === 'falci' || req.user.role === 'falci') return res.status(403).json({ error: 'Falcı Teyze’ye sadece fal isteğiyle yazabilirsin.' });
@@ -1013,7 +1054,7 @@ const STORY_EMOJI = ['😂', '😮', '😍', '😢', '👏', '🔥', '🎉', '�
 app.post('/api/stories/:id/react', auth, (req, res) => {
   const s = store.get('stories', req.params.id);
   const emoji = STORY_EMOJI.includes(req.body?.emoji) ? req.body.emoji : null;
-  if (!s || !emoji || s.userId === req.user.id) return res.status(400).json({ error: 'Tepki gönderilemedi.' });
+  if (!s || !emoji || s.userId === req.user.id || !storyVisible(s, req.user.id)) return res.status(400).json({ error: 'Tepki gönderilemedi.' });
   const owner = store.get('users', s.userId);
   if (!owner || isBlocked(req.user.id, owner.id)) return res.status(403).json({ error: 'Tepki gönderilemedi.' });
   if (limited('sr:' + req.user.id, 40, 600000)) return res.status(429).json({ error: 'Biraz yavaş 🙂' });
@@ -1032,7 +1073,8 @@ app.post('/api/stories/:id/react', auth, (req, res) => {
   }
   res.json({ ok: true, chatId });
 });
-setInterval(() => store.filter('stories', (s) => now() - s.at > DAY * 2).forEach((s) => store.del('stories', s.id)), 3600000).unref();
+// Hikayeler 24 saat görünür, sahibinin arşivinde 30 gün kalır (öne çıkanlara eklenebilsin diye)
+setInterval(() => store.filter('stories', (s) => now() - s.at > DAY * 30).forEach((s) => store.del('stories', s.id)), 3600000).unref();
 
 // ---------- Kullanıcılar ----------
 app.get('/api/users/search', auth, (req, res) => {
@@ -1075,7 +1117,8 @@ app.get('/api/users/:username', auth, (req, res) => {
     matched: !!store.get('matches', mid),
     checkin: blockedByMe ? null : featureCtx.checkinOf?.(u, req.user.id) || null,
     blockedByMe,
-    hasStory: !locked && store.filter('stories', (s) => s.userId === u.id && storyAlive(s)).length > 0,
+    hasStory: !locked && store.filter('stories', (s) => s.userId === u.id && storyAlive(s) && storyVisible(s, req.user.id)).length > 0,
+    highlights: locked || blockedByMe ? [] : featureCtx.highlightsOf?.(u.id) || [],
     posts: posts.map((p) => postOut(p, req.user.id)),
     reposts: blockedByMe || locked ? [] : store.filter('reposts', (r) => r.userId === u.id).sort((a, b) => b.at - a.at).map((r) => store.get('posts', r.postId))
       .filter((p) => p && !isBlocked(req.user.id, p.userId) && canSee(req.user.id, store.get('users', p.userId))).slice(0, 60).map((p) => postOut(p, req.user.id)),
@@ -1657,6 +1700,7 @@ const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
   isBlocked, limited, isMedia, isGif: (u) => GIF_HOSTS.test(String(u || '')), extractTags, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
   online, appEvent, falci, msgOut, falLock, shownAge, tagsOf, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id), pushAdmins,
+  storyItem, storyVisible, storyAlive, createPost: (u, b) => createPost(u, b), cleanSticker,
 };
 require('./server/features')(app, featureCtx);
 require('./server/genel')(app, featureCtx);
@@ -1674,6 +1718,7 @@ require('./server/songs')(app, featureCtx);
 require('./server/venues')(app, featureCtx);
 require('./server/contests')(app, featureCtx);
 require('./server/daily')(app, featureCtx); // Falcı Teyze günlük burç / tarot paylaşımı
+require('./server/insta')(app, featureCtx); // öne çıkanlar, yakın arkadaşlar, notlar, anket, planlı gönderi, istatistik
 require('./server/engage')(app, featureCtx); // seriler, kulüpler, günün sorusu, seçki, karaoke… (en son yüklenir)
 gameOut = featureCtx.gameOut;
 
@@ -1968,6 +2013,7 @@ function purgeUser(id) {
   store.filter('posts', (p) => p.likes.includes(id) || p.comments.some((c) => c.userId === id))
     .forEach((p) => store.update('posts', p.id, { likes: p.likes.filter((x) => x !== id), comments: p.comments.filter((c) => c.userId !== id) }));
   store.filter('stories', (s) => s.userId === id).forEach((s) => store.del('stories', s.id));
+  ['highlights', 'notes', 'post_queue'].forEach((c) => store.filter(c, (x) => x.userId === id).forEach((x) => store.del(c, x.id)));
   ['follows', 'swipes', 'blocks'].forEach((c) => store.filter(c, (x) => x.from === id || x.to === id).forEach((x) => store.del(c, x.id)));
   store.filter('matches', (m) => m.users.includes(id)).forEach((m) => store.del('matches', m.id));
   store.filter('chats', (c) => !c.isGroup && c.members.includes(id)).forEach((c) => removeChat(c.id));

@@ -36,10 +36,16 @@ let soundOff = false;
 export default async function stories(view, userId) {
   view.innerHTML = '<div class="story-v"><div class="spinner" style="margin-top:45vh"></div></div>';
   if (userId === 'me') userId = state.me.id;
-  const groups = await api('/stories');
+  // Öne çıkan (profildeki kalıcı hikaye albümü): #/stories/hl-<id>
+  let groups; const hlId = /^hl-/.test(userId) ? userId.slice(3) : null;
+  if (hlId) {
+    const h = await api(`/highlights/${hlId}`).catch(() => null);
+    groups = h ? [{ user: h.user, items: h.items, hl: h }] : [];
+    userId = h?.user.id;
+  } else groups = await api('/stories');
   let gi = groups.findIndex((g) => g.user.id === userId);
-  if (gi < 0) { view.innerHTML = `<div class="empty"><div class="big">${icon('camera')}</div><h2>Hikaye bulunamadı</h2>Hikayeler 24 saat sonra kaybolur.<p><a class="btn primary" href="#/">Ana sayfa</a></p></div>`; return null; }
-  let ii = Math.max(0, groups[gi].items.findIndex((x) => !x.seen));
+  if (gi < 0) { view.innerHTML = `<div class="empty"><div class="big">${icon('camera')}</div><h2>${hlId ? 'Öne çıkan bulunamadı' : 'Hikaye bulunamadı'}</h2>${hlId ? 'Bu öne çıkan kaldırılmış olabilir.' : 'Hikayeler 24 saat sonra kaybolur.'}<p><a class="btn primary" href="#/">Ana sayfa</a></p></div>`; return null; }
+  let ii = hlId ? 0 : Math.max(0, groups[gi].items.findIndex((x) => !x.seen));
   let raf = 0; let t0 = 0; let dur = 5000; let paused = false; let pausedAt = 0; let closed = false;
   let music = null;
   let unscale = null;
@@ -52,24 +58,27 @@ export default async function stories(view, userId) {
     stopMusic();
     const g = groups[gi]; const it = g.items[ii];
     const mine = g.user.id === state.me.id;
+    const hl = g.hl || null;
     view.innerHTML = `<div class="story-v">
       <div class="media">${it.mediaType === 'card' && it.card ? falCardHtml(it.card) : it.mediaType === 'text' || !it.media ? `<div class="tstory tbg-${esc(it.bg || 'g2')}"></div>` : it.mediaType === 'video' ? `<video src="${esc(it.media)}" playsinline autoplay style="filter:${filterCss(it.filter)}"></video>` : `<img class="blurbg" src="${esc(it.media)}" alt=""><img class="fit" src="${esc(it.media)}" alt="" style="filter:${filterCss(it.filter)}">`}</div>
       <div class="bars">${g.items.map((_, i) => `<i><b style="width:${i < ii ? 100 : 0}%"></b></i>`).join('')}</div>
       <div class="head">
-        <a href="#/u/${esc(g.user.username)}" class="row hd-u"><img class="av av-32" src="${esc(g.user.avatar)}" alt=""><span class="hd-t"><span class="hd-1"><b class="ellipsis">${nm(g.user, 'username')}</b><span class="hd-ago">${ago(it.at)}</span>${it.reshareOf ? `<span class="rs-of">${icon('repost')} @${esc(it.reshareOf.username)}</span>` : ''}</span>${muOf(it) ? musicLine(muOf(it)) : ''}</span></a>
+        <a href="#/u/${esc(g.user.username)}" class="row hd-u"><img class="av av-32" src="${esc(g.user.avatar)}" alt=""><span class="hd-t"><span class="hd-1"><b class="ellipsis">${hl ? esc(hl.title) : nm(g.user, 'username')}</b><span class="hd-ago">${hl ? new Date(it.at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : ago(it.at)}</span>${it.audience === 'close' && !hl ? `<span class="cf-chip">${icon('star')} Yakın arkadaşlar</span>` : ''}${it.reshareOf ? `<span class="rs-of">${icon('repost')} @${esc(it.reshareOf.username)}</span>` : ''}</span>${muOf(it) ? musicLine(muOf(it)) : ''}</span></a>
         ${muOf(it) || it.mediaType === 'video' ? `<button class="snd-t" aria-label="Sesi aç/kapat">${icon(soundOff ? 'mute' : 'volume')}</button>` : ''}
-        ${mine ? `<button class="del" aria-label="Sil">${icon('trash')}</button>` : `<button class="more" aria-label="Diğer">${icon('more')}</button>`}
+        ${mine ? `<button class="del" aria-label="${hl ? 'Öne çıkandan kaldır' : 'Sil'}">${icon('trash')}</button>` : `<button class="more" aria-label="Diğer">${icon('more')}</button>`}
         <button class="x" aria-label="Kapat">${icon('close')}</button>
       </div>
       <div class="tapl"></div><div class="tapr"></div>
-      <div class="stk-layer">${stickersHtml(it, mine)}${it.card?.kind === 'fal' ? `<a class="stk act fc-cta" href="#/fal" style="top:90%;left:50%;transform:translate(-50%,-50%)">${icon('wand')} Sen de fal baktır</a>` : ''}</div>
-      <div class="foot">${mine
-    ? `<button class="vw">${icon('eye')} ${it.viewerCount || 0} görüntüleme</button>`
+      <div class="stk-layer">${stickersHtml(it, mine || !!hl)}${it.card?.kind === 'fal' ? `<a class="stk act fc-cta" href="#/fal" style="top:83%;left:50%;transform:translate(-50%,-50%)">${icon('wand')} Sen de fal baktır</a>` : ''}</div>
+      <div class="foot">${hl
+    ? (mine ? `<button class="hl-ed">${icon('edit')} Öne çıkanı düzenle</button>` : `<a class="rp-fal" href="#/u/${esc(g.user.username)}">${avatar(g.user, 24, { dot: false })} @${esc(g.user.username)} profiline git</a>`)
+    : mine
+    ? `<button class="vw">${icon('eye')} ${it.viewerCount || 0} görüntüleme</button><button class="hl-add">${icon('heart')} Öne çıkar</button>`
     : g.user.role === 'official' ? '<a class="rp-fal" href="#/destek">🛡️ SwipeUp resmi hesabı · yanıt kapalı</a>'
     : g.user.role === 'falci' || state.me.role === 'falci' ? `<a class="rp-fal" href="#/fal">🔮 ${state.me.role === 'falci' ? 'Hikayelere yanıt kapalı' : 'Falcı Teyze’ye fal baktır'}</a>`
     : `${(it.stickers || []).some((x) => x.type === 'mention' && x.username === state.me.username) ? `<button class="rs-add">${icon('plus')} Hikayene ekle</button>` : ''}<div class="sr-bar" hidden>${['😂', '😮', '😍', '😢', '👏', '🔥', '🎉', '💯'].map((e) => `<button type="button" data-e="${e}">${e}</button>`).join('')}</div><form class="rp" style="display:flex;gap:10px;flex:1"><input placeholder="${esc(g.user.name.split(' ')[0])} kişisine yanıt ver..." maxlength="500"><button type="button" class="sr-heart ${it.myReaction === '❤️' ? 'on' : ''}" aria-label="Beğen">${icon('heart', '', it.myReaction === '❤️' ? 'fill="currentColor"' : '')}</button><button aria-label="Gönder">${icon('send')}</button></form>`}</div>
     </div>`;
-    if (!mine && !it.seen) { it.seen = true; api(`/stories/${it.id}/view`, { body: {} }).catch(() => {}); }
+    if (!mine && !hl && !it.seen) { it.seen = true; api(`/stories/${it.id}/view`, { body: {} }).catch(() => {}); }
     const v = view.querySelector('video');
     const mu = (it.stickers || []).find((x) => x.type === 'music');
     dur = mu ? 15000 : 5000;
@@ -178,8 +187,20 @@ export default async function stories(view, userId) {
       } catch (er) { toast(er.message); }
       pause(false);
     });
+    view.querySelector('.hl-add')?.addEventListener('click', () => {
+      pause(true);
+      import('../insta.js').then((x) => x.addStoryToHighlight(it.id, { onClose: () => pause(false) }));
+    });
+    view.querySelector('.hl-ed')?.addEventListener('click', () => {
+      pause(true);
+      import('../insta.js').then((x) => x.hlMenu(hl.id, hl.title, () => close()));
+    });
     view.querySelector('.del')?.addEventListener('click', async () => {
       pause(true);
+      if (hl) {
+        if (!confirm('Bu hikaye öne çıkandan kaldırılsın mı? Arşivinde kalmaya devam eder.')) return pause(false);
+        try { const r = await api(`/highlights/${hl.id}`, { method: 'PATCH', body: { remove: [it.id] } }); g.items.splice(ii, 1); if (r.deleted || !g.items.length) return close(); ii = Math.min(ii, g.items.length - 1); return show(); } catch (er) { toast(er.message); return pause(false); }
+      }
       if (!confirm('Bu hikaye silinsin mi?')) return pause(false);
       await api(`/stories/${it.id}`, { method: 'DELETE' });
       g.items.splice(ii, 1);

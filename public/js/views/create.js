@@ -90,8 +90,17 @@ export default function create(view, kind) {
       <div class="tools"></div>
       <div class="capw"><textarea class="field cap" placeholder="Açıklama yaz... #etiket ekle, @ yazınca kişi önerilir" maxlength="2200" rows="3"></textarea>
         <button type="button" class="tagp">${icon('at')} Kişi etiketle</button></div>
+      <div class="post-x" hidden>
+        <button type="button" class="px-row px-poll">${icon('poll')}<span class="grow">Anket ekle<small>Görenler gönderinde oy versin</small></span><span class="px-v"></span></button>
+        <div class="px-f px-pollf" hidden><input class="field pq" maxlength="100" placeholder="Soru (ör. Hangisi daha güzel?)">
+          <div class="po-list"><input class="field po" maxlength="40" placeholder="1. seçenek"><input class="field po" maxlength="40" placeholder="2. seçenek"></div>
+          <div class="row"><button type="button" class="link po-add">+ Seçenek ekle</button><span class="grow"></span><button type="button" class="link po-rm">Anketi kaldır</button></div></div>
+        <button type="button" class="px-row px-sch">${icon('timer')}<span class="grow">İleri bir saate planla<small>Seçtiğin saatte kendiliğinden paylaşılır</small></span><span class="px-v"></span></button>
+        <div class="px-f px-schf" hidden><input type="datetime-local" class="field sch">
+          <div class="row"><a class="link" href="#/planli">Planlı gönderilerim</a><span class="grow"></span><button type="button" class="link sch-rm">Planlamayı kaldır</button></div></div>
+      </div>
       <div class="bar" hidden><i></i></div>
-      <button class="btn primary block go2" disabled>Paylaş</button>
+      <div class="go-row"><button class="btn block go-close" disabled hidden>${icon('star')} Yakın arkadaşlar</button><button class="btn primary block go2" disabled>Paylaş</button></div>
     </div>`;
 
   const capEl = view.querySelector('.cap');
@@ -105,7 +114,50 @@ export default function create(view, kind) {
   const picker = view.querySelector('.picker');
   const tools = view.querySelector('.tools');
   const title = view.querySelector('.center');
-  const goBtns = view.querySelectorAll('.go, .go2');
+  const goBtns = view.querySelectorAll('.go, .go2, .go-close');
+  // ---------- Anket ve planlama (gönderi / yazı) ----------
+  const px = view.querySelector('.post-x');
+  const pollF = px.querySelector('.px-pollf'); const schF = px.querySelector('.px-schf'); const schIn = px.querySelector('.sch');
+  const pad = (n) => String(n).padStart(2, '0');
+  const localIso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const fmtWhen = (t) => new Date(t).toLocaleString('tr-TR', { day: 'numeric', month: 'long', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  const paintPx = () => {
+    const opts = [...pollF.querySelectorAll('.po')].map((i) => i.value.trim()).filter(Boolean);
+    px.querySelector('.px-poll .px-v').textContent = pollF.hidden ? '' : `${opts.length} seçenek`;
+    px.querySelector('.px-sch .px-v').textContent = !schF.hidden && schIn.value ? fmtWhen(schIn.value) : '';
+    px.querySelector('.px-poll').classList.toggle('on', !pollF.hidden); px.querySelector('.px-sch').classList.toggle('on', !schF.hidden);
+    view.querySelector('.go2').textContent = mode === 'story' ? 'Hikayen' : !schF.hidden && schIn.value ? 'Planla' : 'Paylaş';
+    view.querySelector('.go').textContent = !schF.hidden && schIn.value && mode !== 'story' && mode !== 'reel' ? 'Planla' : 'Paylaş';
+  };
+  px.querySelector('.px-poll').onclick = () => { pollF.hidden = !pollF.hidden; if (!pollF.hidden) pollF.querySelector('.pq').focus(); paintPx(); };
+  px.querySelector('.po-rm').onclick = () => { pollF.hidden = true; pollF.querySelectorAll('input').forEach((i) => { i.value = ''; }); paintPx(); };
+  px.querySelector('.po-add').onclick = (e) => {
+    const list = pollF.querySelector('.po-list'); const n = list.children.length; if (n >= 4) return;
+    list.insertAdjacentHTML('beforeend', `<input class="field po" maxlength="40" placeholder="${n + 1}. seçenek">`); list.lastElementChild.focus();
+    if (n + 1 >= 4) e.currentTarget.hidden = true;
+  };
+  pollF.addEventListener('input', paintPx);
+  px.querySelector('.px-sch').onclick = () => {
+    schF.hidden = !schF.hidden;
+    if (!schF.hidden) { const d = new Date(Date.now() + 3600000); d.setMinutes(0, 0, 0); schIn.min = localIso(new Date(Date.now() + 6 * 60000)); schIn.max = localIso(new Date(Date.now() + 59 * 86400000)); if (!schIn.value) schIn.value = localIso(d); }
+    paintPx();
+  };
+  px.querySelector('.sch-rm').onclick = () => { schF.hidden = true; schIn.value = ''; paintPx(); };
+  schIn.addEventListener('input', paintPx);
+  const extras = () => {
+    const out = {};
+    if (!pollF.hidden) {
+      const options = [...pollF.querySelectorAll('.po')].map((i) => i.value.trim()).filter(Boolean);
+      if (options.length < 2) throw new Error('Ankete en az 2 seçenek yaz.');
+      out.poll = { q: pollF.querySelector('.pq').value.trim(), options };
+    }
+    if (!schF.hidden && schIn.value) out.publishAt = new Date(schIn.value).toISOString();
+    return out;
+  };
+  const afterPost = (p, msg) => {
+    if (p.scheduled) { toast(`Gönderin ${fmtWhen(p.publishAt)} tarihinde paylaşılacak.`, { ms: 4500 }); location.hash = '#/planli'; return; }
+    toast(msg); location.hash = `#/p/${p.id}`;
+  };
   const ready = () => (mode === 'image' ? items.length > 0 : mode === 'text' ? postText.trim().length > 0 : mode === 'story' ? !!file || !!storyBg : !!file);
   const bgChips = (cur) => `<div class="bg-chips">${TEXT_BGS.map((b) => `<button type="button" data-bg="${b}" class="tbg-${b} ${cur === b ? 'on' : ''}" aria-label="Arka plan"></button>`).join('')}</div>`;
   const stopAudio = () => { if (audioEl) { audioEl.pause(); audioEl = null; } };
@@ -118,7 +170,10 @@ export default function create(view, kind) {
     picker.className = `picker ${mode !== 'image' ? 'reel' : ''}`;
     title.textContent = TITLES[mode];
     view.querySelector('.capw').hidden = mode === 'story' || mode === 'text';
+    px.hidden = !(mode === 'image' || mode === 'text');
+    view.querySelector('.go-close').hidden = mode !== 'story';
     goBtns.forEach((b) => { b.disabled = !ready(); });
+    paintPx();
     tools.innerHTML = '';
     if (mode === 'text') return paintText();
     if (mode === 'story' && !file && !storyBg) {
@@ -439,17 +494,18 @@ export default function create(view, kind) {
 
   // ---------- Paylaş ----------
   const bar = view.querySelector('.bar');
-  const share = async () => {
+  const share = async (audience) => {
     if (!ready()) return;
+    let ex = {};
+    if (mode === 'image' || mode === 'text') { try { ex = extras(); } catch (er) { toast(er.message); return; } }
     goBtns.forEach((b) => { b.disabled = true; });
     bar.hidden = false;
     const fill = bar.querySelector('i');
     const prog = (base, span) => (p) => { fill.style.width = `${Math.round((base + p * span) * 100)}%`; };
     try {
       if (mode === 'text') {
-        const p = await api('/posts', { body: { type: 'text', caption: postText, bg: postBg } });
-        toast('Paylaşıldı.');
-        location.hash = `#/p/${p.id}`;
+        const p = await api('/posts', { body: { type: 'text', caption: postText, bg: postBg, ...ex } });
+        afterPost(p, 'Paylaşıldı.');
         return;
       }
       if (mode === 'image') {
@@ -458,9 +514,8 @@ export default function create(view, kind) {
           const up = await uploadPrepared(await compressImage(items[i].file), prog(i / items.length, 1 / items.length));
           out.push({ media: up.url, type: 'image', filter: items[i].filter || null });
         }
-        const p = await api('/posts', { body: { type: 'image', items: out, caption: view.querySelector('.cap').value } });
-        toast('Gönderi paylaşıldı.');
-        location.hash = `#/p/${p.id}`;
+        const p = await api('/posts', { body: { type: 'image', items: out, caption: view.querySelector('.cap').value, ...ex } });
+        afterPost(p, 'Gönderi paylaşıldı.');
         return;
       }
       const isImg = !file || !isVideoFile(file);
@@ -473,9 +528,9 @@ export default function create(view, kind) {
             st.push({ type: 'music', src, title: s.title, artist: s.artist, cover: s.cover, spotifyUrl: s.spotifyUrl, x: s.x, y: s.y, s: s.s, style: s.style || 'card', start: s.start || 0 });
           } else st.push(s);
         }
-        await api('/stories', { body: { media: up?.url || null, mediaType: isImg ? 'image' : 'video', bg: file ? null : storyBg, stickers: st, filter: storyFilter || null } });
+        await api('/stories', { body: { media: up?.url || null, mediaType: isImg ? 'image' : 'video', bg: file ? null : storyBg, stickers: st, filter: storyFilter || null, audience: audience === 'close' ? 'close' : 'all' } });
         stopAudio();
-        toast('Hikayen paylaşıldı.');
+        toast(audience === 'close' ? 'Hikayen yakın arkadaşlarınla paylaşıldı.' : 'Hikayen paylaşıldı.');
         location.hash = `#/stories/${state.me.id}`;
         return;
       }
@@ -501,6 +556,6 @@ export default function create(view, kind) {
       toast(e.message); bar.hidden = true; goBtns.forEach((b) => { b.disabled = false; });
     }
   };
-  goBtns.forEach((b) => { b.onclick = share; });
+  goBtns.forEach((b) => { b.onclick = () => share(b.classList.contains('go-close') ? 'close' : 'all'); });
   return () => { stopAudio(); unscale?.(); };
 }

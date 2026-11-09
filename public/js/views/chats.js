@@ -4,6 +4,7 @@ import {
 } from '../core.js';
 import { streakChip } from '../engage.js';
 import { egi } from '../eg-icons.js';
+import { notesRowHtml, noteSheet } from '../insta.js';
 
 const preview = (m) => (m.location ? '📍 Konum' : m.fal ? '🔮 Fal isteği' : m.share && !m.text ? `📤 ${m.share.label}` : m.viewOnce ? '📷 Tek seferlik fotoğraf' : m.game ? '🎲 Oyun' : m.plan ? '📅 Buluşma planı' : '') || m.text || ({ audio: '🎤 Sesli mesaj', video: '🎥 Video', gif: 'GIF' }[m.mediaType] || '📷 Fotoğraf');
 
@@ -14,6 +15,7 @@ export default async function chats(view) {
       <button class="ib soft new" aria-label="Yeni mesaj">${icon('edit')}</button>
     </header>
     <div class="search-bar" style="position:static;padding-top:2px"><label class="sw">${icon('search')}<input class="field q" placeholder="Sohbetlerde ara" aria-label="Sohbetlerde ara"></label></div>
+    <div class="notes-wrap"></div>
     <a class="genel-row" href="#/genel"><span class="genel-ic">${icon('users')}</span><span class="grow"><b>Genel sohbet</b><small>Tüm üyelerin konuştuğu oda</small></span><span class="go-chip">Katıl</span></a>
     <a class="stk-entry" href="#/seriler" hidden></a>
     <div class="mrow"></div>
@@ -69,7 +71,16 @@ export default async function chats(view) {
     stkEl.hidden = !s.length;
     if (s.length) stkEl.innerHTML = `${egi('seri', 40)}<span class="grow"><b>${s.length} sohbet serin var</b><small>${risk ? `${risk} tanesi bugün bekliyor, bozulmasın!` : 'Bugün hepsini korudun 💪'}</small></span><span class="go-chip">Seriler</span>`;
   };
-  await load();
+  // Notlar: 24 saatlik kısa not, karşılıklı takipleştiklerine görünür
+  const notesEl = view.querySelector('.notes-wrap');
+  let notes = [];
+  const loadNotes = async () => {
+    if (['falci', 'official'].includes(state.me.role)) return;
+    notes = await api('/notes').catch(() => []);
+    notesEl.innerHTML = notesRowHtml(notes);
+  };
+  notesEl.onclick = (e) => { const b = e.target.closest('.note'); if (b) noteSheet(notes, b.dataset.u, loadNotes); };
+  await Promise.all([load(), loadNotes()]);
 
   view.querySelector('.q').oninput = (e) => { filter = e.target.value.toLowerCase().trim(); paint(); };
   view.querySelector('.new').onclick = () => {
@@ -103,6 +114,7 @@ export default async function chats(view) {
     on('streak', ({ chatId, count }) => { const c = list.find((x) => x.id === chatId); if (c) { c.streak = { ...(c.streak || {}), count, done: true }; paint(); paintStk(); } }),
     on('badges', paintMatches),
     on('reconnected', load),
+    on('notes:update', loadNotes),
   ];
   refreshBadges();
   return () => offs.forEach((f) => f());

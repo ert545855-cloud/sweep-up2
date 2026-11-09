@@ -1,4 +1,5 @@
 import { icon } from './icons.js';
+import { postPollHtml, wirePostPoll, postInsights } from './insta.js';
 import {
   esc, ago, num, avatar, reportUser, toggleLike, heartBurst, onDoubleTap, openComments, sharePost, saved, sheet, api, toast, state, isVideo,
   nm, richText, filterCss,
@@ -126,6 +127,7 @@ export function postCard(p, { full = false } = {}) {
       <button class="more" aria-label="Diğer seçenekler">${icon('more')}</button>
     </header>
     <div class="post-media ${text ? 'is-text' : ''}">${text ? textCard(p) : mediaHtml(p)}${p.type === 'reel' ? overlayHtml(p.edit?.stickers) : ''}</div>
+    ${p.poll ? postPollHtml(p) : ''}
     <div class="post-actions">
       <button class="like ${p.liked ? 'liked' : ''}" aria-label="Beğen">${icon('heart')}<span class="cnt">${p.likeCount ? num(p.likeCount) : ''}</span></button>
       <button class="cm" aria-label="Yorum yap">${icon('comment')}<span>${p.commentCount ? num(p.commentCount) : ''}</span></button>
@@ -167,10 +169,13 @@ export function wirePost(root, p, onRemove) {
   root.querySelectorAll('.cm, .cm2').forEach((b) => { b.onclick = () => { promoHit(p); openComments(p); }; });
   const rp = root.querySelector('.rp'); if (rp) rp.onclick = () => toggleRepost(p, rp);
   wireCaption(root);
+  wirePostPoll(root, p);
+  root.querySelector('.post-h a')?.addEventListener('click', () => { if (p.user.id !== state.me.id && !p.sponsored) api('/insights/visit', { body: { id: p.id } }).catch(() => {}); });
   root.querySelector('.sh').onclick = () => { promoHit(p); sharePost(p); };
   const sv = root.querySelector('.sv');
   sv.onclick = () => {
     const on = saved.toggle(p.id);
+    if (p.user.id !== state.me.id) api(`/posts/${p.id}/save`, { body: { on } }).catch(() => {});
     sv.innerHTML = icon('bookmark', '', on ? 'fill="currentColor"' : '');
     toast(on ? 'Kaydedilenlere eklendi.' : 'Kaydedilenlerden çıkarıldı.');
   };
@@ -180,6 +185,7 @@ export function wirePost(root, p, onRemove) {
       <button data-a="share">${icon('share')}Paylaş</button>
       <button data-a="link">${icon('link')}Bağlantıyı kopyala</button>
       <button data-a="profile">${icon('person')}Profile git</button>
+      ${mine && !p.sponsored ? `<button data-a="stats">${icon('poll')}<span class="grow">İstatistikleri gör<div class="sub muted" style="font-size:12.5px">Erişim, gösterim, beğeni, kaydetme</div></span></button>` : ''}
       ${mine ? `<button data-a="promo">🚀<span class="grow">Öne çıkar<div class="sub muted" style="font-size:12.5px">Jetonla daha çok kişiye göster</div></span></button>` : ''}
       ${mine && (p.items || []).length > 1 ? `<button data-a="rmitem" class="danger">${icon('image')}Bu fotoğrafı kaldır</button>` : ''}
       ${mine ? `<button data-a="del" class="danger">${icon('trash')}Sil</button>` : `<button data-a="report" class="danger">${icon('flag')}Şikayet et</button>`}
@@ -192,6 +198,7 @@ export function wirePost(root, p, onRemove) {
           if (a === 'link') { await navigator.clipboard?.writeText(`${location.origin}/#/p/${p.id}`); toast('Bağlantı kopyalandı.'); }
           if (a === 'profile') location.hash = `#/u/${p.user.username}`;
           if (a === 'promo') location.hash = `#/reklam/${p.id}`;
+          if (a === 'stats') postInsights(p);
           if (a === 'report') reportUser(p.user, { ref: p.id });
           if (a === 'rmitem') {
             const tr = mediaBox.querySelector('.car-track');

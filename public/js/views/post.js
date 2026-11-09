@@ -1,6 +1,7 @@
 import { icon } from '../icons.js';
 import { api } from '../core.js';
 import { postCard, wirePost, autoplay } from '../components.js';
+import { trackSeen } from '../insta.js';
 
 export default async function post(view, id) {
   view.innerHTML = `<header class="topbar bordered">
@@ -12,5 +13,6 @@ export default async function post(view, id) {
   const pb = view.querySelector('.pb');
   pb.innerHTML = postCard(p, { full: true });
   wirePost(pb.firstElementChild, p, () => { location.hash = '#/me'; });
-  return autoplay(pb);
+  const a = autoplay(pb); const t = trackSeen(pb, 'post');
+  return () => { a(); t(); };
 }
