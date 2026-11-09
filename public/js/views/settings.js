@@ -27,6 +27,7 @@ export default function settings(view) {
       <a class="it" href="#/edit">${icon('edit')}<span class="grow">Profili düzenle<div class="sub">Fotoğraflar, sesli tanıtım, profil soruları</div></span></a>
       <a class="it" href="#/gorunum">${icon('crown')}<span class="grow">Çerçeve ve rozetler<div class="sub">Profil fotoğrafına çerçeve, sınırlı etkinlik rozetleri</div></span></a>
       <a class="it" href="#/seviye">${icon('star')}<span class="grow">Seviyen<div class="sub">${me.level ? `${me.level.em} Seviye ${me.level.n} · ${esc(me.level.title)}` : 'Paylaştıkça, sohbet ettikçe seviye atla'}</div></span></a>
+      <a class="it" href="#/oyunlar">${icon('play')}<span class="grow">Oyunlar<div class="sub">Okey ve Çiz Bil; arkadaşlarınla ya da yeni kişilerle oyna</div></span></a>
       <a class="it" href="#/etkinlikler">${icon('users')}<span class="grow">Etkinlikler<div class="sub">Gerçek hayatta buluşmalar oluştur ya da katıl</div></span></a>
       <a class="it" href="#/haftanin-enleri">${icon('trophy')}<span class="grow">Haftanın en beğenilenleri<div class="sub">İlk 3 gönderi her pazartesi jeton kazanır</div></span></a>
       <a class="it" href="#/yakin">${icon('star')}<span class="grow">Yakın arkadaşlar<div class="sub">Hikayeni ve notunu sadece onlarla paylaş</div></span></a>

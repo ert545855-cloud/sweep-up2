@@ -17,7 +17,7 @@ const titleOf = (n) => TITLES.find((t) => n >= t[0]);
 const XP = {
   giris: [10, 10, 'Günlük giriş'], paylas: [15, 60, 'Gönderi ya da hikaye paylaşmak'], yorum: [4, 40, 'Yorum yapmak'], mesaj: [1, 20, 'Mesajlaşmak'],
   begeni: [1, 15, 'Kaydırmada beğenmek'], vitrin: [1, 10, 'Vitrin izlemek'], seri: [5, 25, 'Sohbet serisini sürdürmek'], liked: [2, 60, 'Gönderilerinin beğenilmesi'],
-  event: [10, 20, 'Etkinlik oluşturmak'], going: [5, 15, 'Etkinliğe katılmak'], enler: [50, 150, 'Haftanın en beğenilenlerine girmek'],
+  oyun: [5, 30, 'Oyun oynamak'], event: [10, 20, 'Etkinlik oluşturmak'], going: [5, 15, 'Etkinliğe katılmak'], enler: [50, 150, 'Haftanın en beğenilenlerine girmek'],
 };
 const EVENT_CATS = { kahve: '☕ Kahve', yuruyus: '🥾 Yürüyüş', spor: '⚽ Spor', muzik: '🎶 Müzik', oyun: '🎲 Oyun', sanat: '🎨 Sanat', yemek: '🍕 Yemek', parti: '🎉 Parti', sohbet: '💬 Sohbet', diger: '📍 Diğer' };
 

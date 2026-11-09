@@ -284,6 +284,15 @@ const D = {
   'Herkese açık': 'Public', 'Sadece takipçilerim': 'Only my followers', 'Etkinlik sohbeti aç': 'Open an event chat', 'Katılanlar otomatik olarak grup sohbetine eklenir': 'People who join are added to a group chat automatically', 'Etkinliği oluştur': 'Create event',
   '🎉 Katılıyorum': '🎉 I’m going', '✓ Katılıyorsun': '✓ You’re going', '☆ İlgileniyorum': '☆ Interested', '★ İlgileniyorsun': '★ Interested', 'Etkinlik dolu': 'Event is full', 'Katılıyorsun': 'Going', 'İlgileniyorsun': 'Interested',
   'Etkinlik sohbeti': 'Event chat', 'Katılanlarla konuş, planı netleştir': 'Talk to attendees and firm up the plan', 'Düzenleyen': 'Organizer', 'Harita': 'Map', 'Etkinliği iptal et': 'Cancel event', 'Etkinliği bildir': 'Report event', 'Düzenle': 'Edit', 'Etkinlik oluşturuldu 🎉': 'Event created 🎉',
+  // Oyunlar
+  'Oyunlar': 'Games', 'Okey': 'Okey', 'Çiz Bil': 'Draw & Guess', 'Hemen oyna': 'Play now', 'Arkadaşlarla': 'With friends', 'Masana dön': 'Back to your table', 'Açık masalar': 'Open tables', 'Açık odalar': 'Open rooms', 'Otur': 'Sit',
+  '4 kişilik klasik okey. Boş koltuklara bot oturur, arkadaşlarını çağır.': 'Classic 4-player okey. Bots fill empty seats; invite your friends.', 'Biri çizer, diğerleri tahmin eder. En hızlı bilen en çok puanı alır.': 'One draws, the others guess. The fastest guess scores the most.',
+  'Oyunlar eğlence içindir; jeton ya da para ile oynanmaz. Oynadıkça seviye puanı kazanırsın.': 'Games are just for fun; no coins or money involved. You earn level points as you play.',
+  'Seri diz': 'Sort runs', 'Çift diz': 'Sort pairs', 'At': 'Discard', 'Bitir': 'Finish', 'Gösterge': 'Indicator', 'Botlarla başlat': 'Start with bots', 'Oyuncular bekleniyor…': 'Waiting for players…', 'Yeni el': 'New hand', 'Masadan kalk': 'Leave table',
+  'Sıra sende: ortadan ya da soldaki taşı çek': 'Your turn: draw from the middle or take the tile on your left', 'Bir taş at ya da elini bitir': 'Discard a tile or finish your hand', 'Okey nasıl oynanır?': 'How to play okey', 'Tebrikler, eli bitirdin!': 'Congrats, you finished the hand!', 'Berabere': 'Draw', 'El berabere bitti.': 'The hand ended in a draw.',
+  'Arkadaşını çağır': 'Invite a friend', 'SwipeUp’tan birini çağır': 'Invite someone on SwipeUp', 'Masa bağlantısını kopyala': 'Copy table link', 'Oda bağlantısını kopyala': 'Copy room link', 'Arkadaşlarını çağır': 'Invite your friends',
+  'Herkes sırayla çizer, diğerleri yazarak tahmin eder.': 'Everyone takes turns drawing; the others type their guesses.', 'Oyunu başlat': 'Start game', 'En az 2 kişi gerekli': 'At least 2 players needed', 'Davet et': 'Invite', 'Bir kelime seç': 'Pick a word', 'Çizeceğin kelimeyi seç': 'Pick the word to draw',
+  'Tahminini yaz…': 'Type your guess…', 'Çizerken sohbet edebilirsin…': 'You can chat while drawing…', 'Yeniden oyna': 'Play again', 'Oyunlara dön': 'Back to games', 'Oyun bitti': 'Game over', 'Bunu çiz! Harf ya da sayı yazma 😉': 'Draw this! No letters or numbers 😉', 'Kelime buydu': 'That was the word', 'Bildin! Diğerlerini bekle': 'You got it! Wait for the others',
 };
 
 // Sayı / isim içeren metinler

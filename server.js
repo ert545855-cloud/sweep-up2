@@ -1728,6 +1728,7 @@ require('./server/daily')(app, featureCtx); // Falcı Teyze günlük burç / tar
 require('./server/insta')(app, featureCtx); // öne çıkanlar, yakın arkadaşlar, notlar, anket, planlı gönderi, istatistik
 require('./server/dating')(app, featureCtx); // sohbet başlatıcılar, buluşma fikirleri, ikinci şans
 require('./server/community')(app, featureCtx); // seviye, haftanın en beğenilenleri, QR kod, etkinlikler
+require('./server/games')(app, featureCtx); // oyun salonu: Okey, Çiz Bil
 require('./server/engage')(app, featureCtx); // seriler, kulüpler, günün sorusu, seçki, karaoke… (en son yüklenir)
 gameOut = featureCtx.gameOut;
 
@@ -1841,6 +1842,7 @@ io.on('connection', (socket) => {
   socket.on('visibility', (v) => { socket.data.visible = !!v; });
   featureCtx.genelSocket(socket);
   featureCtx.speedSocket(socket);
+  featureCtx.gamesSocket?.(socket);
 
   socket.on('message:send', (data, ack) => {
     const c = store.get('chats', data?.chatId);

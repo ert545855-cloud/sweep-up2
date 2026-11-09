@@ -9,7 +9,7 @@ import { egi } from '../eg-icons.js';
 
 // Ana sayfa kısayolları: [ikon, adres, etiket, falcıya da görünür]
 const SHORTCUTS = [
-  ['seri', '#/seriler', 'Serin'], ['etkinlik', '#/etkinlikler', 'Etkinlikler'], ['enler', '#/haftanin-enleri', 'Haftanın enleri', true], ['genel', '#/genel', 'Genel sohbet', true], ['soru', '#/soru', 'Günün sorusu'], ['kulup', '#/kulupler', 'Kulüpler'],
+  ['seri', '#/seriler', 'Serin'], ['okey', '#/oyunlar', 'Oyunlar'], ['etkinlik', '#/etkinlikler', 'Etkinlikler'], ['enler', '#/haftanin-enleri', 'Haftanın enleri', true], ['genel', '#/genel', 'Genel sohbet', true], ['soru', '#/soru', 'Günün sorusu'], ['kulup', '#/kulupler', 'Kulüpler'],
   ['odalar', '#/odalar', 'Odalar', true], ['hizli', '#/hizli', 'Hızlı tanış'], ['mekan', '#/mekan', 'Mekandayım'], ['karaoke', '#/karaoke', 'Karaoke'], ['burc', '#/burc', 'Burç kartın'], ['seviye', '#/seviye', 'Seviyen'],
 ];
 const RAIL = ['quests', 'wheel', 'contest', 'song'];
