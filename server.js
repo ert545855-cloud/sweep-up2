@@ -1719,6 +1719,7 @@ require('./server/venues')(app, featureCtx);
 require('./server/contests')(app, featureCtx);
 require('./server/daily')(app, featureCtx); // Falcı Teyze günlük burç / tarot paylaşımı
 require('./server/insta')(app, featureCtx); // öne çıkanlar, yakın arkadaşlar, notlar, anket, planlı gönderi, istatistik
+require('./server/dating')(app, featureCtx); // sohbet başlatıcılar, buluşma fikirleri, ikinci şans
 require('./server/engage')(app, featureCtx); // seriler, kulüpler, günün sorusu, seçki, karaoke… (en son yüklenir)
 gameOut = featureCtx.gameOut;
 

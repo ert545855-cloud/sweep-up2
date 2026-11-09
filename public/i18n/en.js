@@ -261,6 +261,14 @@ const D = {
   'İstatistikleri gör': 'View insights', 'Erişim, gösterim, beğeni, kaydetme': 'Reach, impressions, likes, saves', 'Gönderi istatistikleri': 'Post insights', 'Erişilen hesap': 'Accounts reached', 'Gösterim': 'Impressions', 'Etkileşim': 'Interactions',
   'Beğeni': 'Likes', 'Yorum': 'Comments', 'Yeniden paylaşım': 'Reposts', 'Kaydetme': 'Saves', 'Profil ziyareti': 'Profile visits', 'Anket oyu': 'Poll votes', 'Etkileşim oranı': 'Engagement rate', 'Son 7 gün gösterim': 'Impressions, last 7 days',
   'Erişim': 'Reach', 'Gösterimlerin geldiği yer': 'Where impressions came from', 'Ana sayfa': 'Home', 'Profil ve bağlantılar': 'Profile and links', 'Keşfet': 'Explore', 'Etiketler': 'Tags', 'Diğer': 'Other',
+  // Tanışma araçları
+  'Ne yazsam?': 'What should I say?', 'Sohbeti başlatacak öneriler': 'Ideas to start the conversation', 'Ne yazacağını bilemedin mi? Birine dokun, mesaj kutuna gelsin.': 'Not sure what to say? Tap one to put it in your message box.',
+  'Ortak ilgi': 'Shared interest', 'Profilinden': 'From their profile', 'İlgi alanı': 'Interest', 'Şu an dinliyor': 'Listening now', 'Burç uyumu': 'Zodiac match', 'Aynı şehir': 'Same city', 'Eğlenceli soru': 'Fun question',
+  'Uyum testi': 'Compatibility test', '10 soru, Falcı Teyze yorumlar': '10 questions, Auntie Fortune comments', 'Buluşma fikirleri': 'Date ideas', 'İlgi alanlarınıza göre': 'Based on your interests', 'Ortak ilgi alanlarınıza göre öneriler': 'Ideas based on your shared interests',
+  '💡 Ne yazsam?': '💡 What to say?', '💞 Uyum testi': '💞 Compatibility', '📍 Buluşma fikirleri': '📍 Date ideas', '📅 Plan yap': '📅 Make a plan', 'Bu araçlara + menüsünden her zaman ulaşabilirsin.': 'You can always find these tools in the + menu.',
+  'Öner': 'Suggest', '📅 Buluşma planı gönder': '📅 Send a date plan', '💛 İlk buluşmayı kalabalık, herkese açık bir yerde yap.': '💛 Meet in a busy public place for your first date.', 'İkinizin ortasında, SwipeUp’ta popüler': 'Popular on SwipeUp, halfway between you', 'İlk buluşma için ideal': 'Great for a first date',
+  'İkinci şans': 'Second chance', '💫 İkinci şans': '💫 Second chance', 'Geçtiğin kişilerden bu hafta senin için seçtiklerimiz. Bir kez daha bak; beğenirsen ve o da seni beğendiyse eşleşirsiniz.': 'People you passed, picked for you this week. Take another look; if you like them and they liked you, you match.',
+  'Geç': 'Pass', 'Eşleşme şansınız yüksek ✨': 'Good chance of a match ✨', 'Bir kez daha bak': 'Take another look', 'Keşfetmeye dön': 'Back to discover', 'Bu haftanın ikinci şanslarını gördün': 'You’ve seen this week’s second chances', 'Bu hafta ikinci şans yok': 'No second chances this week',
 };
 
 // Sayı / isim içeren metinler

@@ -93,6 +93,7 @@ export default async function chat(view, chatId) {
     </header>
     <div class="msgs" role="log" aria-live="polite"></div>
     <div class="holdbar" hidden></div>
+    <div class="date-tools" hidden></div>
     <div class="composer"></div></div>`;
 
   const box = view.querySelector('.msgs');
@@ -334,12 +335,73 @@ ${meta}</div>`;
     const sender = isGroup && !mine && gap !== false && (!prev || prev.from !== m.from) ? `<span class="sender">${esc(members.get(m.from)?.name || '')}</span>` : '';
     return `${dayHtml}<div class="mwrap ${mine ? 'me' : 'them'} ${gap ? 'gap' : ''}" data-id="${esc(m.id)}">${sender}${bubbleInner(m)}${reactsHtml(m)}</div>`;
   };
+  const dateChat = !isGroup && !falChat;
   const paintAll = () => {
     box.innerHTML = msgs.length
       ? msgs.map((m, i) => bubble(m, msgs[i - 1])).join('')
-      : `<div class="empty">${avatar(other, 72, { dot: false })}<h2>${esc(other.name)}</h2>${isGroup ? `${members.size} üye` : `@${esc(other.username)}`}<p>Bir merhaba ile başla 👋</p></div>`;
+      : `<div class="empty">${avatar(other, 72, { dot: false })}<h2>${esc(other.name)}</h2>${isGroup ? `${members.size} üye` : `@${esc(other.username)}`}<p>Bir merhaba ile başla 👋</p>${dateChat ? '<div class="starters"><div class="spinner"></div></div>' : ''}</div>`;
     box.scrollTop = box.scrollHeight;
+    if (dateChat && !msgs.length) loadStarters(box.querySelector('.starters'));
+    paintDateTools();
   };
+  // ---- Tanışma araçları: sohbet başlatıcılar, uyum testi, buluşma fikirleri ----
+  let starters = null;
+  const useStarter = (text) => { const ta = comp.querySelector('textarea'); if (!ta) return; ta.value = text; ta.dispatchEvent(new Event('input')); ta.focus(); ta.setSelectionRange(text.length, text.length); };
+  const starterHtml = (it) => `<button type="button" class="st-it" data-t="${esc(it.text)}"><span class="st-em">${it.em}</span><span class="grow"><small>${esc(it.tag)}</small>${esc(it.text)}</span></button>`;
+  async function loadStarters(el) {
+    if (!el) return;
+    try { starters = starters || await api(`/chats/${chatId}/starters`); } catch { el.remove(); return; }
+    if (!starters.items.length) { el.remove(); return; }
+    el.innerHTML = `<div class="st-h">Ne yazacağını bilemedin mi? Birine dokun, mesaj kutuna gelsin.</div>${starters.items.map(starterHtml).join('')}
+      <div class="st-tools"><button type="button" class="st-tool" data-a="compat">${egi('uyum', 30)}<span><b>Uyum testi</b><small>10 soru, Falcı Teyze yorumlar</small></span></button><button type="button" class="st-tool" data-a="ideas">${egi('mekan', 30)}<span><b>Buluşma fikirleri</b><small>İlgi alanlarınıza göre</small></span></button></div>`;
+  }
+  function startersSheet() {
+    sheet('Ne yazsam?', '<div class="starters in-sheet"><div class="spinner"></div></div>', {
+      async onMount(sh, close) {
+        await loadStarters(sh.querySelector('.starters'));
+        sh.querySelector('.starters')?.addEventListener('click', (e) => { const b = e.target.closest('.st-it'); if (b) { close(); useStarter(b.dataset.t); } const t = e.target.closest('.st-tool'); if (t) { close(); t.dataset.a === 'compat' ? startCompat() : ideasSheet(); } });
+      },
+    });
+  }
+  const dtEl = view.querySelector('.date-tools');
+  const dtKey = `su_dt_${chatId}`;
+  function paintDateTools() {
+    let off = false; try { off = localStorage.getItem(dtKey) === '1'; } catch {}
+    dtEl.hidden = !dateChat || blocked || off || msgs.length > 60;
+    if (dtEl.hidden) return;
+    dtEl.innerHTML = `<button type="button" data-a="st">💡 Ne yazsam?</button><button type="button" data-a="compat">💞 Uyum testi</button><button type="button" data-a="ideas">📍 Buluşma fikirleri</button><button type="button" data-a="plan">📅 Plan yap</button><button type="button" class="dt-x" data-a="x" aria-label="Gizle">${icon('close')}</button>`;
+  }
+  dtEl.onclick = (e) => {
+    const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+    if (a === 'st') startersSheet();
+    if (a === 'compat') startCompat();
+    if (a === 'ideas') ideasSheet();
+    if (a === 'plan') planSheet();
+    if (a === 'x') { try { localStorage.setItem(dtKey, '1'); } catch {} dtEl.hidden = true; toast('Bu araçlara + menüsünden her zaman ulaşabilirsin.'); }
+  };
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest('.starters .st-it'); if (b) { useStarter(b.dataset.t); return; }
+    const t = e.target.closest('.starters .st-tool'); if (t) t.dataset.a === 'compat' ? startCompat() : ideasSheet();
+  });
+  const CAT_EM = { cafe: '☕', food: '🍽️', bar: '🍸', park: '🌳', fun: '🎟️', sport: '🏃', other: '📍' };
+  function ideasSheet() {
+    sheet('Buluşma fikirleri', '<div class="ideas"><div class="spinner"></div></div>', {
+      async onMount(sh, close) {
+        const el = sh.querySelector('.ideas');
+        let d;
+        try { d = await api(`/chats/${chatId}/ideas`); } catch (er) { el.innerHTML = `<div class="empty">${esc(er.message)}</div>`; return; }
+        el.innerHTML = `<p class="muted id-sub">${d.shared.length ? `Ortak ilgi alanlarınız: <b>${d.shared.map(esc).join(', ')}</b>` : `${esc(d.name)} ile ilgi alanlarınıza göre seçtik.`}${d.km != null ? ` · Aranızda yaklaşık ${d.km} km var.` : ''}</p>
+          ${d.ideas.map((i) => `<div class="idea"><span class="id-em">${i.em}</span><div class="grow"><b>${esc(i.title)}</b><p>${esc(i.desc)}</p><small>${esc(i.why)}</small></div><button type="button" class="btn sm id-send" data-t="${esc(`${i.em} ${i.title}: ${i.desc} Ne dersin?`)}">Öner</button></div>`).join('')}
+          ${d.spots.length ? `<div class="section-t"><span>İkinizin ortasında, SwipeUp’ta popüler</span></div>${d.spots.map((v) => `<div class="idea spot"><span class="id-em">${CAT_EM[v.cat] || '📍'}</span><div class="grow"><b>${esc(v.name)}</b><small>${esc(v.area || '')}${v.n ? `${v.area ? ' · ' : ''}${v.n} check-in` : ''}</small></div><button type="button" class="btn sm id-send" data-t="${esc(`${v.name}${v.area ? ` (${v.area})` : ''} nasıl? Bir gün orada buluşalım mı?`)}">Öner</button></div>`).join('')}` : ''}
+          <button type="button" class="btn primary block id-plan">📅 Buluşma planı gönder</button>
+          <p class="muted id-safe">💛 İlk buluşmayı kalabalık, herkese açık bir yerde yap.</p>`;
+        el.onclick = (e) => {
+          const b = e.target.closest('.id-send'); if (b) { close(); useStarter(b.dataset.t); return; }
+          if (e.target.closest('.id-plan')) { close(); planSheet(); }
+        };
+      },
+    });
+  }
   const repaintOne = (m) => {
     const w = box.querySelector(`[data-id="${CSS.escape(m.id)}"]`);
     if (!w) return;
@@ -675,6 +737,8 @@ ${meta}</div>`;
       ${isGroup || falChat ? '' : `<button data-a="game">🎲<span class="grow">Oyun başlat<div class="sub muted" style="font-size:12.5px">İki doğru bir yalan, Bu mu şu mu</div></span></button>
       <button data-a="plan">${egi('secki', 28)}<span class="grow">Buluşma planla<div class="sub muted" style="font-size:12.5px">Yakındaki kafe ve mekan önerileri, hatırlatma</div></span></button>
       <button data-a="compat">${egi('uyum', 28)}<span class="grow">Uyum testi<div class="sub muted" style="font-size:12.5px">10 soru, sonucu Falcı Teyze yorumlar</div></span></button>
+      <button data-a="ideas">${egi('mekan', 28)}<span class="grow">Buluşma fikirleri<div class="sub muted" style="font-size:12.5px">Ortak ilgi alanlarınıza göre öneriler</div></span></button>
+      <button data-a="st">💡<span class="grow">Ne yazsam?<div class="sub muted" style="font-size:12.5px">Sohbeti başlatacak öneriler</div></span></button>
       <button data-a="gift">${egi('hediye', 28)}<span class="grow">Hediye gönder<div class="sub muted" style="font-size:12.5px">Gül, yüzük ve daha fazlası jetonla</div></span></button>`}
       <button data-a="loc">${icon('mapPin')}Konum gönder</button>
       <button data-a="ttl">${icon('timer')}<span class="grow">Kaybolan mesajlar</span><span class="muted">${ttlLabel(ttl)}</span></button></div>`, {
@@ -689,6 +753,8 @@ ${meta}</div>`;
           if (a === 'game') gameSheet();
           if (a === 'plan') planSheet();
           if (a === 'compat') startCompat();
+          if (a === 'ideas') ideasSheet();
+          if (a === 'st') startersSheet();
           if (a === 'gift') giftSheet();
         };
       },

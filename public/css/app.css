@@ -3034,3 +3034,51 @@ button.inv-code:active { transform: scale(.97); }
 .sthumb[class*="tbg-"], .hl-c .hl-ph[class*="tbg-"], .sch-tx[class*="tbg-"] { background: var(--tbg); }
 
 .note-f .nf-del { background: transparent; color: var(--hot); box-shadow: none; }
+
+/* ===== Tanışma araçları ===== */
+.starters { display: grid; gap: 8px; width: 100%; max-width: 420px; margin: 14px auto 0; text-align: left; }
+.starters.in-sheet { margin: 0; max-width: none; padding-bottom: 6px; }
+.st-h { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 2px; }
+.st-it { display: flex; gap: 10px; align-items: flex-start; width: 100%; padding: 11px 12px; border-radius: 16px; background: var(--surface); text-align: left; font-size: 14px; line-height: 1.35; color: var(--text); }
+.st-it small { display: block; font-size: 11.5px; font-weight: 700; color: var(--uv); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 2px; }
+.st-it:active { transform: scale(.985); }
+.st-em { font-size: 20px; line-height: 1.2; }
+.st-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+.st-tool { display: flex; gap: 8px; align-items: center; padding: 10px; border-radius: 16px; background: var(--uv-soft, var(--surface)); text-align: left; color: var(--text); }
+.st-tool b { display: block; font-size: 13.5px; } .st-tool small { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.25; }
+.date-tools { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 6px 12px 2px; }
+.date-tools::-webkit-scrollbar { display: none; }
+.date-tools[hidden] { display: none; }
+.date-tools button { flex: 0 0 auto; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--surface); color: var(--text); font-size: 13px; font-weight: 650; white-space: nowrap; }
+.date-tools .dt-x { width: 32px; padding: 0; display: grid; place-items: center; color: var(--muted); }
+.date-tools .dt-x svg { width: 15px; height: 15px; }
+.ideas { display: grid; gap: 10px; padding-bottom: 6px; }
+.id-sub { margin: 0; font-size: 13px; }
+.idea { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 16px; background: var(--surface); }
+.id-em { font-size: 26px; width: 40px; text-align: center; flex: 0 0 40px; }
+.idea b { font-size: 14.5px; } .idea p { margin: 2px 0; font-size: 13px; color: var(--text); opacity: .85; line-height: 1.35; }
+.idea small { font-size: 12px; color: var(--uv); font-weight: 650; }
+.idea.spot small { color: var(--muted); display: block; }
+.id-safe { font-size: 12.5px; margin: 0; text-align: center; }
+
+/* İkinci şans */
+.sc-page { padding: 0 16px 28px; display: grid; gap: 14px; }
+.sc-hero { display: flex; gap: 12px; align-items: center; margin-top: 12px; padding: 14px; border-radius: 18px; background: linear-gradient(120deg, color-mix(in srgb, var(--uv) 16%, var(--surface)), var(--surface)); }
+.sc-hero > span { font-size: 30px; } .sc-hero p { margin: 0; font-size: 13.5px; line-height: 1.45; }
+.sc-card { border-radius: 22px; overflow: hidden; background: var(--surface); transition: transform .3s ease, opacity .3s ease; }
+.sc-card.gone-r { transform: translateX(110%) rotate(8deg); opacity: 0; } .sc-card.gone-l { transform: translateX(-110%) rotate(-8deg); opacity: 0; }
+.sc-ph { position: relative; display: block; aspect-ratio: 4 / 4.4; background: var(--surface-2); }
+.sc-ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sc-why { position: absolute; left: 12px; bottom: 12px; padding: 6px 12px; border-radius: 999px; background: rgba(0,0,0,.55); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: #fff; font-size: 13px; font-weight: 700; }
+.sc-b { padding: 14px 16px 16px; display: grid; gap: 8px; }
+.sc-b h3 { margin: 0; font-size: 22px; display: flex; align-items: center; gap: 6px; } .sc-b h3 small { font-weight: 500; font-size: 20px; }
+.sc-w { font-size: 13.5px; } .sc-bio { margin: 0; font-size: 14px; line-height: 1.45; }
+.sc-act { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; margin-top: 4px; }
+.sc-act .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.sc-act svg { width: 18px; height: 18px; }
+.sc-foot { text-align: center; font-size: 12.5px; margin: 0; }
+.topbar .sc { position: relative; font-size: 19px; }
+/* Sayfa altı paneller: yeni içerikler için kenar boşluğu */
+.sheet .ideas, .sheet .starters.in-sheet, .sheet .ins, .sheet .pk-arch, .sheet .hl-pick, .sheet .note-f, .sheet .note-v { padding-left: 16px; padding-right: 16px; padding-bottom: 16px; }
+.sheet .pk-arch > .empty, .sheet .ins > .empty { padding-left: 0; padding-right: 0; }
+.sc-b .chip { background: var(--surface-2); }

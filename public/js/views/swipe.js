@@ -8,6 +8,7 @@ export default async function swipe(view) {
   view.innerHTML = `<header class="topbar">
       <h1><span>Keşfet</span></h1>
 
+      <a class="ib soft sc" href="#/ikinci-sans" aria-label="İkinci şans" title="İkinci şans">💫<span class="num-badge scn" hidden></span></a>
       <button class="ib soft bst" aria-label="Boost">${icon('bolt')}</button>
       <a class="ib soft lk" href="#/likes" aria-label="Seni beğenenler">${icon('heart')}<span class="num-badge lkn" ${state.badges.likes ? '' : 'hidden'}>${state.badges.likes}</span></a>
       <button class="ib soft flt" aria-label="Filtreler">${icon('sliders')}</button>
@@ -23,6 +24,7 @@ export default async function swipe(view) {
     </div>`;
 
   const deckEl = view.querySelector('.deck');
+  api('/second-chance/count').then((r) => { const b = view.querySelector('.scn'); if (b && r.n) { b.textContent = r.n; b.hidden = false; } }).catch(() => {});
   let deck = await api('/swipe/deck');
   let history = [];
   let busy = false;
@@ -48,7 +50,7 @@ export default async function swipe(view) {
   const render = () => {
     if (!deck.length) {
       deckEl.innerHTML = `<div class="empty"><div class="big">${icon('flame')}</div><h2>Şimdilik bu kadar</h2>Yakında yeni kişiler gelecek. Geçtiklerini tekrar görmek istersen desteyi yenile.
-        <p style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn primary reset">Desteyi yenile</button><button class="btn wf">Filtreleri genişlet</button></p></div>`;
+        <p style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn primary reset">Desteyi yenile</button><button class="btn wf">Filtreleri genişlet</button><a class="btn" href="#/ikinci-sans">💫 İkinci şans</a></p></div>`;
       deckEl.querySelector('.wf').onclick = () => openFilters(async () => { deck = await api('/swipe/deck'); render(); });
       deckEl.querySelector('.reset').onclick = async (e) => {
         const b = e.currentTarget; b.disabled = true; b.textContent = 'Yenileniyor…';

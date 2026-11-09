@@ -54,6 +54,7 @@ const routes = [
   // Etkileşim: seriler, günün sorusu, kulüpler, günlük seçki, karaoke, burç kartı
   [/^\/seriler$/, 'streaks', { tabs: false }],
   [/^\/(yakin|planli|arsiv)$/, 'insta', { tabs: false }],
+  [/^\/ikinci-sans$/, 'sans', { tab: 'swipe' }],
   [/^\/soru$/, 'dq', { tab: 'home' }],
   [/^\/kulupler$/, 'clubs', { tab: 'home' }],
   [/^\/kulup\/([a-z0-9]+)$/, 'clubs', { tab: 'home' }],
