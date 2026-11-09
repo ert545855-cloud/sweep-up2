@@ -225,6 +225,20 @@ const D = {
   'Müzik görünümü': 'Music style', 'Kapaklı kart': 'Card with cover', 'Küçük etiket': 'Small label', 'Sadece üstte göster': 'Show only at the top', 'Müziği kaldır': 'Remove music', 'Sesi aç/kapat': 'Sound on/off',
   'Etkinlik teması · sınırlı süre': 'Event theme · limited time', 'Günlük burç ve tarot paylaşımı': 'Daily horoscope & tarot post',
   'bonus! Yenilenmesine': 'bonus! Resets in', 'Galeriden seç · 24 saat sonra kaybolur': 'Pick from your gallery · disappears after 24 hours',
+  // Falcı Teyze: geçmiş, rüya tabiri, haftalık burç, hikaye kartı
+  'Fal geçmişim': 'My readings', 'Fal isteklerin': 'Your requests', 'Rüya tabiri': 'Dream reading', 'Rüyanı anlat, Falcı Teyze tabir etsin.': 'Tell your dream, Auntie Fortune will read it.',
+  'Rüyanda ne gördün?': 'What did you see in your dream?', 'Ne kadar ayrıntı yazarsan Falcı Teyze o kadar güzel yorumlar.': 'The more detail you give, the better Auntie Fortune’s reading.',
+  'Rüyan': 'Your dream', 'Rüyayla ilgili merak ettiğin bir şey var mı? (isteğe bağlı)': 'Anything you wonder about the dream? (optional)',
+  'Cevaplandı': 'Answered', 'Devamını oku': 'Read more', 'Daha az göster': 'Show less', 'Sohbette aç': 'Open in chat', 'Hikayende paylaş': 'Share to your story',
+  'Falını hikayende paylaş': 'Share your reading to your story', 'Falın hikayende paylaşıldı 🔮': 'Your reading is on your story 🔮', 'Paylaşılıyor…': 'Sharing…',
+  'Falcı Teyze’nin yorumundan bir bölüm hikayende paylaşılır. Görenler “Sen de fal baktır”a dokunup kendi falına baktırabilir.': 'A part of Auntie Fortune’s reading is shared to your story. Viewers can tap “Get your own reading” to ask for theirs.',
+  'Sen de fal baktır': 'Get your own reading', 'SwipeUp · Kalbinin soramadıklarını, Falcı Teyze’ye sor': 'SwipeUp · Ask Auntie Fortune what your heart can’t',
+  'Henüz fal baktırmadın': 'No readings yet', 'Falcı Teyze seni bekliyor kuzum.': 'Auntie Fortune is waiting for you, dear.', 'Fal baktır': 'Get a reading',
+  'Falcı Teyze falına bakıyor, cevabı birazdan gelecek ☕️': 'Auntie Fortune is reading it, the answer is on its way ☕️', 'Falının cevabı henüz gelmedi kuzum.': 'Your reading hasn’t arrived yet, dear.',
+  'Burç yorumun': 'Your horoscope', 'Bugün': 'Today', 'Bu hafta': 'This week', 'Falcı Teyze’ye kişisel yorum sor': 'Ask Auntie Fortune for a personal reading',
+  'Başka bir burca bak': 'Look at another sign', 'Eğlence amaçlıdır.': 'For entertainment only.', '— Falcı Teyze': '— Auntie Fortune',
+  'Falcı Teyze’den sabah burç mesajı': 'Morning horoscope from Auntie Fortune', 'Her sabah burcuna özel kısa bir yorum': 'A short reading for your sign every morning',
+  'Sabah burç mesajı açık ☀️': 'Morning horoscope is on ☀️', 'Sabah burç mesajı kapatıldı.': 'Morning horoscope turned off.',
 };
 
 // Sayı / isim içeren metinler
@@ -253,6 +267,8 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^(\d+) (Ocak|Şubat|Mart|Nisan|Mayıs|Haziran|Temmuz|Ağustos|Eylül|Ekim|Kasım|Aralık)(?: \S+)? haftası$/, (_, d, m) => `Week of ${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'].indexOf(m)]} ${d}`],
+  [/^(.+) · Haftalık yorum$/, (_, z) => `${z} · Weekly reading`],
   [/^(\d+) jeton$/, (_, n) => `${n} coins`],
   [/^(\d+) görüntüleme$/, (_, n) => `${n} views`],
   [/^(\d+) gün SwipeUp\+$/, (_, n) => `${n} days SwipeUp+`],

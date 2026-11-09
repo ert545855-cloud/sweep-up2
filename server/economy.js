@@ -23,7 +23,7 @@ const DEFAULTS = {
     { id: 'roket', em: '🚀', name: 'Roket', coins: 300 },
     { id: 'elmas', em: '💎', name: 'Elmas', coins: 500 },
   ],
-  falPrices: { kahve: 40, tarot: 30, burc: 20, uyum: 30 },
+  falPrices: { kahve: 40, tarot: 30, burc: 20, uyum: 30, ruya: 25 },
   boostCoins: 80,
   boostMinutes: 30,
   freeLikes: 50,

@@ -298,7 +298,7 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
   if (!fal) { featureCtx.quest?.(fromId, 'mesaj'); featureCtx.onMessage?.(msg, chat, sender); }
   if (sender?.role === 'falci' && !fal) {
     store.filter('messages', (m) => m.chatId === chat.id && m.fal && m.fal.status === 'pending').forEach((m) => {
-      m.fal.status = 'answered'; m.fal.answeredAt = now(); store.update('messages', m.id, {});
+      m.fal.status = 'answered'; m.fal.answeredAt = now(); if (!m.fal.answerId && text) m.fal.answerId = msg.id; store.update('messages', m.id, {});
       chat.members.forEach((x) => emitTo(x, 'message:update', msgOut(m)));
     });
   }
@@ -526,7 +526,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (b.privacy && typeof b.privacy === 'object') {
     const cur = priv(req.user);
     const np = { ...cur };
-    ['private', 'hideLastSeen', 'hideRead', 'hideFromDeck', 'hideVisits', 'hideAge', 'hideCheckin'].forEach((k) => { if (b.privacy[k] !== undefined) np[k] = !!b.privacy[k]; });
+    ['private', 'hideLastSeen', 'hideRead', 'hideFromDeck', 'hideVisits', 'hideAge', 'hideCheckin', 'noBurcPush'].forEach((k) => { if (b.privacy[k] !== undefined) np[k] = !!b.privacy[k]; });
     patch.privacy = np;
     // Gizli hesap kapatılınca bekleyen istekleri kabul et
     if (cur.private && !np.private) store.filter('follows', (f) => f.to === req.user.id && f.status === 'pending').forEach((f) => store.update('follows', f.id, { status: null }));
@@ -934,7 +934,7 @@ app.get('/api/stories', auth, (req, res) => {
     .forEach((s) => {
       if (!byUser.has(s.userId)) byUser.set(s.userId, []);
       byUser.get(s.userId).push({
-        id: s.id, media: s.media, mediaType: s.mediaType, bg: s.bg || null, filter: s.filter || null, at: s.at, reshareOf: s.reshareOf ? brief(store.get('users', s.reshareOf)) : null, seen: s.viewers.includes(me), myReaction: (s.reactions || {})[me]?.emoji || null, viewerCount: s.userId === me ? s.viewers.length : undefined,
+        id: s.id, media: s.media, mediaType: s.mediaType, bg: s.bg || null, filter: s.filter || null, at: s.at, card: s.card || null, audience: s.audience || 'all', reshareOf: s.reshareOf ? brief(store.get('users', s.reshareOf)) : null, seen: s.viewers.includes(me), myReaction: (s.reactions || {})[me]?.emoji || null, viewerCount: s.userId === me ? s.viewers.length : undefined,
         stickers: stickersOut(s, me),
       });
     });
@@ -946,16 +946,22 @@ app.post('/api/stories', auth, (req, res) => {
   const { media, mediaType } = req.body || {};
   const STORY_BG = ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8'];
   const bg = STORY_BG.includes(req.body?.bg) ? req.body.bg : null;
-  if (!media && !bg) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç ya da yazı yaz.' });
+  // Fal kartı: Falcı Teyze'nin cevabı hikaye kartı olarak paylaşılır (metin sunucuda falın kendisinden alınır)
+  let card = null;
+  if (req.body?.card?.kind === 'fal') {
+    card = falCard(req.user, req.body.card.messageId);
+    if (!card) return res.status(400).json({ error: 'Bu fal hikayede paylaşılamıyor.' });
+  }
+  if (!media && !bg && !card) return res.status(400).json({ error: 'Önce bir fotoğraf veya video seç ya da yazı yaz.' });
   if (media && !isMedia(media)) return res.status(400).json({ error: 'Dosya bulunamadı.' });
   const stickers = (Array.isArray(req.body.stickers) ? req.body.stickers : []).slice(0, 12).map(cleanSticker).filter(Boolean);
-  if (!media && !stickers.some((x) => ['text', 'emoji', 'gif', 'poll', 'question', 'mention'].includes(x.type))) return res.status(400).json({ error: 'Yazı hikayesine bir şey yaz.' });
+  if (!media && !card && !stickers.some((x) => ['text', 'emoji', 'gif', 'poll', 'question', 'mention'].includes(x.type))) return res.status(400).json({ error: 'Yazı hikayesine bir şey yaz.' });
   const filter = FILTERS.includes(req.body.filter) ? req.body.filter : null;
   // Türü yüklenen dosyanın kaydından al (telefon yanlış/boş tür gönderse bile doğru gösterilsin)
   const meta = store.get('media_meta', String(media).replace(/^\/media\//, ''));
-  const kind = !media ? 'text' : meta?.mime ? (meta.mime.startsWith('video/') ? 'video' : 'image') : (mediaType === 'video' ? 'video' : 'image');
+  const kind = card ? 'card' : !media ? 'text' : meta?.mime ? (meta.mime.startsWith('video/') ? 'video' : 'image') : (mediaType === 'video' ? 'video' : 'image');
   const reshareOf = req.body?.reshareOf ? store.get('users', String(req.body.reshareOf)) : null;
-  const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: media ? String(media) : null, mediaType: kind, bg, filter, at: now(), viewers: [], stickers, votes: {}, answers: [], reshareOf: reshareOf ? reshareOf.id : null });
+  const s = store.put('stories', { id: nanoid(12), userId: req.user.id, media: media ? String(media) : null, mediaType: kind, bg, filter, at: now(), viewers: [], stickers, votes: {}, answers: [], reshareOf: reshareOf ? reshareOf.id : null, card, audience: req.body?.audience === 'close' ? 'close' : 'all' });
   io.emit('stories:update', { userId: req.user.id });
   // Hikayede etiketlenen kişilere bildirim
   stickers.filter((x) => x.type === 'mention' && x.userId !== req.user.id).forEach((x) => {
@@ -1400,7 +1406,7 @@ app.delete('/api/groups/:id/members/:uid', auth, (req, res) => {
 });
 
 // ---------- Fal (Falcı Teyze'ye istek) ----------
-const FAL_TYPES = { kahve: 'kahve falı', tarot: 'tarot falı', burc: 'burç yorumu', uyum: 'aşk uyumu' };
+const FAL_TYPES = { kahve: 'kahve falı', tarot: 'tarot falı', burc: 'burç yorumu', uyum: 'aşk uyumu', ruya: 'rüya tabiri' };
 const falci = () => store.find('users', (u) => u.role === 'falci');
 const official = () => store.find('users', (u) => u.role === 'official');
 const isMedia = (u) => typeof u === 'string' && /^\/media\/[\w-]+$/.test(u);
@@ -1426,6 +1432,8 @@ app.post('/api/fal', auth, (req, res) => {
   const zodiacs = ['koc', 'boga', 'ikizler', 'yengec', 'aslan', 'basak', 'terazi', 'akrep', 'yay', 'oglak', 'kova', 'balik'];
   const cards = (Array.isArray(b.cards) ? b.cards : []).slice(0, 3).map((c) => ({ name: String(c.name || '').slice(0, 30), em: String(c.em || '').slice(0, 4), rev: !!c.rev, pos: String(c.pos || '').slice(0, 12) }));
   if (b.type === 'tarot' && cards.length !== 3) return res.status(400).json({ error: 'Üç kart seç.' });
+  const dream = b.type === 'ruya' ? String(b.dream || '').trim().slice(0, 1500) : null;
+  if (b.type === 'ruya' && dream.length < 20) return res.status(400).json({ error: 'Rüyanı biraz daha ayrıntılı anlat kuzum (en az 20 harf).' });
   let partner = null;
   if (b.type === 'uyum') {
     const p = store.get('users', b.partnerId);
@@ -1434,11 +1442,11 @@ app.post('/api/fal', auth, (req, res) => {
   }
   const zodiac = zodiacs.includes(b.zodiac) ? b.zodiac : (req.user.zodiac || null);
   const payload = {
-    id: nanoid(8), type: b.type, note: String(b.note || '').trim().slice(0, 1000), images, cards, partner, zodiac,
+    id: nanoid(8), type: b.type, note: String(b.note || '').trim().slice(0, 1000), images, cards, partner, zodiac, dream,
     name: req.user.name, status: 'pending', at: now(), price, dueAt: featureCtx.falDueAt?.(b.type) || null,
   };
   const chat = chatBetween(req.user.id, f.id);
-  const msg = sendMessage(chat, req.user.id, { text: payload.note, fal: payload });
+  const msg = sendMessage(chat, req.user.id, { text: payload.note || (dream ? dream.slice(0, 400) : ''), fal: payload });
   if (!msg) return res.status(400).json({ error: 'Fal isteği gönderilemedi.' });
   featureCtx.useFalSub?.(req.user, fp.use);
   featureCtx.onFalRequest?.(msg);
@@ -1447,6 +1455,30 @@ app.post('/api/fal', auth, (req, res) => {
     eco.earn(f.id, Math.round(price * eco.get().falciShare), 'fal', { ref: msg.id, fromId: req.user.id });
   }
   res.json({ ok: true, chatId: chat.id, messageId: msg.id, coins: store.get('users', req.user.id).coins || 0 });
+});
+
+// Falın cevabı: Falcı Teyze'nin istekten sonraki ilk yazılı mesajı
+function falAnswer(m) {
+  if (!m?.fal) return null;
+  const a = m.fal.answerId ? store.get('messages', m.fal.answerId)
+    : store.filter('messages', (x) => x.chatId === m.chatId && x.at > m.at && x.from !== m.from && x.text && !x.fal && !x.system).sort((a, b) => a.at - b.at)[0];
+  return a?.text ? a : null;
+}
+const excerpt = (t, n) => { t = String(t || '').trim(); if (t.length <= n) return t; const cut = t.slice(0, n); const i = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? ')); return (i > n * 0.55 ? cut.slice(0, i + 1) : `${cut.replace(/\s+\S*$/, '')}…`).trim(); };
+function falCard(user, messageId) {
+  const m = store.get('messages', String(messageId || ''));
+  if (!m?.fal || m.from !== user.id) return null;
+  const a = falAnswer(m); if (!a) return null;
+  return { kind: 'fal', type: m.fal.type, text: excerpt(a.text, 340), zodiac: m.fal.zodiac || null, cards: (m.fal.cards || []).map((c) => ({ name: c.name, rev: !!c.rev })) };
+}
+// Fal geçmişi: tüm fallar ve cevapları
+app.get('/api/fal/history', auth, (req, res) => {
+  const f = falci(); if (!f) return res.json([]);
+  const chatId = [req.user.id, f.id].sort().join('_');
+  res.json(store.filter('messages', (m) => m.chatId === chatId && m.fal && m.from === req.user.id).sort((a, b) => b.at - a.at).slice(0, 100).map((m) => {
+    const a = m.fal.status === 'answered' ? falAnswer(m) : null;
+    return { messageId: m.id, chatId, type: m.fal.type, at: m.at, status: m.fal.status, note: m.fal.note || '', zodiac: m.fal.zodiac || null, cards: m.fal.cards || [], images: m.fal.images || [], dream: m.fal.dream || null, answer: a ? { text: a.text, at: a.at } : null };
+  }));
 });
 
 app.get('/api/fal/mine', auth, (req, res) => {

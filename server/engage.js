@@ -618,6 +618,7 @@ module.exports = function engage(app, ctx) {
     burcInflight.set(id, p);
     return p;
   }
+  ctx.burcToday = burcToday; ctx.zodiacOf = zodiacOf; ctx.ZODIAC_NAMES = ZODIAC;
   app.get('/api/burc/today', auth, ctx.wrap(async (req, res) => {
     const z = ZODIAC[req.query.z] ? req.query.z : zodiacOf(req.user);
     if (!z) return res.json({ zodiac: null });

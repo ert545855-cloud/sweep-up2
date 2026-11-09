@@ -58,7 +58,7 @@ const routes = [
   [/^\/kulup\/([a-z0-9]+)$/, 'clubs', { tab: 'home' }],
   [/^\/secki$/, 'picks', { tab: 'swipe' }],
   [/^\/karaoke$/, 'karaoke', { tabs: false }],
-  [/^\/burc$/, 'burc', { tab: 'home' }],
+  [/^\/burc(?:\?.*)?$/, 'burc', { tab: 'home' }],
   [/^\/market\/(i|o|new|edit)(?:\/([\w-]+))?$/, 'market', { tabs: false }],
   [/^\/market(?:\/(\w+))?(?:\/([\w-]+))?$/, 'market', { tab: 'home' }],
 ];

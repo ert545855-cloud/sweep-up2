@@ -313,7 +313,7 @@ export default function create(view, kind) {
     if (s.type === 'gif') return `<img class="stk gif" data-i="${i}" style="${style}" src="${esc(s.src)}" alt="">`;
     if (s.type === 'poll') return `<div class="stk poll" data-i="${i}" style="${style}"><b>${esc(s.q || 'Anket')}</b>${s.options.map((o) => `<span>${esc(o)}</span>`).join('')}</div>`;
     if (s.type === 'question') return `<div class="stk q" data-i="${i}" style="${style}"><b>${esc(s.q)}</b><span>Bir şey yaz…</span></div>`;
-    if (s.type === 'music') return `<div class="stk mu ${s.style === 'mini' ? 'mini' : s.style === 'hide' ? 'mini hid' : ''}" data-i="${i}" style="${style}">${musicChip(s)}</div>`;
+    if (s.type === 'music') return ''; // müzik sadece üstteki satırda görünür
     if (s.type === 'mention') return `<div class="stk men" data-i="${i}" style="${style}">@${esc(s.username)}</div>`;
     return '';
   }
@@ -322,7 +322,7 @@ export default function create(view, kind) {
     const fst = `style="filter:${filterCss(storyFilter)}"`;
     picker.innerHTML = `${!file ? `<div class="tstory tbg-${storyBg}"></div>` : vid ? `<video src="${fileUrl}" autoplay muted loop playsinline class="fit" ${fst}></video>` : `<img src="${fileUrl}" class="blurbg" alt=""><img src="${fileUrl}" alt="Önizleme" class="fit" ${fst}>`}
       <div class="stk-layer">${stickers.map(stickerHtml).join('')}</div>
-      ${stickers.some((x) => x.type === 'music') ? `<div class="mu-top">${musicLine(stickers.find((x) => x.type === 'music'))}<button type="button" class="mu-x" aria-label="Müziği kaldır">${icon('close')}</button></div>` : ''}
+      ${stickers.some((x) => x.type === 'music') ? `<div class="mu-top"><img class="av av-32" src="${esc(state.me.avatar)}" alt=""><span class="mu-who"><b>${esc(state.me.username)}</b>${musicLine(stickers.find((x) => x.type === 'music'))}</span><button type="button" class="mu-x" aria-label="Müziği kaldır">${icon('close')}</button></div>` : ''}
       <button class="swap" aria-label="Başka dosya seç">${icon('image')}</button>`;
     picker.querySelector('.mu-x')?.addEventListener('click', (e) => { e.stopPropagation(); stickers = stickers.filter((x) => x.type !== 'music'); stopAudio(); paint(); });
     picker.querySelector('.swap').onclick = choose;
@@ -358,7 +358,7 @@ export default function create(view, kind) {
     if (k === 'music') {
       pickMusic().then((m) => {
         if (!m) return;
-        stickers.push({ type: 'music', ...m, x: 50, y: 30, style: 'card' });
+        stickers.push({ type: 'music', ...m, x: 50, y: 30, style: 'hide' });
         stopAudio(); paint();
       });
       return;

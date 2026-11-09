@@ -28,7 +28,7 @@ const LINES = [
   'paylaştıkça çoğalan bir mutluluk seni bekliyor', 'eski bir dostu aramak iyi gelecek', 'acele etme, güzel şeyler sabırla gelir', 'bugün içindeki ışık herkesi kendine çekecek',
   'küçük bir değişiklik büyük bir ferahlık getirebilir', 'sevdiklerine sarılmayı ihmal etme', 'yeni bir fikir kafanda filizleniyor, not al',
 ];
-const DEFAULT = { enabled: true, hour: 10, minute: 0, kinds: ['tarot', 'burc', 'ask'] };
+const DEFAULT = { enabled: true, hour: 10, minute: 0, kinds: ['tarot', 'burc', 'ask'], mEnabled: true, mHour: 9, mMinute: 0 };
 const KIND_LABEL = { tarot: 'Günün tarot kartı', burc: 'Günün burç enerjisi', ask: 'Aşkın yıldızı' };
 
 const trDay = (t = Date.now()) => new Date(t + TRO).toISOString().slice(0, 10);
@@ -131,6 +131,89 @@ En sona şu hashtag'leri ekle: #FalcıTeyze #GününBurcu #burç #${sign}`;
   setTimeout(tick, 30000).unref?.();
   setInterval(tick, 5 * 60000).unref?.();
 
+  // ================= Burcuna özel sabah bildirimi + haftalık burç yorumu =================
+  const ai = require('./ai')(ctx);
+  const weekOf = (t = Date.now()) => { const d = new Date(t + TRO); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); };
+  const firstSentence = (t) => { const m = String(t || '').match(/^[^.!?]+[.!?]/); return (m ? m[0] : String(t || '').slice(0, 110)).trim(); };
+  const GREET = ['Günaydın kuzum ☀️', 'Günaydın güzelim 🌼', 'Hayırlı sabahlar canım ☕️', 'Günaydın bir tanem 💜', 'Sabahın güzel olsun gülüm 🌸'];
+  let mBusy = false;
+  async function morning(date, { force = false } = {}) {
+    if (mBusy) return null; mBusy = true;
+    try {
+      const sent = store.get('morning_push', date); if (sent && !force) return sent;
+      if (!ctx.burcToday || !ctx.zodiacOf) return null;
+      const users = store.filter('users', (u) => !u.deleted && !u.ban && !['falci', 'official'].includes(u.role) && !(u.privacy || {}).noBurcPush);
+      const bySign = {};
+      users.forEach((u) => { const z = ctx.zodiacOf(u); if (z) (bySign[z] ||= []).push(u); });
+      let n = 0; const monday = new Date(Date.now() + TRO).getUTCDay() === 1;
+      for (const [z, list] of Object.entries(bySign)) {
+        const d = await ctx.burcToday(z).catch(() => null); if (!d) continue;
+        const name = ctx.ZODIAC_NAMES?.[z]?.[0] || '';
+        list.forEach((u) => {
+          const g = GREET[hash(`${date}:${u.id}`) % GREET.length];
+          const text = monday ? `${g} Haftalık ${name} yorumun hazır! Bugün için: ${firstSentence(d.text)}` : `${g} Bugün ${name}’lar için: ${firstSentence(d.text)}`;
+          ctx.notify(u.id, { type: 'burc', title: 'Falcı Teyze', fromId: falci()?.id, text: text.slice(0, 220), url: monday ? '/#/burc?h=1' : '/#/burc', tag: 'burc-' + date });
+          n++;
+        });
+      }
+      const rec = store.put('morning_push', { id: date, at: Date.now(), count: n });
+      console.log(`[günlük] sabah burç bildirimi: ${n} kişi`);
+      return rec;
+    } finally { mBusy = false; }
+  }
+  const mTick = () => {
+    const c = cfg(); if (!c.mEnabled) return;
+    const t = new Date(Date.now() + TRO);
+    if (t.getUTCHours() * 60 + t.getUTCMinutes() < c.mHour * 60 + c.mMinute) return;
+    if (t.getUTCHours() >= 13) return; // öğleden sonra "günaydın" gönderme
+    const d = trDay(); if (store.get('morning_push', d)) return;
+    morning(d).catch((e) => console.error('[günlük] sabah', e.message));
+  };
+  setTimeout(mTick, 45000).unref?.();
+  setInterval(mTick, 5 * 60000).unref?.();
+
+  // Haftalık burç yorumu (her burç için haftada bir kez yazılır, herkes okur)
+  const weekInflight = new Map();
+  async function weekly(z) {
+    const w = weekOf(); const id = `${w}_${z}`;
+    const doc = store.get('burc_weekly', id); if (doc) return doc;
+    if (weekInflight.has(id)) return weekInflight.get(id);
+    const name = ctx.ZODIAC_NAMES?.[z]?.[0] || z;
+    const p = (async () => {
+      let text = null; let src = 'tpl';
+      if (ai.enabled()) {
+        try {
+          text = await ai.text(`${name} burcu için ${trDate(w)} haftasının (pazartesiden pazara) burç yorumunu yaz. Doğrudan ${name} burcundaki kişiye, tek kişiye konuşur gibi yaz ("kuzum", "güzelim" gibi). Sırasıyla haftanın genel enerjisi, aşk ve ilişkiler, iş ve okul, kendine iyi bakma önerisi ve haftanın şanslı günü hakkında 4 kısa paragraf yaz. 150–220 kelime. Başlık, madde işareti ve markdown kullanma. Sona sıcak bir dilek ekle.`, {
+            system: 'Sen SwipeUp’ın sıcacık kalpli, sevecen, anaç ve biraz muzip Falcı Teyze’sisin. Türkçe yazarsın. Burç yorumunu eğlence ve sembolik yorum olarak sunar, umut verir, korkutmazsın; sağlık, hukuk ve para yatırımı tavsiyesi vermezsin.', timeout: 25000, temperature: 1, maxTokens: 1200,
+          });
+          if (text) { text = text.replace(/\*\*/g, '').trim().slice(0, 2400); src = 'ai'; }
+        } catch { text = null; }
+      }
+      if (!text) {
+        const order = LINES.map((l, i) => [hash(`${w}:${z}:${i}`), l.replace(/\bbugün\b/g, 'bu hafta')]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+        const days = ['pazartesi', 'salı', 'çarşamba', 'perşembe', 'cuma', 'cumartesi', 'pazar'];
+        text = `Bu hafta yıldızlar senin için tatlı bir yol açıyor kuzum. ${order[0][0].toUpperCase()}${order[0].slice(1)}.\n\nAşkta: ${order[1]}. Kalbini dinlemekten korkma.\n\nİşte ve okulda: ${order[2]}. Acele etme, adım adım ilerle.\n\nKendine iyi bak güzelim: ${order[3]}. Haftanın şanslı günü ${days[hash(`${w}${z}`) % 7]}.\n\nGönlüne göre bir hafta olsun 💜`;
+      }
+      const out = store.put('burc_weekly', { id, week: w, z, text, src, at: Date.now() });
+      weekInflight.delete(id);
+      return out;
+    })();
+    weekInflight.set(id, p);
+    return p;
+  }
+  app.get('/api/burc/week', ctx.auth, ctx.wrap(async (req, res) => {
+    const z = ctx.ZODIAC_NAMES?.[req.query.z] ? req.query.z : ctx.zodiacOf?.(req.user);
+    if (!z) return res.json({ zodiac: null });
+    const d = await weekly(z);
+    res.json({ zodiac: z, name: ctx.ZODIAC_NAMES[z][0], week: d.week, text: d.text, from: trDate(d.week) });
+  }));
+  // Pazartesi sabahı 12 burcun haftalık yorumunu önceden hazırla (ilk okuyan beklemesin)
+  setInterval(async () => {
+    const t = new Date(Date.now() + TRO); if (t.getUTCDay() !== 1 || t.getUTCHours() < 7) return;
+    for (const z of Object.keys(ctx.ZODIAC_NAMES || {})) { if (!store.get('burc_weekly', `${weekOf()}_${z}`)) { await weekly(z).catch(() => {}); break; } }
+  }, 4 * 60000).unref?.();
+  setInterval(() => { const lim = weekOf(Date.now() - 35 * DAY); store.filter('burc_weekly', (x) => x.week < lim).forEach((x) => store.del('burc_weekly', x.id)); }, 24 * 3600000).unref?.();
+
   // ---- Yönetim paneli ----
   if (A) {
     const view = () => {
@@ -140,15 +223,24 @@ En sona şu hashtag'leri ekle: #FalcıTeyze #GününBurcu #burç #${sign}`;
         return { ...x, label: KIND_LABEL[x.kind], media: p?.media || null, caption: p?.caption || '', likes: p?.likes?.length || 0, comments: p?.comments?.length || 0, deleted: !p };
       });
       const next = plan(store.get('daily_posts', d)?.postId ? trDay(Date.now() + DAY) : d);
-      return { settings: c, today: d, list, next: { ...next, label: KIND_LABEL[next.kind], title: next.kind === 'tarot' ? TAROT[next.card][1] : next.sign[1] }, kinds: Object.entries(KIND_LABEL).map(([id, label]) => ({ id, label })), hasAi: !!process.env.GEMINI_API_KEY };
+      const mp = store.all('morning_push').sort((a, b) => (a.id < b.id ? 1 : -1))[0] || null;
+      return { settings: c, today: d, list, morning: mp, next: { ...next, label: KIND_LABEL[next.kind], title: next.kind === 'tarot' ? TAROT[next.card][1] : next.sign[1] }, kinds: Object.entries(KIND_LABEL).map(([id, label]) => ({ id, label })), hasAi: !!process.env.GEMINI_API_KEY };
     };
     app.get('/api/admin/falai/daily', A.adminAuth, (req, res) => res.json(view()));
     app.put('/api/admin/falai/daily', A.adminAuth, (req, res) => {
       const b = req.body || {}; const c = cfg();
       const kinds = Array.isArray(b.kinds) ? b.kinds.filter((k) => KIND_LABEL[k]) : c.kinds;
-      store.put('settings', { id: 'daily', enabled: b.enabled ?? c.enabled, hour: Math.max(0, Math.min(23, num(b.hour, c.hour))), minute: Math.max(0, Math.min(59, num(b.minute, c.minute))), kinds: kinds.length ? kinds : DEFAULT.kinds });
+      store.put('settings', { id: 'daily', mEnabled: b.mEnabled ?? c.mEnabled, mHour: Math.max(5, Math.min(12, num(b.mHour, c.mHour))), mMinute: Math.max(0, Math.min(59, num(b.mMinute, c.mMinute))), enabled: b.enabled ?? c.enabled, hour: Math.max(0, Math.min(23, num(b.hour, c.hour))), minute: Math.max(0, Math.min(59, num(b.minute, c.minute))), kinds: kinds.length ? kinds : DEFAULT.kinds });
       A.audit?.(req.admin, 'günlük paylaşım ayarı', null, '');
       res.json(view());
+    });
+    // Sabah burç bildirimini şimdi gönder (bugün gönderilmediyse)
+    app.post('/api/admin/falai/daily/morning', A.adminAuth, async (req, res) => {
+      try {
+        if (store.get('morning_push', trDay())) return res.status(400).json({ error: 'Bugünün sabah bildirimi zaten gönderildi.' });
+        await morning(trDay()); A.audit?.(req.admin, 'sabah burç bildirimi gönderdi', null, '');
+        res.json(view());
+      } catch (e) { res.status(400).json({ error: e.message }); }
     });
     // Şimdi paylaş (bugünkü yoksa) ya da bugünkünü yeniden oluştur
     app.post('/api/admin/falai/daily/now', A.adminAuth, async (req, res) => {

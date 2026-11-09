@@ -2,7 +2,7 @@
 // Mod: off (kapalı) · draft (Falcı Teyze'ye taslak hazırlar) · auto (cevabı kendiliğinden gönderir)
 const API = process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com/v1beta';
 const ZODIAC = { koc: 'Koç', boga: 'Boğa', ikizler: 'İkizler', yengec: 'Yengeç', aslan: 'Aslan', basak: 'Başak', terazi: 'Terazi', akrep: 'Akrep', yay: 'Yay', oglak: 'Oğlak', kova: 'Kova', balik: 'Balık' };
-const TYPE = { kahve: 'Kahve falı', tarot: 'Tarot falı', burc: 'Burç yorumu', uyum: 'Aşk uyumu' };
+const TYPE = { kahve: 'Kahve falı', tarot: 'Tarot falı', burc: 'Burç yorumu', uyum: 'Aşk uyumu', ruya: 'Rüya tabiri' };
 
 const SYSTEM = `Sen SwipeUp uygulamasının resmi fal ve spiritüel eğlence hesabı "Falcı Teyze"sin. Mahallenin herkesin sevdiği, kapısı herkese açık, sıcacık kalpli teyzesisin: sevecen, anaç, gizemli, biraz muzip ve sezgileri güçlü. Karşındaki kişi senin için yabancı değil, sanki yıllardır tanıdığın, sofrana oturttuğun, çayını koyduğun biri.
 Sıcaklık (en önemli kural):
@@ -27,10 +27,11 @@ Fal türleri:
 - Tarotta her kartı pozisyonuyla (geçmiş, şimdi, gelecek) ve ters/düz durumuyla yorumlarsın.
 - Aşk uyumunda iki burcun elementlerini, güçlü yanlarını ve dikkat etmeleri gereken noktaları sevimli ve muzip bir dille anlatırsın.
 - Burç yorumunda günün/ayın enerjisini, gezegen hareketlerini ve aşk temasını sembolik bir dille işlersin.
+- Rüya tabirinde rüyadaki sembolleri (su, yılan, uçmak, diş, ev, bebek, düğün, para, kaybolmak vb.) halk tabirleri ve sembolik anlamlarıyla, korkutmadan, umut veren bir dille yorumlarsın; kötü görünen rüyaları bile tatlı ve iyiye yorumlarsın. 150–240 kelime, 3–4 kısa paragraf.
 - Kişinin notunda bir sorusu varsa mutlaka ona, onu önemsediğini hissettirerek değinirsin.
 - Sona içten bir dilek, sarılır gibi bir veda ya da tatlı bir tavsiye eklersin ("Gönlüne göre olsun kuzum", "Hadi bakalım, yolun açık olsun gülüm" gibi, her seferinde farklı); ara sıra (her seferinde değil) "Kalbinin soramadıklarını, Falcı Teyze’ye sor! 🔮💜" sloganıyla bitirirsin.`;
 // Cevap bekleme süresi (dakika): Falcı Teyze fala hemen cevap vermez
-const DELAY_DEF = { kahve: [17, 20], tarot: [16, 19], uyum: [15, 18], burc: [15, 17] };
+const DELAY_DEF = { kahve: [17, 20], tarot: [16, 19], uyum: [15, 18], burc: [15, 17], ruya: [15, 18] };
 
 // Sadece ilk ad (sıcak hitap için); emoji/rakam içeren takma adlar kullanılmaz
 const firstName = (n) => { const w = String(n || '').trim().split(/\s+/)[0] || ''; return /^[\p{L}'’-]{2,20}$/u.test(w) ? w : ''; };
@@ -118,6 +119,7 @@ module.exports = function falai(app, ctx) {
     if (f.type === 'tarot' && f.cards?.length) lines.push(`Çekilen kartlar: ${f.cards.map((c) => `${c.pos}: ${c.name}${c.rev ? ' (ters)' : ' (düz)'}`).join(', ')}`);
     if (f.type === 'uyum') lines.push(`Uyumuna bakılan kişinin burcu: ${f.partner?.zodiac ? ZODIAC[f.partner.zodiac] : 'bilinmiyor'}`);
     if (f.type === 'kahve') lines.push(`Fincan fotoğrafı sayısı: ${f.images?.length || 0}`);
+    if (f.type === 'ruya' && f.dream) lines.push(`Gördüğü rüya: "${f.dream}"`);
     if (f.name) lines.push(`Kişinin adı: ${f.name}`);
     lines.push(`Kişinin notu: ${f.note ? `"${f.note}"` : '(not yazmamış)'}`);
     lines.push('Şimdi Falcı Teyze olarak yorumunu yaz.');

@@ -67,6 +67,7 @@ const RING = '<circle cx="32" cy="38.5" r="12.5" fill="none" stroke="#fff" strok
 const CHATS = '<path d="M26 17h20a5 5 0 0 1 5 5v11a5 5 0 0 1-5 5h-1v5.5L39 38H26a5 5 0 0 1-5-5V22a5 5 0 0 1 5-5z" fill="#fff" fill-opacity=".55"/><path d="M18 25h18a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H25l-6 5.2V45h-1a5 5 0 0 1-5-5V30a5 5 0 0 1 5-5z" fill="#fff"/><g fill="url(#g)"><circle cx="21" cy="35" r="2.2"/><circle cx="27" cy="35" r="2.2"/><circle cx="33" cy="35" r="2.2"/></g>';
 const PHONES = '<path d="M18 40v-7a14 14 0 0 1 28 0v7" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><rect x="14.5" y="34" width="10.5" height="15.5" rx="4.6" fill="#fff"/><rect x="39" y="34" width="10.5" height="15.5" rx="4.6" fill="#fff"/>';
 const BOLT = '<path d="M35.6 13.5 19.5 35.2h10.4L27.6 50.5 44.5 28H33.8z" fill="#fff" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/>';
+const DREAM = '<path d="M37 15.5a17 17 0 1 0 12 28.6A14 14 0 0 1 37 15.5z" fill="#fff"/><path d="M44 18l1.3 3.2 3.2 1.3-3.2 1.3L44 27l-1.3-3.2-3.2-1.3 3.2-1.3z" fill="#fff" fill-opacity=".85"/><circle cx="49.5" cy="32" r="1.8" fill="#fff" fill-opacity=".7"/>';
 const PIN = '<path d="M32 13.5c-7.5 0-13.5 5.8-13.5 13.1 0 9.6 13.5 23.4 13.5 23.4s13.5-13.8 13.5-23.4c0-7.3-6-13.1-13.5-13.1z" fill="#fff"/><circle cx="32" cy="26.8" r="5.2" fill="url(#g)"/>';
 
 // [ad, glif, palet, şekil]
@@ -80,7 +81,7 @@ const ICONS = [
   ['club-yemek', 'club-yemek', 'sunset'], ['club-teknoloji', 'club-teknoloji', 'teal'],
   ['gift-gul', 'gift-gul', 'rose'], ['gift-kalp', 'uyum', 'grape'], ['gift-kahve', 'gift-kahve', 'coffee'], ['gift-yildiz', 'gift-yildiz', 'gold'],
   ['gift-tac', 'gift-tac', 'amber'], ['gift-yuzuk', RING, 'pink'], ['gift-roket', 'gift-roket', 'sky'], ['gift-elmas', 'gift-elmas', 'ice'],
-  ['fal-kahve', 'gift-kahve', 'coffee'], ['fal-tarot', 'fal-tarot', 'violet'], ['fal-burc', 'burc', 'grape'], ['fal-uyum', 'uyum', 'rose'],
+  ['fal-kahve', 'gift-kahve', 'coffee'], ['fal-tarot', 'fal-tarot', 'violet'], ['fal-burc', 'burc', 'grape'], ['fal-uyum', 'uyum', 'rose'], ['fal-ruya', DREAM, 'indigo'],
   ['pack-ask_ay', 'pack-ask_ay', 'pink'], ['pack-tarot_ay', 'fal-tarot', 'indigo'], ['pack-kahve_3', 'pack-kahve_3', 'coffee'], ['pack-yillik', 'pack-yillik', 'gold'],
   ['z-koc', 'z-koc', 'fire', 'o'], ['z-boga', 'z-boga', 'earth', 'o'], ['z-ikizler', 'z-ikizler', 'air', 'o'], ['z-yengec', 'z-yengec', 'water', 'o'],
   ['z-aslan', 'z-aslan', 'fire', 'o'], ['z-basak', 'z-basak', 'earth', 'o'], ['z-terazi', 'z-terazi', 'air', 'o'], ['z-akrep', 'z-akrep', 'water', 'o'],

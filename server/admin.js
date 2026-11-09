@@ -548,7 +548,7 @@ module.exports = function mountAdmin(app, ctx) {
     if (Array.isArray(b.coinPacks)) patch.coinPacks = b.coinPacks.slice(0, 6).map((p, i) => ({ id: String(p.id || `c${i}`).slice(0, 12), coins: n(p.coins, 1, 100000, 100) | 0, price: n(p.price, 0.01, 100000, 10), tag: String(p.tag || '').slice(0, 20) || undefined }));
     if (Array.isArray(b.plusPlans)) patch.plusPlans = b.plusPlans.slice(0, 4).map((p, i) => ({ id: String(p.id || `p${i}`).slice(0, 12), days: n(p.days, 1, 3650, 30) | 0, price: n(p.price, 0.01, 100000, 10), tag: String(p.tag || '').slice(0, 20) || undefined }));
     if (Array.isArray(b.gifts)) patch.gifts = b.gifts.slice(0, 12).map((g, i) => ({ id: String(g.id || `g${i}`).slice(0, 12), em: String(g.em || '🎁').slice(0, 4), name: String(g.name || 'Hediye').slice(0, 20), coins: n(g.coins, 1, 100000, 10) | 0 }));
-    if (b.falPrices) patch.falPrices = Object.fromEntries(['kahve', 'tarot', 'burc', 'uyum'].map((k) => [k, n(b.falPrices[k], 0, 10000, cur.falPrices[k]) | 0]));
+    if (b.falPrices) patch.falPrices = Object.fromEntries(['kahve', 'tarot', 'burc', 'uyum', 'ruya'].map((k) => [k, n(b.falPrices[k], 0, 10000, cur.falPrices[k]) | 0]));
     ['boostCoins', 'boostMinutes', 'freeLikes', 'freeSupers', 'plusSupers', 'superMsgCoins', 'inviteCoins', 'falSubCoins'].forEach((k) => { if (b[k] !== undefined) patch[k] = n(b[k], 0, 100000, cur[k]) | 0; });
     ['creatorShare', 'falciShare'].forEach((k) => { if (b[k] !== undefined) patch[k] = n(b[k], 0, 1, cur[k]); });
     if (b.coinTL !== undefined) patch.coinTL = n(b.coinTL, 0, 100, cur.coinTL);

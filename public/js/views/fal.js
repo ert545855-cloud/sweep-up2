@@ -44,7 +44,7 @@ async function hub(view, sub) {
     <div class="fal-hero teyze"><span class="fz"></span><div class="grow"><b>Falcı Teyze</b><p>Fincanına, kartlarına ve yıldızlarına bakar. Cevabı Mesajlar’a düşer.</p></div></div>
     <div class="fal-grid">
       ${Object.entries(FAL_TYPES).map(([k, t]) => `<a class="fal-tile" href="#/fal/${k}">${falIcon(k, 48, 'em')}<b>${t.name}</b><span>${{
-    kahve: 'Fincanının fotoğraflarını gönder.', tarot: 'Üç kart çek, Falcı Teyze yorumlasın.', burc: 'Burcunu ve sorunu yaz.', uyum: 'Biriyle aranızdaki uyuma baksın.',
+    kahve: 'Fincanının fotoğraflarını gönder.', tarot: 'Üç kart çek, Falcı Teyze yorumlasın.', burc: 'Burcunu ve sorunu yaz.', uyum: 'Biriyle aranızdaki uyuma baksın.', ruya: 'Rüyanı anlat, Falcı Teyze tabir etsin.',
   }[k]}</span><em class="price" data-k="${k}"></em></a>`).join('')}
     </div>
     <a class="bc-entry" href="#/burc">${egi('burc', 44)}<span class="grow"><b>Günün burç kartı</b><small>Falcı Teyze’nin bugünkü yorumu · hikayende paylaş</small></span><span class="go-chip">Bak</span></a>
@@ -117,8 +117,8 @@ async function hub(view, sub) {
   if (f && mine.length) {
     hero.insertAdjacentHTML('beforeend', `<a class="btn sm" href="#/chat/${esc(mine[0].chatId)}" style="background:rgba(255,255,255,.22);color:inherit">Mesajlar</a>`);
   }
-  view.querySelector('.mine').innerHTML = mine.length ? `<div class="section-t"><span>Fal isteklerin</span></div>${mine.map((m) => `<a class="list-item" href="#/chat/${esc(m.chatId)}">
-      ${falIcon(m.type, 40, 'fal-mini')}<div class="grow"><div class="b">${FAL_TYPES[m.type].name}</div><div class="sub">${ago(m.at, true)}</div></div>${statusChip(m.status)}</a>`).join('')}` : '';
+  view.querySelector('.mine').innerHTML = mine.length ? `<div class="section-t"><span>Fal isteklerin</span><a class="link" href="#/fal/gecmis">Fal geçmişim</a></div>${mine.slice(0, 3).map((m) => `<a class="list-item" href="#/fal/gecmis">
+      ${falIcon(m.type, 40, 'fal-mini')}<div class="grow"><div class="b">${FAL_TYPES[m.type]?.name || 'Fal'}</div><div class="sub">${ago(m.at, true)}</div></div>${statusChip(m.status)}</a>`).join('')}` : '';
   return null;
 }
 
@@ -272,6 +272,43 @@ function burc(view) {
   return null;
 }
 
+// ================= Fal geçmişi =================
+async function history(view) {
+  view.innerHTML = `${head('Fal geçmişim')}<div class="fh-list"><div class="spinner"></div></div>`;
+  const box = view.querySelector('.fh-list');
+  let list = [];
+  try { list = await api('/fal/history'); } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return null; }
+  if (!list.length) { box.innerHTML = `<div class="empty"><div class="big">🔮</div><h2>Henüz fal baktırmadın</h2>Falcı Teyze seni bekliyor kuzum.<p><a class="btn primary" href="#/fal">Fal baktır</a></p></div>`; return null; }
+  const z = (id) => zodiacOf(id);
+  box.innerHTML = list.map((f) => `<article class="fh" data-id="${esc(f.messageId)}">
+      <header>${falIcon(f.type, 40, 'fal-mini')}<div class="grow"><b>${FAL_TYPES[f.type]?.name || 'Fal'}</b><small>${new Date(f.at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}${z(f.zodiac) ? ` · ${z(f.zodiac)[2]} ${z(f.zodiac)[1]}` : ''}</small></div>${statusChip(f.status)}</header>
+      ${f.cards?.length ? `<div class="fq-cards">${f.cards.map((c) => `<span class="chip">${c.em || ''} ${esc(c.name)}${c.rev ? ' (ters)' : ''}</span>`).join('')}</div>` : ''}
+      ${f.dream ? `<p class="fh-ask">🌙 ${esc(f.dream)}</p>` : f.note ? `<p class="fh-ask">${esc(f.note)}</p>` : ''}
+      ${f.answer ? `<div class="fh-ans clamp">${esc(f.answer.text)}</div><div class="fh-act"><button type="button" class="link fh-more">Devamını oku</button><span class="grow"></span><a class="btn sm" href="#/chat/${esc(f.chatId)}">Sohbette aç</a><button type="button" class="btn sm primary fh-share">${icon('plus')} Hikayende paylaş</button></div>`
+    : '<p class="muted fh-wait">Falcı Teyze falına bakıyor, cevabı birazdan gelecek ☕️</p>'}
+    </article>`).join('');
+  box.onclick = (e) => {
+    const a = e.target.closest('.fh'); if (!a) return;
+    if (e.target.closest('.fh-more')) { const t = a.querySelector('.fh-ans'); const open = t.classList.toggle('clamp'); e.target.textContent = open ? 'Devamını oku' : 'Daha az göster'; }
+    if (e.target.closest('.fh-share')) import('../falshare.js').then((x) => x.falStorySheet(a.dataset.id));
+  };
+  return null;
+}
+
+// ================= Rüya tabiri =================
+function ruya(view) {
+  view.innerHTML = `${head('Rüya tabiri')}<div class="fal-pad">
+    <div class="fal-head">${falIcon('ruya', 56, 'em')}<h2>Rüyanda ne gördün?</h2><p class="muted">Ne kadar ayrıntı yazarsan Falcı Teyze o kadar güzel yorumlar.</p></div>
+    <label class="form" style="padding:0;gap:6px"><span class="b" style="font-size:13.5px">Rüyan</span>
+      <textarea class="field dr" maxlength="1500" rows="6" placeholder="Ör. Bir denizin kıyısındaydım, su çok berraktı. Elimde bir anahtar vardı ve uzaktan biri bana sesleniyordu…"></textarea><small class="muted dr-n" style="text-align:right">0 / 1500</small></label>
+    ${noteField('Rüyayla ilgili merak ettiğin bir şey var mı? (isteğe bağlı)')}
+    <button class="btn primary block go" disabled>${icon('send')} Falcı Teyze’ye gönder</button>${aiNote()}</div>`;
+  const dr = view.querySelector('.dr'); const go = view.querySelector('.go');
+  dr.oninput = () => { view.querySelector('.dr-n').textContent = `${dr.value.length} / 1500`; go.disabled = dr.value.trim().length < 20; };
+  go.onclick = (e) => send({ type: 'ruya', dream: dr.value, note: view.querySelector('.nt').value }, e.currentTarget);
+  return null;
+}
+
 // ================= Aşk uyumu =================
 async function uyum(view) {
   let partner = null;
@@ -302,6 +339,8 @@ export default function fal(view, sub) {
   if (sub === 'tarot') return tarot(view);
   if (sub === 'burc') return burc(view);
   if (sub === 'uyum') return uyum(view);
+  if (sub === 'ruya') return ruya(view);
+  if (sub === 'gecmis') return history(view);
   return hub(view, sub);
 }
 export { zodiacOf };

@@ -36,7 +36,7 @@ const statusChip = (s) => `<span class="chip ${STATUS[s]?.[0] || ''}">${STATUS[s
 const vt = (u) => (u?.verified ? `<span class="vt" title="Doğrulanmış">${icon('verified')}</span>` : '') + (u?.plus ? '<span class="chip gold">+</span>' : '');
 const userCell = (u) => (u ? `<div class="row"><img class="av" src="${esc(u.avatar)}" alt="" loading="lazy"><div class="grow"><div class="ell"><b>${esc(u.name)}</b>${vt(u)}${u.role === 'falci' ? ' <span class="chip info">Falcı</span>' : ''}</div><div class="muted ell">@${esc(u.username)}</div></div></div>` : '<span class="muted">Silinmiş hesap</span>');
 const REASON = { tehdit: 'Tehdit / şiddet', nefret: 'Nefret söylemi', spam: 'Spam / sahte hesap', taciz: 'Taciz veya zorbalık', uygunsuz: 'Uygunsuz içerik', dolandirici: 'Dolandırıcılık', yas: '18 yaş altı olabilir', diger: 'Diğer' };
-const FAL = { kahve: '☕️ Kahve falı', tarot: '🔮 Tarot', burc: '✨ Burç', uyum: '💞 Aşk uyumu' };
+const FAL = { kahve: '☕️ Kahve falı', tarot: '🔮 Tarot', burc: '✨ Burç', uyum: '💞 Aşk uyumu', ruya: '🌙 Rüya tabiri' };
 
 const SECTIONS = [
   ['overview', 'Genel bakış', 'home'],
@@ -433,12 +433,15 @@ VIEWS.fal = async (main) => {
       <div class="aiout" hidden></div>
       <p class="muted" style="margin:0;font-size:12px">Ücretsiz katmanda günlük istek sınırı vardır; sınır dolunca istekler Falcı Teyze'nin kuyruğunda bekler. Ücretsiz katmanda gönderilen içerik Google tarafından ürün geliştirme için kullanılabilir.</p>
     </div></div>` : ''}
-    ${dy ? `<form class="panel dyp" style="margin-bottom:14px"><div class="ph"><h3>Günlük burç ve tarot paylaşımı</h3><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="on" ${dy.settings.enabled ? 'checked' : ''} ${can('fal') ? '' : 'disabled'}> Açık</label></div><div class="pb" style="display:grid;gap:12px">
+    ${dy ? `<form class="panel dyp" style="margin-bottom:14px"><div class="ph"><h3>Günlük burç, tarot paylaşımı ve sabah bildirimi</h3><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="on" ${dy.settings.enabled ? 'checked' : ''} ${can('fal') ? '' : 'disabled'}> Açık</label></div><div class="pb" style="display:grid;gap:12px">
       <div class="muted" style="font-size:12.5px">Falcı Teyze her gün belirlediğin saatte akışa bir görsel paylaşır; herkesin ana sayfasına düşer. Sırayla: ${dy.kinds.map((k) => esc(k.label)).join(', ')}. Metni yapay zeka Falcı Teyze ağzından yazar${dy.hasAi ? '' : ' (anahtar olmadığı için hazır metinler kullanılır)'}.</div>
       <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end"><label style="display:grid;gap:4px;font-size:12.5px">Saat (Türkiye)<input class="field" type="time" name="t" value="${String(dy.settings.hour).padStart(2, '0')}:${String(dy.settings.minute).padStart(2, '0')}" style="width:130px"></label>
         <div style="display:flex;gap:10px;flex-wrap:wrap">${dy.kinds.map((k) => `<label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="k_${k.id}" ${dy.settings.kinds.includes(k.id) ? 'checked' : ''}> ${esc(k.label)}</label>`).join('')}</div></div>
       <div class="muted" style="font-size:12.5px">Sıradaki: <b>${esc(dy.next.label)} · ${esc(dy.next.title)}</b> (${esc(dy.next.date)})</div>
-      ${can('fal') ? `<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary sm">${icon('check')} Kaydet</button><button type="button" class="btn sm dynow">Bugünkünü şimdi paylaş</button><button type="button" class="btn sm dyre">Bugünkünü yeniden oluştur</button></div>` : ''}
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;padding-top:8px;border-top:1px solid var(--line)"><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="mon" ${dy.settings.mEnabled ? 'checked' : ''}> Burcuna özel sabah bildirimi</label>
+        <label style="display:grid;gap:4px;font-size:12.5px">Saat<input class="field" type="time" name="mt" value="${String(dy.settings.mHour).padStart(2, '0')}:${String(dy.settings.mMinute).padStart(2, '0')}" style="width:130px"></label>
+        <span class="muted" style="font-size:12.5px">${dy.morning ? `Son gönderim: ${esc(dy.morning.id)} · ${dy.morning.count} kişi` : 'Henüz gönderilmedi.'} Pazartesileri haftalık burç yorumu da haber verilir. Kullanıcılar Bildirimler ayarından kapatabilir.</span></div>
+      ${can('fal') ? `<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn primary sm">${icon('check')} Kaydet</button><button type="button" class="btn sm dynow">Bugünkünü şimdi paylaş</button><button type="button" class="btn sm dyre">Bugünkünü yeniden oluştur</button>${dy.morning?.id === dy.today ? '' : '<button type="button" class="btn sm dym">Sabah bildirimini şimdi gönder</button>'}</div>` : ''}
       ${dy.list.length ? `<div class="dyl">${dy.list.map((x) => `<div class="dyi">${x.media ? `<img src="${esc(x.media)}" alt="">` : '<div class="dyx">Silindi</div>'}<div class="grow"><b>${esc(x.label)}</b> <span class="muted">${esc(x.id)} · ${x.ai ? 'yapay zeka' : 'hazır metin'} · ${esc(x.by)}</span><div class="muted" style="font-size:12px">${x.likes} beğeni · ${x.comments} yorum</div><p>${esc(x.caption.slice(0, 220))}${x.caption.length > 220 ? '…' : ''}</p></div></div>`).join('')}</div>` : '<div class="muted" style="font-size:12.5px">Henüz paylaşım yapılmadı.</div>'}
     </div></form>` : ''}
     ${ai?.delay ? `<form class="panel dlp" style="margin-bottom:14px"><div class="ph"><h3>⏳ Cevap bekleme süresi</h3><label class="row" style="gap:6px;font-size:13px"><input type="checkbox" name="den" ${ai.delay.enabled ? 'checked' : ''} ${can('fal') ? '' : 'disabled'}> Açık</label></div><div class="pb" style="display:grid;gap:12px">
@@ -467,7 +470,8 @@ VIEWS.fal = async (main) => {
   dyf?.addEventListener('submit', async (e) => {
     e.preventDefault(); const [h, m] = (dyf.t.value || '10:00').split(':');
     const kinds = dy.kinds.map((k) => k.id).filter((k) => dyf[`k_${k}`].checked);
-    try { await api('/falai/daily', { method: 'PUT', body: { enabled: dyf.on.checked, hour: +h, minute: +m, kinds } }); toast('Günlük paylaşım ayarı kaydedildi.'); VIEWS.fal(main); } catch (er) { toast(er.message); }
+    const [mh, mm] = (dyf.mt.value || '09:00').split(':');
+    try { await api('/falai/daily', { method: 'PUT', body: { enabled: dyf.on.checked, hour: +h, minute: +m, kinds, mEnabled: dyf.mon.checked, mHour: +mh, mMinute: +mm } }); toast('Günlük paylaşım ayarı kaydedildi.'); VIEWS.fal(main); } catch (er) { toast(er.message); }
   });
   const dyGo = async (b, replace) => {
     if (replace && !confirm('Bugünkü paylaşım silinip yenisi oluşturulsun mu? Beğeni ve yorumları da silinir.')) return;
@@ -475,6 +479,11 @@ VIEWS.fal = async (main) => {
     try { await api('/falai/daily/now', { body: { replace } }); toast('Falcı Teyze paylaştı.'); VIEWS.fal(main); } catch (er) { toast(er.message); b.disabled = false; }
   };
   main.querySelector('.dynow')?.addEventListener('click', (e) => dyGo(e.target, false));
+  main.querySelector('.dym')?.addEventListener('click', async (e) => {
+    if (!confirm('Burcu belli olan herkese bugünün sabah burç bildirimi gönderilsin mi?')) return;
+    e.target.disabled = true;
+    try { const x = await api('/falai/daily/morning', { body: {} }); toast(`Bildirim ${x.morning?.count || 0} kişiye gönderildi.`); VIEWS.fal(main); } catch (er) { toast(er.message); e.target.disabled = false; }
+  });
   main.querySelector('.dyre')?.addEventListener('click', (e) => dyGo(e.target, true));
   main.querySelector('.aitest')?.addEventListener('click', async (e) => {
     const t = main.querySelector('.ait'); const out = main.querySelector('.aiout');

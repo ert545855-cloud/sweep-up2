@@ -176,7 +176,9 @@ export default async function chat(view, chatId) {
         ${f.cards?.length ? `<div class="fq-cards">${f.cards.map((c) => `<span class="chip"><small>${esc(c.pos)}</small> ${c.em} ${esc(c.name)}${c.rev ? ' (ters)' : ''}</span>`).join('')}</div>` : ''}
         ${z ? `<div class="fq-line">${z[2]} ${z[1]}${f.partner ? '' : ''}</div>` : ''}
         ${f.partner ? `<div class="fq-line">💞 ${esc(f.name)} & ${esc(f.partner.name)}${zodiacOf(f.partner.zodiac) ? ` (${zodiacOf(f.partner.zodiac)[2]} ${zodiacOf(f.partner.zodiac)[1]})` : ''}</div>` : ''}
-        ${f.note ? `<p class="fq-note">${esc(f.note)}</p>` : ''}${meta}</div>`;
+        ${f.dream ? `<p class="fq-note fq-dream">🌙 ${esc(f.dream)}</p>` : ''}
+        ${f.note && f.note !== f.dream ? `<p class="fq-note">${esc(f.note)}</p>` : ''}
+        ${f.status === 'answered' && m.from === state.me.id ? `<button type="button" class="fm-share" data-fal="${esc(m.id)}">${icon('plus')} Falını hikayende paylaş</button>` : ''}${meta}</div>`;
     }
     if (m.share) {
       const s = m.share;
@@ -661,6 +663,7 @@ export default async function chat(view, chatId) {
       } catch (er) { toast(er.message); }
     };
     comp.querySelector('.pic').onclick = () => sendMedia('image/*,video/*');
+    if (!view.dataset.fsw) { view.dataset.fsw = '1'; view.addEventListener('click', (e) => { const b = e.target.closest('.fm-share'); if (!b) return; e.stopPropagation(); import('../falshare.js').then((x) => x.falStorySheet(b.dataset.fal)); }); }
     comp.querySelector('.gifb')?.addEventListener('click', async () => {
       const src = await pickGif({ title: 'GIF gönder', upload: false }); if (!src) return;
       try { await send({ media: src, mediaType: src.startsWith('/media/') ? 'image' : 'gif' }); } catch (er) { toast(er.message); }

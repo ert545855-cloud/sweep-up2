@@ -78,11 +78,15 @@ export async function notifSettings() {
     <p class="muted" style="margin:0">Mesaj, arama, eşleşme, beğeni, yorum, takip ve canlı yayın bildirimleri bu cihaza gönderilir. Uygulama açıkken bildirimler ekranın üstünde görünür.</p>
     ${hint ? `<p style="margin:0">${esc(hint)}</p>` : `<button class="btn ${enabled ? '' : 'primary'} block tg">${enabled ? 'Bu cihazda bildirimleri kapat' : 'Bu cihazda bildirimleri aç'}</button>
     ${enabled ? '<button class="btn outline block test">Test bildirimi gönder</button>' : ''}`}
+    <label class="switch-row" style="display:flex;align-items:center;font-size:14.5px"><span class="grow">Falcı Teyze’den sabah burç mesajı<small class="muted" style="display:block;font-size:12.5px">Her sabah burcuna özel kısa bir yorum</small></span><input type="checkbox" class="bp" ${state.me.privacy?.noBurcPush ? '' : 'checked'}></label>
   </div>`, {
     onMount(sh, close) {
       sh.querySelector('.tg')?.addEventListener('click', async () => {
         try { if (enabled) { await disablePush(); toast('Bildirimler kapatıldı.'); } else { await enablePush(); toast('Bildirimler açıldı.'); } close(); } catch (e) { toast(e.message); }
       });
+      sh.querySelector('.bp').onchange = async (e) => {
+        try { const u = await api('/me', { method: 'PATCH', body: { privacy: { noBurcPush: !e.target.checked } } }); Object.assign(state.me, u); toast(e.target.checked ? 'Sabah burç mesajı açık ☀️' : 'Sabah burç mesajı kapatıldı.'); } catch (er) { toast(er.message); }
+      };
       sh.querySelector('.test')?.addEventListener('click', async () => {
         try { await api('/push/test', { body: {} }); toast('Test bildirimi gönderildi.'); } catch (e) { toast(e.message); }
       });

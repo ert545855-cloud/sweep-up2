@@ -2,7 +2,8 @@ import { icon } from '../icons.js';
 import {
   state, api, esc, ago, toast, sheet, avatar, emit, nm, filterCss, scaleStickerLayer, stkPos,
 } from '../core.js';
-import { musicChip, musicLine } from '../music.js';
+import { musicLine } from '../music.js';
+import { falCardHtml } from '../falshare.js';
 
 function pollHtml(st, mine) {
   const showRes = mine || st.mine != null;
@@ -18,11 +19,8 @@ function stickersHtml(it, mine) {
     const pos = stkPos(st);
     if (st.type === 'poll') return pollHtml(st, mine);
     if (st.type === 'question') return `<button class="stk q act" data-sid="${esc(st.id)}" style="${pos}"><b>${esc(st.q)}</b><span>${mine ? 'Yanıtları görmek için görüntüleyenlere bak' : 'Yanıtla…'}</span></button>`;
-    if (st.type === 'music') {
-      if (st.style === 'hide') return '';
-      const cls = `stk mu ${st.style === 'mini' ? 'mini' : ''}`;
-      return st.spotifyUrl ? `<a class="${cls} act" href="${esc(st.spotifyUrl)}" target="_blank" rel="noopener" style="${pos}">${musicChip(st)}<em>Spotify</em></a>` : `<div class="${cls}" style="${pos}">${musicChip(st)}</div>`;
-    }
+    // Müzik görselin üstünde etiket olarak durmaz; Instagram gibi sadece başlıkta, kullanıcı adının altında yazar
+    if (st.type === 'music') return '';
     if (st.type === 'text') return `<div class="stk txt sz-${esc(st.size || 'm')} ${st.bgc ? 'bgc' : ''}" style="${pos};color:${esc(st.color)}">${esc(st.text)}</div>`;
     if (st.type === 'emoji') return `<div class="stk em" style="${pos}">${esc(st.em)}</div>`;
     if (st.type === 'gif') return `<img class="stk gif" style="${pos}" src="${esc(st.src)}" alt="">`;
@@ -55,7 +53,7 @@ export default async function stories(view, userId) {
     const g = groups[gi]; const it = g.items[ii];
     const mine = g.user.id === state.me.id;
     view.innerHTML = `<div class="story-v">
-      <div class="media">${it.mediaType === 'text' || !it.media ? `<div class="tstory tbg-${esc(it.bg || 'g2')}"></div>` : it.mediaType === 'video' ? `<video src="${esc(it.media)}" playsinline autoplay style="filter:${filterCss(it.filter)}"></video>` : `<img class="blurbg" src="${esc(it.media)}" alt=""><img class="fit" src="${esc(it.media)}" alt="" style="filter:${filterCss(it.filter)}">`}</div>
+      <div class="media">${it.mediaType === 'card' && it.card ? falCardHtml(it.card) : it.mediaType === 'text' || !it.media ? `<div class="tstory tbg-${esc(it.bg || 'g2')}"></div>` : it.mediaType === 'video' ? `<video src="${esc(it.media)}" playsinline autoplay style="filter:${filterCss(it.filter)}"></video>` : `<img class="blurbg" src="${esc(it.media)}" alt=""><img class="fit" src="${esc(it.media)}" alt="" style="filter:${filterCss(it.filter)}">`}</div>
       <div class="bars">${g.items.map((_, i) => `<i><b style="width:${i < ii ? 100 : 0}%"></b></i>`).join('')}</div>
       <div class="head">
         <a href="#/u/${esc(g.user.username)}" class="row hd-u"><img class="av av-32" src="${esc(g.user.avatar)}" alt=""><span class="hd-t"><span class="hd-1"><b class="ellipsis">${nm(g.user, 'username')}</b><span class="hd-ago">${ago(it.at)}</span>${it.reshareOf ? `<span class="rs-of">${icon('repost')} @${esc(it.reshareOf.username)}</span>` : ''}</span>${muOf(it) ? musicLine(muOf(it)) : ''}</span></a>
@@ -64,7 +62,7 @@ export default async function stories(view, userId) {
         <button class="x" aria-label="Kapat">${icon('close')}</button>
       </div>
       <div class="tapl"></div><div class="tapr"></div>
-      <div class="stk-layer">${stickersHtml(it, mine)}</div>
+      <div class="stk-layer">${stickersHtml(it, mine)}${it.card?.kind === 'fal' ? `<a class="stk act fc-cta" href="#/fal" style="top:90%;left:50%;transform:translate(-50%,-50%)">${icon('wand')} Sen de fal baktır</a>` : ''}</div>
       <div class="foot">${mine
     ? `<button class="vw">${icon('eye')} ${it.viewerCount || 0} görüntüleme</button>`
     : g.user.role === 'official' ? '<a class="rp-fal" href="#/destek">🛡️ SwipeUp resmi hesabı · yanıt kapalı</a>'

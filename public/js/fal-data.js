@@ -16,6 +16,7 @@ export const FAL_TYPES = {
   tarot: { em: '🔮', name: 'Tarot falı' },
   burc: { em: '✨', name: 'Burç yorumu' },
   uyum: { em: '💞', name: 'Aşk uyumu' },
+  ruya: { em: '🌙', name: 'Rüya tabiri' },
 };
 
 // Büyük Arkana: [numara, ad, simge]
