@@ -323,6 +323,13 @@ const D = {
   'Anlat': 'Describe', 'Kelimeyi anlat (yasaklıları kullanma!)…': 'Describe the word (no forbidden words!)…', 'Tahminini yaz…': 'Type your guess…', 'Hazırlan! Kelimeyi sohbete yazarak anlatacaksın.': 'Get ready! You’ll describe the word in the chat.',
   'Tahminlerini sohbete yaz.': 'Type your guesses in the chat.', 'Bildin! 🎉': 'You got it! 🎉', 'İpuçları bitti. Şimdi konuşun: kim casus?': 'Clues are done. Now talk: who’s the spy?',
   'Süre doldu! Cevapları kontrol edin, geçersiz olanları işaretleyin.': 'Time’s up! Check the answers and mark the invalid ones.', 'Oylar eşit çıktı, kimse suçlanmadı. Casus kazandı! 🕵️': 'It’s a tie, nobody was accused. The spy wins! 🕵️',
+  // Yarışmalar
+  'Bilgi Yarışması': 'Quiz Show', 'Şarkıyı Tahmin Et': 'Guess the Song', 'Kategori': 'Category', 'Oyuncu sayısı': 'Players', 'Karışık': 'Mixed', 'Genel kültür': 'General knowledge',
+  'Tarih': 'History', 'Coğrafya': 'Geography', 'Bilim': 'Science', 'Spor': 'Sports', 'Sanat ve edebiyat': 'Art & literature', 'Sinema ve müzik': 'Film & music',
+  'Türkçe pop': 'Turkish pop', 'Türkçe rap': 'Turkish rap', 'Türkçe rock': 'Turkish rock', '90’lar ve 2000’ler': '90s & 2000s', 'Yabancı hitler': 'International hits',
+  'Hazır ol!': 'Get ready!', 'Bu şarkı hangisi?': 'Which song is this?', '🔊 Dinlemek için dokun': '🔊 Tap to listen', '50:50 joker': '50:50 lifeline', 'Süre doldu': 'Time’s up',
+  'Yanlış cevap': 'Wrong answer', 'Şarkılar hazırlanıyor…': 'Loading songs…', 'Sorular hazırlanıyor…': 'Loading questions…', 'Şarkı çalınamadı, seçeneklerden tahmin et.': 'Couldn’t play the song, guess from the options.',
+  'Şarkının başı çalar, adını ilk sen bil.': 'A song plays — name it first.', 'Genel kültür soruları, hızlı olan kazanır.': 'Trivia questions — the fastest wins.', 'Soru': 'Question', 'Şarkı': 'Song',
 };
 
 // Sayı / isim içeren metinler
@@ -351,6 +358,11 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^(Soru|Şarkı) (\d+)\/(\d+)$/, (_, u, a, b) => `${u === 'Soru' ? 'Question' : 'Song'} ${a}/${b}`],
+  [/^Doğru! \+(\d+) puan$/, (_, n) => `Correct! +${n} points`],
+  [/^(\d+)\/(\d+) cevapladı$/, (_, a, b) => `${a}/${b} answered`],
+  [/^Cevabın alındı ✓ · (\d+)\/(\d+) cevapladı$/, (_, a, b) => `Answer locked ✓ · ${a}/${b} answered`],
+  [/^Kazanan: (.+) · (\d+) puan$/, (_, u, n) => `Winner: ${u} · ${n} points`],
   [/^Tur (\d+)\/(\d+)$/, (_, a, b) => `Round ${a}/${b}`],
   [/^Sıra (\d+)\/(\d+)$/, (_, a, b) => `Turn ${a}/${b}`],
   [/^Casus kim\? \((\d+)\/(\d+) oy\)$/, (_, a, b) => `Who’s the spy? (${a}/${b} votes)`],

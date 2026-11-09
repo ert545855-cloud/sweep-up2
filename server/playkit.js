@@ -32,7 +32,7 @@ module.exports = function playkit(app, ctx) {
     return {
       id: t.id, game: t.game, status: t.status, host: t.host === uid, private: t.private, me, size: t.size, round: t.round || 0,
       seats: t.seats.map((s, i) => (s ? { name: s.name, avatar: s.avatar, bot: !!s.bot, uid: s.bot ? null : s.uid, score: t.scores[i] || 0, afk: !!s.afk } : null)),
-      turn: t.turn ?? null, deadline: t.deadline || null, turnMs: t.turnMs || null, chat: t.chat.slice(-50), log: t.log.slice(-8), result: t.result || null, ...extra,
+      turn: t.turn ?? null, deadline: t.deadline || null, turnMs: t.turnMs || null, chat: t.chat.slice(-50), log: t.log.slice(-8), result: t.result || null, opts: t.opts || {}, ...extra,
     };
   }
   function push(t) {
@@ -210,13 +210,20 @@ module.exports = function playkit(app, ctx) {
     t.size = size; t.seats = [...people, ...new Array(size - people.length).fill(null)];
     push(t); res.json(view(t, req.user.id));
   });
+  // Oyun ayarı (ör. kategori): masayı açan, oyun başlamadan değiştirir
+  app.post('/api/play/:game/:id/opts', auth, (req, res) => {
+    const d = getDef(req, res); if (!d) return; const t = getT(req, res); if (!t) return;
+    if (t.host !== req.user.id || t.status === 'playing') return res.status(403).json({ error: 'Ayarları masayı açan, oyun başlamadan değiştirebilir.' });
+    t.opts = d.opts ? d.opts({ ...t.opts, ...(req.body || {}) }) : {};
+    push(t); res.json(view(t, req.user.id));
+  });
   app.post('/api/play/:game/:id/start', auth, (req, res) => {
     const d = getDef(req, res); if (!d) return; const t = getT(req, res); if (!t) return;
     if (t.host !== req.user.id) return res.status(403).json({ error: 'Oyunu masayı açan başlatır.' });
     if (t.status === 'playing') return res.status(409).json({ error: 'Oyun zaten sürüyor.' });
     const people = t.seats.filter(Boolean).filter((s) => !s.bot);
     if (people.length < (d.minHumans || 1)) return res.status(400).json({ error: `Başlamak için en az ${d.minHumans} kişi gerekli. Arkadaşlarını davet et!` });
-    if (d.bots) t.seats = t.seats.map((s) => s || botSeat(t));
+    if (d.bots) t.seats.forEach((s, i) => { if (!s) t.seats[i] = botSeat(t); });
     else { t.seats = t.seats.filter((s) => s && !s.bot); while (t.seats.length < t.size) t.seats.push(null); }
     if (t.seats.filter(Boolean).length < d.min) return res.status(400).json({ error: `Başlamak için en az ${d.min} kişi gerekli. Arkadaşlarını davet et!` });
     if (req.body?.bots === false && d.bots) { /* yalnız insanlarla: boş koltuklar kapatılır */ }
@@ -228,7 +235,7 @@ module.exports = function playkit(app, ctx) {
     if (t.status !== 'ended') return res.status(409).json({ error: 'Oyun daha bitmedi.' });
     if (d.party && t.host !== req.user.id) return res.status(403).json({ error: 'Yeni oyunu odayı açan başlatır.' });
     if (d.party) { t.status = 'waiting'; t.g = null; t.result = null; t.scores = {}; say(t, { sys: true, text: 'Yeni oyun için hazırlanıyoruz.' }); push(t); return res.json(view(t, req.user.id)); }
-    if (d.bots) t.seats = t.seats.map((s) => s || botSeat(t));
+    if (d.bots) t.seats.forEach((s, i) => { if (!s) t.seats[i] = botSeat(t); });
     deal(t); res.json(view(t, req.user.id));
   });
   app.post('/api/play/:game/:id/leave', auth, (req, res) => { if (!getDef(req, res)) return; const t = getT(req, res); if (!t) return; leave(t, req.user.id); res.json({ ok: true }); });

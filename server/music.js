@@ -153,4 +153,4 @@ async function selfTest() {
   } catch (e) { console.error('[music] Spotify bağlantısı kurulamadı:', e.message, (e.body || '').slice(0, 200)); }
 }
 
-module.exports = { search, getFeatured, clean, selfTest, isPreview: (u) => PREVIEW_RE.test(u || ''), enabled: () => !!(ID && SECRET) };
+module.exports = { search, itunesSearch, getFeatured, clean, selfTest, isPreview: (u) => PREVIEW_RE.test(u || ''), enabled: () => !!(ID && SECRET) };

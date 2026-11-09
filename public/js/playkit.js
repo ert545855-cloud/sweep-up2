@@ -73,7 +73,9 @@ export async function playTable(view, game, id, opt) {
       over.hidden = false;
       over.innerHTML = `<div class="pk-card"><div class="big">${opt.emoji || '🎮'}</div><h2>${esc(title)}</h2>
         <div class="pk-wseats">${v.seats.map((s, i) => seatChip(v, i)).join('')}</div>
-        ${v.host && minSize && maxSize && minSize !== maxSize ? `<div class="seg pk-size">${Array.from({ length: maxSize - minSize + 1 }, (_, k) => minSize + k).map((n) => `<button data-n="${n}" class="${n === v.size ? 'on' : ''}">${n} ${sizeLabel || 'kişi'}</button>`).join('')}</div>` : ''}
+        ${v.host && minSize && maxSize && minSize !== maxSize ? (maxSize - minSize > 3
+    ? `<div class="pk-sizes"><small>Oyuncu sayısı</small><div class="seg pk-size many">${Array.from({ length: maxSize - minSize + 1 }, (_, k) => minSize + k).map((n) => `<button data-n="${n}" class="${n === v.size ? 'on' : ''}">${n}</button>`).join('')}</div></div>`
+    : `<div class="seg pk-size">${Array.from({ length: maxSize - minSize + 1 }, (_, k) => minSize + k).map((n) => `<button data-n="${n}" class="${n === v.size ? 'on' : ''}">${n} ${sizeLabel || 'kişi'}</button>`).join('')}</div>`) : ''}
         ${waitingHtml ? waitingHtml(v) : ''}
         <p class="muted pk-note">${opt.bots === false ? `En az ${opt.minHumans || 2} kişi gerekli. Arkadaşlarını davet et.` : 'Arkadaşlarını davet et ya da boş yerlere bot oturtarak hemen başla.'}</p>
         <div class="pk-acts">${v.host ? `<button class="btn primary pk-start" ${opt.bots === false && people < (opt.minHumans || 2) ? 'disabled' : ''}>${opt.bots === false ? 'Oyunu başlat' : people < v.size ? 'Botlarla başlat' : 'Başlat'}</button>` : '<span class="muted">Masayı açan kişi başlatacak.</span>'}
@@ -110,7 +112,7 @@ export async function playTable(view, game, id, opt) {
       },
     });
   };
-  view.addEventListener('click', async (e) => {
+  wrap.addEventListener('click', async (e) => {
     if (e.target.closest('.pk-x')) {
       if (v.status === 'playing' && !confirm(opt.party ? 'Oyundan çıkmak istiyor musun?' : 'Masadan kalkarsan yerine bot oynar. Emin misin?')) return;
       await api(`/play/${game}/${id}/leave`, { body: {} }).catch(() => {}); location.hash = '#/oyunlar'; return;
@@ -120,6 +122,8 @@ export async function playTable(view, game, id, opt) {
     if (e.target.closest('.pk-chat-b')) return openChat();
     const sz = e.target.closest('.pk-size [data-n]');
     if (sz) { try { v = await api(`/play/${game}/${id}/size`, { body: { size: +sz.dataset.n } }); paint(); } catch (er) { toast(er.message); } return; }
+    const op = e.target.closest('.pk-opt [data-k]');
+    if (op) { try { v = await api(`/play/${game}/${id}/opts`, { body: { [op.dataset.k]: op.dataset.v } }); paint(); } catch (er) { toast(er.message); } return; }
     if (e.target.closest('.pk-start')) { try { v = await api(`/play/${game}/${id}/start`, { body: {} }); paint(); } catch (er) { toast(er.message); } return; }
     if (e.target.closest('.pk-again')) { try { v = await api(`/play/${game}/${id}/again`, { body: {} }); paint(); } catch (er) { toast(er.message); } }
   });
