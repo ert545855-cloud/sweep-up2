@@ -204,6 +204,18 @@ const D = {
   'Yayını bitir': 'End stream', 'Canlı yayın için kamera ve mikrofon izni gerekiyor. Tarayıcı ayarlarından izin verip sayfayı yenile.': 'Live streaming needs camera and microphone permission. Allow it in your browser settings and refresh.',
   // Ödeme / diğer
   'Seni beğenenleri görmek için SwipeUp+ gerekli.': 'SwipeUp+ is required to see who likes you.',
+  // Ana sayfa kısayolları ve "Senin için" kartları
+  'Serin': 'Streak', 'Günün sorusu': 'Daily question', 'Kulüpler': 'Clubs', 'Karaoke': 'Karaoke', 'Burç kartın': 'Your sign', 'Senin için': 'For you', 'Kısayollar': 'Shortcuts',
+  'Kahve, tarot, burç ve aşk uyumu': 'Coffee, tarot, horoscope and love match', 'Baktır': 'Ask', 'Fal kuyruğu': 'Reading queue', 'Gelen fal isteklerini gör ve cevapla.': 'See and answer incoming reading requests.',
+  'Şarkını yükle, Spotify’da yayınlayalım': 'Upload your song and we’ll release it on Spotify', 'Şarkı yarışmasında oylama': 'Song contest voting', 'Şarkı yarışması sonuçlandı': 'Song contest results are in', 'Kazanan şarkıyı dinle': 'Listen to the winning song',
+  'Şarkın yarışmada · arkadaşlarına haber ver': 'Your song is in the contest · tell your friends',
+  // GIF
+  'GIF ve çıkartma': 'GIFs and stickers', 'GIPHY’de ara': 'Search GIPHY', 'Çıkartma': 'Stickers', 'Cihazdan yükle': 'Upload from device', 'GIF gönder': 'Send a GIF', 'GIF ile yorum yap': 'Comment with a GIF', 'GIF ile yorum yap ': 'Comment with a GIF',
+  'Telefonundaki bir GIF’i ekleyebilirsin.': 'You can add a GIF from your phone.', 'Şu an GIF yüklenemedi.': 'Couldn’t load GIFs right now.', 'GIF': 'GIF',
+  'Merhaba': 'Hello', 'Kahkaha': 'LOL', 'Aşk': 'Love', 'Tebrikler': 'Congrats', 'Teşekkürler': 'Thanks', 'Dans': 'Dance', 'Şaşkın': 'Shocked', 'Kedi': 'Cat', 'Günaydın': 'Good morning', 'İyi geceler': 'Good night',
+  'GIF gönderdi': 'sent a GIF', 'GIF ile yorum yapmak için': 'Comment with a GIF',
+  'İpucu: Bir mesaja basılı tutarak yanıtlayabilir, tepki verebilir ya da bildirebilirsin.': 'Tip: Press and hold a message to reply, react or report it.',
+  'bonus! Yenilenmesine': 'bonus! Resets in', 'Galeriden seç · 24 saat sonra kaybolur': 'Pick from your gallery · disappears after 24 hours',
 };
 
 // Sayı / isim içeren metinler
@@ -217,6 +229,11 @@ export const patterns = [
   [/^son görülme (.+) (\d\d:\d\d)$/, (_, d, t) => `last seen ${d} ${t}`],
   [/^Günlük görevler · (\d+)\/(\d+)$/, (_, a, b) => `Daily tasks · ${a}/${b}`],
   [/^(\d+) ödül seni bekliyor!$/, (_, n) => `${n} rewards waiting for you!`],
+  [/^\+(\d+) jeton$/, (_, n) => `+${n} coin`],
+  [/^(\d+) jetona kadar kazan$/, (_, n) => `Earn up to ${n} coins`],
+  [/^Fal kuyruğu · (\d+) bekliyor$/, (_, n) => `Reading queue · ${n} waiting`],
+  [/^“(.+)” için sonuç yok\. Başka bir kelime dene\.$/, (_, q) => `No results for “${q}”. Try another word.`],
+  [/^(\d+) oy hakkın var · (\d+) şarkı$/, (_, a, b) => `${a} votes left · ${b} songs`],
   [/^(\d+) görev kaldı$/, (_, n) => `${n} tasks left`],
   [/^Şu an çevrimiçi · (\d+)$/, (_, n) => `Online now · ${n}`],
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],

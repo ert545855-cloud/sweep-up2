@@ -102,13 +102,14 @@ module.exports = function genel(app, ctx) {
       if (rm.club && !ctx.clubCanSend?.(rm.club, uid)) return ack?.({ error: 'Bu kulübün sohbetine yazmak için önce kulübe katıl.' });
       if (limited('gs:' + uid, 8, 15000)) return ack?.({ error: 'Çok hızlı yazıyorsun, biraz bekle.' });
       const raw = String(data?.text || '').trim().slice(0, 1000);
-      const media = isMedia(data?.media) ? data.media : null;
+      const gif = data?.mediaType === 'gif' && ctx.isGif?.(data.media);
+      const media = gif || isMedia(data?.media) ? data.media : null;
       if (!raw && !media) return ack?.({ error: 'Mesaj boş.' });
       const text = moderation.mask(raw);
       const rep = data?.replyTo && store.get('pub_msgs', data.replyTo);
       const m = store.put('pub_msgs', {
-        id: nanoid(12), userId: uid, room: rid === 'genel' ? undefined : rid, text, media, mediaType: media ? 'image' : null,
-        reply: rep ? { id: rep.id, userId: rep.userId, name: store.get('users', rep.userId)?.name || '', text: (rep.text || (rep.media ? '📷 Fotoğraf' : '')).slice(0, 120) } : null,
+        id: nanoid(12), userId: uid, room: rid === 'genel' ? undefined : rid, text, media, mediaType: media ? (gif ? 'gif' : 'image') : null,
+        reply: rep ? { id: rep.id, userId: rep.userId, name: store.get('users', rep.userId)?.name || '', text: (rep.text || (rep.media ? (rep.mediaType === 'gif' ? 'GIF' : '📷 Fotoğraf') : '')).slice(0, 120) } : null,
         reactions: {}, at: now(),
       });
       const fl = raw && moderation.flag(raw);

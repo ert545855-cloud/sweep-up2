@@ -6,34 +6,27 @@ import { postCard, wirePost, autoplay } from '../components.js';
 import { paintEventBanner } from '../event.js';
 import { egi } from '../eg-icons.js';
 
+// Ana sayfa kısayolları: [ikon, adres, etiket, falcıya da görünür]
+const SHORTCUTS = [
+  ['seri', '#/seriler', 'Serin'], ['genel', '#/genel', 'Genel sohbet', true], ['soru', '#/soru', 'Günün sorusu'], ['kulup', '#/kulupler', 'Kulüpler'],
+  ['odalar', '#/odalar', 'Odalar', true], ['hizli', '#/hizli', 'Hızlı tanış'], ['mekan', '#/mekan', 'Mekandayım'], ['karaoke', '#/karaoke', 'Karaoke'], ['burc', '#/burc', 'Burç kartın'],
+];
+const RAIL = ['quests', 'wheel', 'contest', 'song', 'fal'];
+
 export default async function feed(view) {
   view.innerHTML = `
     <header class="topbar">
       <div class="wordmark">${logo()}</div>
-      <a class="ib" href="#/fal" aria-label="Fal" style="font-size:22px">🔮</a>
+      <a class="ib" href="#/fal" aria-label="Fal">${icon('orb')}</a>
       <a class="ib" href="#/search" aria-label="Ara">${icon('search')}</a>
       <a class="ib" href="#/create" aria-label="Oluştur">${icon('plusSq')}</a>
       <a class="ib" href="#/notifications" aria-label="Bildirimler">${icon('bell')}<i class="dot-badge nb" style="top:8px;right:8px;${state.badges.notifications ? '' : 'display:none'}"></i></a>
     </header>
     <div class="stories" aria-label="Hikayeler ve canlı yayınlar"></div>
     <div class="maint-slot"></div>
-    <a class="wh-card-f" href="#/cark" hidden><img class="wf-ic" src="/img/wheel/gift.svg" alt=""><span class="grow"><b>Hediye çarkı hazır!</b><small>Bu haftaki çevirme hakkını kullan</small></span><span class="go-chip">Çevir</span></a>
-    <a class="qs-card" href="#/gorevler" hidden></a>
-    <a class="sg-feed" href="#/sarki" hidden></a>
-    <a class="sg-feed ct-feed" href="#/yarismalar" hidden></a>
     <div class="event-slot"></div>
-    <a class="fal-hero" href="#/fal" style="margin-top:0"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
-    ${state.me.role === 'falci' ? '' : `<nav class="eg-row" aria-label="Etkileşim">
-      <a class="eg-it eg-stk" href="#/seriler">${egi('seri', 40, 'eg-ic')}<b class="eg-n">${state.me.loginStreak?.count || 0}</b><small>Serin</small></a>
-      <a class="eg-it" href="#/soru">${egi('soru', 40, 'eg-ic')}<small>Günün sorusu</small></a>
-      <a class="eg-it" href="#/kulupler">${egi('kulup', 40, 'eg-ic')}<small>Kulüpler</small></a>
-      <a class="eg-it" href="#/karaoke">${egi('karaoke', 40, 'eg-ic')}<small>Karaoke</small></a>
-      <a class="eg-it" href="#/burc">${egi('burc', 40, 'eg-ic')}<small>Burç kartın</small></a>
-    </nav>`}
-    <div class="social-row"><a class="genel-row feedg" href="#/genel"><span class="genel-ic">${icon('users')}</span><span class="grow"><b>Genel sohbet</b><small>Herkes burada</small></span></a>
-      <a class="genel-row feedg rooms-e" href="#/odalar"><span class="genel-ic">🎵</span><span class="grow"><b>Odalar</b><small>Müzik, dizi, şehir…</small></span></a>
-      <a class="genel-row feedg speed-e" href="#/hizli"><span class="genel-ic">⚡</span><span class="grow"><b>Hızlı tanış</b><small>3 dk görüntülü</small></span></a>
-      <a class="genel-row feedg vn-e" href="#/mekan"><span class="genel-ic">📍</span><span class="grow"><b>Mekandayım</b><small>Aynı yerdekilerle eşleş</small></span></a></div>
+    <section class="promo-rail" aria-label="Senin için"><div class="pr-track"></div><div class="pr-dots" aria-hidden="true"></div></section>
+    <nav class="sc-row" aria-label="Kısayollar">${SHORTCUTS.filter((x) => state.me.role !== 'falci' || x[3]).map(([k, href, label]) => `<a class="sc" href="${href}">${egi(k, 54, 'sc-ic')}${k === 'seri' ? `<b class="sc-n">${state.me.loginStreak?.count || 0}</b>` : ''}<small>${label}</small></a>`).join('')}</nav>
     <div class="vn-friends"></div>
     ${state.config?.features?.market ? `<a class="mk-entry" href="#/market"><span class="mk-ei">${icon('bag')}</span><span class="grow"><b>SwipeUp Store</b><small>İkinci el al, sat · komisyon yok · güvenli ödeme</small></span><span class="go-chip">Göz at</span></a>` : ''}
     <div class="push-slot"></div>
@@ -103,39 +96,54 @@ export default async function feed(view) {
   offs.push(on('reconnected', () => { loadStories(); loadPeople(); }));
   offs.push(on('badges', (b) => { view.querySelector('.nb').style.display = b.notifications ? '' : 'none'; }));
   offs.push(paintEventBanner(view.querySelector('.event-slot')));
-  // Günlük görevler kartı
-  const qsCard = view.querySelector('.qs-card');
+  // "Senin için" kartları: görevler, çark, yarışma, şarkı yarışması, fal — tek kaydırmalı şerit
+  const railEl = view.querySelector('.promo-rail'); const track = railEl.querySelector('.pr-track'); const dots = railEl.querySelector('.pr-dots');
+  const cards = {};
+  const card = (cls, href, ic, title, sub, chip, extra = '') => `<a class="pc ${cls}" href="${href}">${ic}<span class="pc-t"><b>${title}</b><small>${sub}</small></span>${chip ? `<span class="pc-chip">${chip}</span>` : ''}${extra}</a>`;
+  cards.fal = state.me.role === 'falci'
+    ? card('pc-fal', '#/fal', '<span class="pc-ic">☕️</span>', `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}`, 'Gelen fal isteklerini gör ve cevapla.', 'Aç')
+    : card('pc-fal', '#/fal', `<span class="pc-ic">${egi('fal-kahve', 46)}</span>`, 'Falcı Teyze’ye fal baktır', 'Kahve, tarot, burç ve aşk uyumu', 'Baktır');
+  const paintRail = () => {
+    const list = RAIL.map((k) => cards[k]).filter(Boolean);
+    track.innerHTML = list.join('');
+    railEl.classList.toggle('one', list.length < 2);
+    dots.innerHTML = list.length > 1 ? list.map(() => '<i></i>').join('') : '';
+    syncDots();
+  };
+  const syncDots = () => {
+    const w = track.firstElementChild?.offsetWidth || 1; const i = Math.round(track.scrollLeft / (w + 10));
+    dots.querySelectorAll('i').forEach((d, k) => d.classList.toggle('on', k === i));
+  };
+  track.addEventListener('scroll', syncDots, { passive: true });
+  paintRail();
   const paintQs = async () => {
     const q = await api('/quests').catch(() => null);
-    if (!q?.enabled || state.me.role === 'falci' || (q.bonusClaimed && !q.claimable)) { qsCard.hidden = true; return; }
-    qsCard.hidden = false;
-    qsCard.innerHTML = `<span class="qc-ic">🎯</span><span class="grow"><b>Günlük görevler · ${q.doneCount}/${q.total}</b><small>${q.claimable ? `${q.claimable} ödül seni bekliyor!` : `Görevleri tamamla, ${q.items.reduce((a, x) => a + x.coins, 0) + q.bonus} jetona kadar kazan`}</small></span>
-      <span class="qc-bar"><i style="width:${Math.round((q.doneCount / q.total) * 100)}%"></i></span>${q.claimable ? '<span class="go-chip">Al</span>' : ''}`;
+    cards.quests = !q?.enabled || state.me.role === 'falci' || (q.bonusClaimed && !q.claimable) ? null
+      : card('pc-qs', '#/gorevler', `<span class="pc-ic">${egi('gorev', 46)}</span>`, `Günlük görevler · ${q.doneCount}/${q.total}`, q.claimable ? `${q.claimable} ödül seni bekliyor!` : `${q.items.reduce((x, i) => x + i.coins, 0) + q.bonus} jetona kadar kazan`, q.claimable ? 'Al' : 'Gör', `<span class="pc-bar"><i style="width:${Math.round((q.doneCount / q.total) * 100)}%"></i></span>`);
+    paintRail();
   };
   paintQs();
-  // Devam eden yarışma kartı
+  offs.push(on('quests', paintQs));
+  api('/wheel').then((w) => { if (w.canSpin) { cards.wheel = card('pc-wh', '#/cark', '<img class="pc-ic" src="/img/wheel/gift.svg" alt="">', 'Hediye çarkı hazır!', 'Bu haftaki çevirme hakkını kullan', 'Çevir'); paintRail(); } }).catch(() => {});
   api('/contests').then((r) => {
-    const c = (r.items || []).find((x) => x.phase === 'live'); const a = view.querySelector('.ct-feed'); if (!c || !a) return;
-    a.href = `#/yarismalar/${c.id}`;
-    a.innerHTML = `<span class="sgf-ic" style="font-size:30px;display:grid;place-items:center">${esc(c.em)}</span><span class="grow"><b>${esc(c.title)}</b><small>${esc(c.metricLabel)}${c.me ? ` · ${c.me.rank}. sıradasın` : ''}</small></span><span class="go-chip">${c.me ? 'Sıralama' : 'Katıl'}</span>`;
-    a.hidden = false;
+    const c = (r.items || []).find((x) => x.phase === 'live'); if (!c) return;
+    cards.contest = card('pc-ct', `#/yarismalar/${esc(c.id)}`, `<span class="pc-ic">${egi('odul', 46)}</span>`, esc(c.title), `${esc(c.metricLabel)}${c.me ? ` · ${c.me.rank}. sıradasın` : ''}`, c.me ? 'Sıralama' : 'Katıl');
+    paintRail();
+  }).catch(() => {});
+  api('/songs/summary').then((r) => {
+    const c = r.contest; if (!c) return;
+    const t = c.phase === 'submit' ? ['Şarkı yarışması başladı', r.mine ? 'Şarkın yarışmada · arkadaşlarına haber ver' : 'Şarkını yükle, Spotify’da yayınlayalım', 'Katıl']
+      : c.phase === 'vote' ? ['Şarkı yarışmasında oylama', r.votesLeft ? `${r.votesLeft} oy hakkın var · ${c.entries} şarkı` : `${c.entries} şarkı yarışıyor`, 'Dinle']
+        : c.phase === 'ended' && Date.now() - c.voteEnd < 14 * 86400000 ? ['Şarkı yarışması sonuçlandı', 'Kazanan şarkıyı dinle', 'Gör'] : null;
+    if (!t) return;
+    cards.song = card('pc-sg', '#/sarki', '<img class="pc-ic" src="/img/songs/trophy.svg" alt="">', t[0], t[1], t[2]);
+    paintRail();
   }).catch(() => {});
   // Arkadaşların şu an nerede (karşılıklı takip)
   api('/checkins/friends').then((list) => {
     const el2 = view.querySelector('.vn-friends'); if (!el2 || !list.length) return;
     el2.innerHTML = `<div class="section-t"><span>📍 Arkadaşların şu an</span><a href="#/mekan">Mekandayım</a></div><div class="vnf-row">${list.map((x) => `<a class="vnf" href="#/u/${esc(x.user.username)}"><img class="av av-40" src="${esc(x.user.avatar)}" alt=""><span class="grow"><b class="ellipsis">${esc(x.user.name)}</b><small class="ellipsis">${x.venue.em} ${esc(x.venue.name)}</small></span></a>`).join('')}</div>`;
   }).catch(() => {});
-  api('/wheel').then((w) => { view.querySelector('.wh-card-f').hidden = !w.canSpin; }).catch(() => {});
-  api('/songs/summary').then((r) => {
-    const c = r.contest; const a = view.querySelector('.sg-feed'); if (!c || !a) return;
-    const t = c.phase === 'submit' ? ['Şarkı yarışması başladı', r.mine ? 'Şarkın yarışmada · arkadaşlarına haber ver' : 'Şarkını yükle, kazanırsan Spotify’da yayınlayalım', 'Katıl']
-      : c.phase === 'vote' ? ['Şarkı yarışmasında oylama', r.votesLeft ? `${r.votesLeft} oy hakkın var · ${c.entries} şarkı yarışıyor` : `${c.entries} şarkı yarışıyor`, 'Dinle']
-        : c.phase === 'ended' && Date.now() - c.voteEnd < 14 * 86400000 ? ['Şarkı yarışması sonuçlandı', 'Kazanan şarkıyı dinle', 'Gör'] : null;
-    if (!t) return;
-    a.innerHTML = `<img class="sgf-ic" src="/img/songs/trophy.svg" alt=""><span class="grow"><b>${t[0]}</b><small>${t[1]}</small></span><span class="go-chip">${t[2]}</span>`;
-    a.hidden = false;
-  }).catch(() => {});
-  offs.push(on('quests', paintQs));
   // Planlı bakım duyurusu
   const maintSlot = view.querySelector('.maint-slot');
   const paintMaint = () => {

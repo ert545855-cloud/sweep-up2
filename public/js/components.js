@@ -92,22 +92,30 @@ export function overlayHtml(list = []) {
   }).join('')}</div>`;
 }
 // Uzun yazılar: birkaç satır görünür, "devamı" ile açılır
-export function capHtml(p, withUser = true) {
+// Instagram gibi: ilk iki satır / ~110 karakter görünür, devamı aynı satırda "… devamı" ile açılır
+const CAP_MAX = 110;
+function capCut(text) {
+  let cut = text.split('\n').slice(0, 2).join('\n');
+  if (cut.length > CAP_MAX) { cut = cut.slice(0, CAP_MAX); const sp = cut.lastIndexOf(' '); if (sp > CAP_MAX * 0.6) cut = cut.slice(0, sp); }
+  if (cut.length >= text.trimEnd().length) return null;
+  return cut.replace(/[\s.,;:!?…-]+$/u, '');
+}
+export function capHtml(p, withUser = true, { full = false } = {}) {
   if (!p.caption) return '';
-  return `<div class="cap-w"><div class="cap clamp">${withUser ? `<a class="cu" href="#/u/${esc(p.user.username)}">${esc(p.user.username)}</a> ` : ''}${richText(p.caption)}</div><button class="cap-more" hidden>devamı</button></div>`;
+  const cut = full ? null : capCut(p.caption);
+  const user = withUser ? `<a class="cu" href="#/u/${esc(p.user.username)}">${esc(p.user.username)}</a> ` : '';
+  return `<div class="cap-w"><div class="cap">${user}<span class="cap-s">${richText(cut ?? p.caption)}</span>${cut != null ? `<span class="cap-dots">… </span><button type="button" class="cap-more">devamı</button><template>${richText(p.caption)}</template>` : ''}</div></div>`;
 }
 export function wireCaption(root) {
   root.querySelectorAll('.cap-w').forEach((w) => {
-    const c = w.querySelector('.cap'); const b = w.querySelector('.cap-more');
-    if (!c || !b) return;
-    const check = () => { b.hidden = !(c.classList.contains('clamp') && c.scrollHeight > c.clientHeight + 2); };
-    requestAnimationFrame(check); setTimeout(check, 400);
-    b.onclick = (e) => { e.stopPropagation(); c.classList.remove('clamp'); b.hidden = true; };
-    c.addEventListener('click', (e) => { if (e.target.closest('a')) return; if (c.classList.contains('clamp') && !b.hidden) { c.classList.remove('clamp'); b.hidden = true; } });
+    const b = w.querySelector('.cap-more'); if (!b) return;
+    const open = () => { const t = w.querySelector('template'); w.querySelector('.cap-s').innerHTML = t.innerHTML; t.remove(); w.querySelector('.cap-dots')?.remove(); b.remove(); };
+    b.onclick = (e) => { e.stopPropagation(); open(); };
+    w.querySelector('.cap').addEventListener('click', (e) => { if (e.target.closest('a') || !w.querySelector('.cap-more')) return; open(); });
   });
 }
 
-export function postCard(p) {
+export function postCard(p, { full = false } = {}) {
   const text = p.type === 'text';
   const canRepost = p.user.id !== state.me.id && !p.user.private;
   return `<article class="post" data-post="${esc(p.id)}">
@@ -127,7 +135,7 @@ export function postCard(p) {
       <button class="sv" aria-label="Kaydet">${icon('bookmark', '', saved.has(p.id) ? 'fill="currentColor"' : '')}</button>
     </div>
     <div class="post-body">
-      ${text ? '' : capHtml(p)}
+      ${text ? '' : capHtml(p, true, { full })}
       ${p.commentCount ? `<button class="muted cm2" style="text-align:left">${p.commentCount} yorumun tümünü gör</button>` : ''}
       <span class="when">${ago(p.repostAt || p.createdAt)}</span>
     </div>

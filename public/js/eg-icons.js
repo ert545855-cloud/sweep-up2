@@ -2,7 +2,7 @@
 // Emoji yerine her yerde bu rozetler kullanılır; yönetimden eklenen yeni kulüp/hediye için emoji yedek kalır.
 import { esc } from './core.js';
 
-const HAS = new Set(['seri', 'soru', 'secki', 'kulup', 'karaoke', 'burc', 'koruyucu', 'odul', 'hediye', 'uyum', 'gorev', 'dinle',
+const HAS = new Set(['seri', 'soru', 'secki', 'kulup', 'karaoke', 'burc', 'koruyucu', 'odul', 'hediye', 'uyum', 'gorev', 'dinle', 'genel', 'odalar', 'hizli', 'mekan',
   'club-muzik', 'club-oyun', 'club-burc', 'club-futbol', 'club-dizi', 'club-kitap', 'club-seyahat', 'club-spor', 'club-yemek', 'club-teknoloji',
   'gift-gul', 'gift-kalp', 'gift-kahve', 'gift-yildiz', 'gift-tac', 'gift-yuzuk', 'gift-roket', 'gift-elmas',
   'fal-kahve', 'fal-tarot', 'fal-burc', 'fal-uyum', 'pack-ask_ay', 'pack-tarot_ay', 'pack-kahve_3', 'pack-yillik',

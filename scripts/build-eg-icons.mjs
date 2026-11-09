@@ -63,11 +63,18 @@ const D = {
 // Yüzük glifi Figma'da vektörle çizildi (fontta yok)
 const RING = '<circle cx="32" cy="38.5" r="12.5" fill="none" stroke="#fff" stroke-width="5.2"/><path d="M23.5 19.5 27.5 13.5h9l4 6-8.5 7.6z" fill="#fff"/>';
 
+// Ana sayfa kısayolları için çizilen glifler (genel sohbet, odalar, hızlı tanış, mekan)
+const CHATS = '<path d="M26 17h20a5 5 0 0 1 5 5v11a5 5 0 0 1-5 5h-1v5.5L39 38H26a5 5 0 0 1-5-5V22a5 5 0 0 1 5-5z" fill="#fff" fill-opacity=".55"/><path d="M18 25h18a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H25l-6 5.2V45h-1a5 5 0 0 1-5-5V30a5 5 0 0 1 5-5z" fill="#fff"/><g fill="url(#g)"><circle cx="21" cy="35" r="2.2"/><circle cx="27" cy="35" r="2.2"/><circle cx="33" cy="35" r="2.2"/></g>';
+const PHONES = '<path d="M18 40v-7a14 14 0 0 1 28 0v7" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/><rect x="14.5" y="34" width="10.5" height="15.5" rx="4.6" fill="#fff"/><rect x="39" y="34" width="10.5" height="15.5" rx="4.6" fill="#fff"/>';
+const BOLT = '<path d="M35.6 13.5 19.5 35.2h10.4L27.6 50.5 44.5 28H33.8z" fill="#fff" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"/>';
+const PIN = '<path d="M32 13.5c-7.5 0-13.5 5.8-13.5 13.1 0 9.6 13.5 23.4 13.5 23.4s13.5-13.8 13.5-23.4c0-7.3-6-13.1-13.5-13.1z" fill="#fff"/><circle cx="32" cy="26.8" r="5.2" fill="url(#g)"/>';
+
 // [ad, glif, palet, şekil]
 const ICONS = [
   ['seri', 'seri', 'sunset'], ['soru', 'soru', 'violet'], ['secki', 'secki', 'sun'], ['kulup', 'kulup', 'sky'], ['karaoke', 'karaoke', 'magenta'],
   ['burc', 'burc', 'grape'], ['koruyucu', 'koruyucu', 'ice'], ['odul', 'odul', 'gold'], ['hediye', 'hediye', 'pink'], ['uyum', 'uyum', 'rose'],
   ['gorev', 'gorev', 'mint'], ['dinle', 'dinle', 'teal'],
+  ['genel', CHATS, 'indigo'], ['odalar', PHONES, 'pink'], ['hizli', BOLT, 'sun'], ['mekan', PIN, 'mint'],
   ['club-muzik', 'club-muzik', 'pink'], ['club-oyun', 'club-oyun', 'violet'], ['club-burc', 'club-burc', 'indigo'], ['club-futbol', 'club-futbol', 'mint'],
   ['club-dizi', 'club-dizi', 'red'], ['club-kitap', 'club-kitap', 'amber'], ['club-seyahat', 'club-seyahat', 'sky'], ['club-spor', 'club-spor', 'orange'],
   ['club-yemek', 'club-yemek', 'sunset'], ['club-teknoloji', 'club-teknoloji', 'teal'],

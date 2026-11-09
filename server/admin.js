@@ -134,10 +134,12 @@ module.exports = function mountAdmin(app, ctx) {
     const users = store.all('users');
     const msgs = store.filter('messages', (m) => !m.system);
     const days = 14;
-    const start = new Date(); start.setHours(0, 0, 0, 0);
+    // Günler Türkiye saatine göre (UTC+3) — sunucu hangi saat diliminde çalışırsa çalışsın
+    const TRO = 3 * 3600000;
+    const start = (() => { const d = new Date(t + TRO); d.setUTCHours(0, 0, 0, 0); return d.getTime() - TRO; })();
     const series = (arr, field = 'at') => Array.from({ length: days }, (_, i) => {
-      const d0 = start.getTime() - (days - 1 - i) * DAY;
-      return { day: new Date(d0).toISOString().slice(0, 10), n: arr.filter((x) => x[field] >= d0 && x[field] < d0 + DAY).length };
+      const d0 = start - (days - 1 - i) * DAY;
+      return { day: new Date(d0 + TRO).toISOString().slice(0, 10), n: arr.filter((x) => x[field] >= d0 && x[field] < d0 + DAY).length };
     });
     const month = new Date(); month.setDate(1); month.setHours(0, 0, 0, 0);
     const ledger = store.filter('adm_ledger', (l) => new Date(l.date).getTime() >= month.getTime());
@@ -145,12 +147,12 @@ module.exports = function mountAdmin(app, ctx) {
     const falMsgs = store.filter('messages', (m) => m.fal);
     res.json({
       users: users.length,
-      newToday: users.filter((u) => u.createdAt >= start.getTime()).length,
+      newToday: users.filter((u) => u.createdAt >= start).length,
       new7: users.filter((u) => u.createdAt >= t - 7 * DAY).length,
       online: users.filter((u) => isOnline(u.id)).length,
       active24: users.filter((u) => (u.lastSeen || 0) >= t - DAY || isOnline(u.id)).length,
       banned: users.filter((u) => statusOf(u) !== 'active').length,
-      messagesToday: msgs.filter((m) => m.at >= start.getTime()).length,
+      messagesToday: msgs.filter((m) => m.at >= start).length,
       matches: store.all('matches').length,
       posts: store.all('posts').length,
       stories: store.filter('stories', (s) => t - s.at < DAY).length,

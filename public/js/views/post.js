@@ -10,7 +10,7 @@ export default async function post(view, id) {
   const p = await api(`/posts/${id}`);
   if (p.type === 'reel') { location.replace(`#/vitrin/${p.id}`); return null; }
   const pb = view.querySelector('.pb');
-  pb.innerHTML = postCard(p);
+  pb.innerHTML = postCard(p, { full: true });
   wirePost(pb.firstElementChild, p, () => { location.hash = '#/me'; });
   return autoplay(pb);
 }

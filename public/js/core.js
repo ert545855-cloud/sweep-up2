@@ -130,27 +130,53 @@ export function pickEmoji(title = 'Emoji ekle') {
   });
 }
 // GIF seçici: arama açıksa GIPHY/Tenor'dan, her zaman cihazdan GIF yükleme
-export function pickGif() {
+// GIF / hareketli çıkartma seçici (GIPHY). Seçilen bağlantıyı döndürür; anahtar yoksa cihazdan yükleme kalır.
+export function pickGif({ tab = 'gifs', upload = true, title = 'GIF ekle' } = {}) {
   return new Promise((resolve) => {
     let done = false;
-    sheet('GIF ekle', `<div class="gif-pick"><div class="gif-q" hidden><input class="field" placeholder="GIF ara…" maxlength="60"></div>
-      <button type="button" class="btn block gif-up">${icon('upload')} Cihazdan GIF yükle</button>
-      <div class="gif-grid"><div class="spinner"></div></div></div>`, {
-      async onMount(sh, close) {
-        const grid = sh.querySelector('.gif-grid');
+    sheet(title, `<div class="gif-pick">
+      <div class="gif-top" hidden><label class="gif-q">${icon('search')}<input placeholder="GIPHY’de ara" maxlength="60" enterkeyhint="search"></label>
+        <div class="gif-tabs" role="tablist"><button type="button" data-t="gifs" role="tab">GIF</button><button type="button" data-t="stickers" role="tab">Çıkartma</button></div>
+        <div class="gif-sug"></div></div>
+      <div class="gif-grid"><div class="gif-sk">${'<i></i>'.repeat(8)}</div></div>
+      <div class="gif-foot">${upload ? `<button type="button" class="btn sm gif-up">${icon('upload')} Cihazdan yükle</button>` : '<span></span>'}<span class="gif-by" hidden>Powered by GIPHY</span></div></div>`, {
+      onMount(sh, close) {
+        const grid = sh.querySelector('.gif-grid'); const inp = sh.querySelector('.gif-q input');
         const finish = (v) => { done = true; close(); resolve(v); };
-        sh.querySelector('.gif-up').onclick = async () => {
+        let kind = tab; let q = ''; let next = null; let busy = false; let seq = 0;
+        sh.querySelector('.gif-up')?.addEventListener('click', async () => {
           const f = await pickFile('image/gif,image/webp,image/png'); if (!f) return;
           if (f.size > 8 * 1024 * 1024) return toast('GIF en fazla 8 MB olabilir.');
           const b = sh.querySelector('.gif-up'); b.disabled = true; b.textContent = 'Yükleniyor…';
-          try { const r = await uploadFile(f); finish(r.url); } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Cihazdan GIF yükle'; }
+          try { const r = await uploadFile(f); finish(r.url); } catch (e) { toast(e.message); b.disabled = false; b.innerHTML = `${icon('upload')} Cihazdan yükle`; }
+        });
+        const tile = (g) => `<button type="button" class="gif-it ${kind === 'stickers' ? 'gst' : ''}" data-src="${esc(g.src)}" title="${esc(g.title || '')}" style="aspect-ratio:${g.w || 1}/${g.h || 1}"><img src="${esc(g.src)}" alt="${esc(g.title || 'GIF')}" loading="lazy" decoding="async"></button>`;
+        // İki sütun: her görseli daha kısa sütuna koy (Instagram/GIPHY gibi)
+        let cols = null; let hs = [0, 0];
+        const reset = () => { grid.innerHTML = '<div class="gif-col"></div><div class="gif-col"></div>'; cols = grid.querySelectorAll('.gif-col'); hs = [0, 0]; grid.scrollTop = 0; };
+        const add = (items) => items.forEach((g) => { const k = hs[0] <= hs[1] ? 0 : 1; cols[k].insertAdjacentHTML('beforeend', tile(g)); hs[k] += (g.h || 1) / (g.w || 1) + 0.05; });
+        const load = async (more) => {
+          if (busy && more) return; busy = true; const my = ++seq;
+          if (!more) grid.innerHTML = `<div class="gif-sk">${'<i></i>'.repeat(8)}</div>`;
+          const r = await api(`/gifs?type=${kind}&q=${encodeURIComponent(q)}${more ? `&offset=${next}` : ''}`).catch(() => ({ enabled: true, items: [] }));
+          busy = false; if (my !== seq) return;
+          if (!r.enabled) { grid.innerHTML = '<p class="gif-empty">Telefonundaki bir GIF’i ekleyebilirsin.</p>'; return; }
+          sh.querySelector('.gif-top').hidden = false; sh.querySelector('.gif-by').hidden = r.provider !== 'giphy';
+          sh.querySelectorAll('.gif-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === kind));
+          if (r.provider !== 'giphy') sh.querySelector('.gif-tabs').hidden = true;
+          if (!more) { reset(); if (!r.items.length) { grid.innerHTML = `<p class="gif-empty">${q ? `“${esc(q)}” için sonuç yok. Başka bir kelime dene.` : 'Şu an GIF yüklenemedi.'}</p>`; return; } }
+          add(r.items); next = r.next;
         };
-        const show = (items) => { grid.innerHTML = items.length ? items.map((g) => `<button type="button" data-src="${esc(g.src)}"><img src="${esc(g.src)}" alt="" loading="lazy"></button>`).join('') : '<div class="muted" style="padding:10px">Sonuç bulunamadı.</div>'; };
-        grid.onclick = (e) => { const b = e.target.closest('[data-src]'); if (b) finish(b.dataset.src); };
-        const r = await api('/gifs').catch(() => ({ enabled: false }));
-        if (!r.enabled) { grid.innerHTML = '<p class="muted" style="font-size:13px;margin:4px 2px">Telefonundaki bir GIF’i ekleyebilirsin.</p>'; return; }
-        sh.querySelector('.gif-q').hidden = false; show(r.items);
-        let t; sh.querySelector('.gif-q input').oninput = (e) => { clearTimeout(t); t = setTimeout(async () => { const x = await api(`/gifs?q=${encodeURIComponent(e.target.value)}`).catch(() => ({ items: [] })); show(x.items || []); }, 350); };
+        grid.addEventListener('click', (e) => { const b = e.target.closest('[data-src]'); if (b) finish(b.dataset.src); });
+        grid.addEventListener('scroll', () => { if (next != null && grid.scrollTop + grid.clientHeight > grid.scrollHeight - 300) load(true); }, { passive: true });
+        sh.querySelector('.gif-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t]'); if (!b || b.dataset.t === kind) return; kind = b.dataset.t; load(false); });
+        const SUG = ['Merhaba', 'Kahkaha', 'Aşk', 'Tebrikler', 'Teşekkürler', 'Dans', 'Şaşkın', 'Kedi', 'Günaydın', 'İyi geceler'];
+        const sug = sh.querySelector('.gif-sug');
+        sug.innerHTML = SUG.map((w) => `<button type="button">${w}</button>`).join('');
+        sug.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; inp.value = b.textContent; q = inp.value; load(false); });
+        let t; inp.oninput = () => { clearTimeout(t); t = setTimeout(() => { q = inp.value.trim(); load(false); }, 380); };
+        inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(t); q = inp.value.trim(); load(false); inp.blur(); } };
+        load(false);
       },
       onClose() { if (!done) resolve(null); },
     });
@@ -370,11 +396,19 @@ export function toast(text, { title, img, href, ms = 3500 } = {}) {
   const t = el(`<div class="toast" role="status">
     ${img ? `<img class="av av-32" src="${esc(img)}" alt="">` : ''}
     <div class="t">${title ? `<b>${esc(title)}</b>` : ''}${esc(text)}</div></div>`);
-  if (href) t.onclick = () => { location.hash = href; close(); };
+  t.onclick = () => { if (href) location.hash = href; close(); };
   root.prepend(t);
-  const close = () => { t.classList.add('out'); setTimeout(() => t.remove(), 250); };
+  const close = () => { if (t.classList.contains('out')) return; t.classList.add('out'); setTimeout(() => t.remove(), 250); };
   setTimeout(close, ms);
   if (navigator.vibrate && title) navigator.vibrate(18);
+}
+
+// Bir kez gösterilen küçük ipucu: sayfanın içinde, başlığı kapatmadan (dokununca kapanır)
+export function inlineHint(anchor, key, text, where = 'beforebegin') {
+  try { if (!anchor || localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch { return; }
+  const h = el(`<div class="inl-hint" role="status"><span class="ih-i">${icon('hand')}</span><span class="grow">${esc(text)}</span><button type="button" aria-label="Kapat">${icon('close')}</button></div>`);
+  const close = () => { h.classList.add('out'); setTimeout(() => h.remove(), 220); };
+  h.onclick = close; anchor.insertAdjacentElement(where, h); setTimeout(close, 9000);
 }
 
 // ---- Alt sayfa (sheet) ----
@@ -620,7 +654,7 @@ export function onDoubleTap(target, onDouble, onSingle) {
 export function openComments(post) {
   let replyTo = null;
   const close = sheet('Yorumlar', '<div class="cl"><div class="spinner"></div></div>', {
-    footer: `<div class="reply-to" hidden><span></span><button type="button" class="link rt-x">Vazgeç</button></div><form class="comment-input">${avatar(state.me, 32, { dot: false })}<input name="t" placeholder="${esc(post.user.username)} için yorum ekle..." autocomplete="off" maxlength="500"><button class="link">Paylaş</button></form>`,
+    footer: `<div class="reply-to" hidden><span></span><button type="button" class="link rt-x">Vazgeç</button></div><div class="c-quick">${['❤️', '🙌', '🔥', '👏', '😢', '😍', '😮', '😂'].map((e) => `<button type="button">${e}</button>`).join('')}</div><form class="comment-input">${avatar(state.me, 32, { dot: false })}<input name="t" placeholder="${esc(post.user.username)} için yorum ekle..." autocomplete="off" maxlength="500"><button type="button" class="cgif" aria-label="GIF ile yorum yap">${icon('gif')}</button><button class="link">Paylaş</button></form>`,
     async onMount(sh) {
       const inp = sh.querySelector('.comment-input input');
       mentionAutocomplete(inp);
@@ -630,7 +664,7 @@ export function openComments(post) {
       let cs = [];
       const open = new Set();
       const row = (c, sub) => `<div class="comment ${sub ? 'sub' : ''}" data-cid="${esc(c.id)}">${avatar(c.user, sub ? 28 : 32, { dot: false })}<div class="t"><span class="b">${nm(c.user, 'username')}</span><span class="muted">${ago(c.at)}</span>
-        <div class="ctext">${c.replyToUser && sub ? `<a class="tag" href="#/u/${esc(c.replyToUser)}">@${esc(c.replyToUser)}</a> ` : ''}${richText(c.text)}</div>
+        ${c.text || (c.replyToUser && sub) ? `<div class="ctext">${c.replyToUser && sub ? `<a class="tag" href="#/u/${esc(c.replyToUser)}">@${esc(c.replyToUser)}</a> ` : ''}${richText(c.text || '')}</div>` : ''}${c.gif ? `<img class="cgif-img" src="${esc(c.gif)}" alt="GIF" loading="lazy">` : ''}
         <div class="cacts"><button class="crep">Yanıtla</button>${owner && c.user?.id !== state.me.id ? '<button class="cpriv">Özel yanıt gönder</button>' : ''}</div></div>
         <button class="cmore" aria-label="Yorum seçenekleri">${icon('more')}</button></div>`;
       const paint = () => {
@@ -649,7 +683,7 @@ export function openComments(post) {
       };
       rt.querySelector('.rt-x').onclick = () => setReply(null);
       const privateReply = (c) => {
-        sheet(`@${c.user.username} kişisine özel yanıt`, `<form class="form" style="padding:0 16px 16px"><div class="pq-quote" style="margin:0"><small>Gönderindeki yorumu</small>${esc(c.text)}</div>
+        sheet(`@${c.user.username} kişisine özel yanıt`, `<form class="form" style="padding:0 16px 16px"><div class="pq-quote" style="margin:0"><small>Gönderindeki yorumu</small>${esc(c.text || 'GIF')}</div>
           <textarea class="field" name="t" rows="3" maxlength="1000" placeholder="Mesajın sadece ona gider..."></textarea><button class="btn primary block">${icon('send')} Gönder</button></form>`, {
           onMount(s2, close2) {
             const f = s2.querySelector('form'); setTimeout(() => f.t.focus(), 60);
@@ -681,7 +715,7 @@ export function openComments(post) {
               close2();
               if (a === 'reply') setReply(c);
               if (a === 'priv') privateReply(c);
-              if (a === 'copy') { await navigator.clipboard?.writeText(c.text); toast('Kopyalandı.'); }
+              if (a === 'copy') { await navigator.clipboard?.writeText(c.text || c.gif || ''); toast('Kopyalandı.'); }
               if (a === 'rep') reportMessage({ kind: 'comment', id: c.id, postId: post.id, user: c.user, text: c.text });
               if (a === 'del') {
                 try {
@@ -697,18 +731,28 @@ export function openComments(post) {
       });
       try { cs = await api(`/posts/${post.id}/comments`); paint(); } catch (e) { list.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
       const f = sh.querySelector('form');
+      const post_ = async (text, gif) => {
+        const to = replyTo;
+        const c = await api(`/posts/${post.id}/comments`, { body: { text, gif, replyTo: to?.id || null } });
+        cs.push(c); post.commentCount++;
+        if (c.parentId) open.add(c.parentId);
+        setReply(null); paint();
+        list.querySelector(`[data-cid="${CSS.escape(c.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
       f.onsubmit = async (e) => {
         e.preventDefault();
         const text = f.t.value.trim(); if (!text) return;
         f.t.value = '';
-        const to = replyTo;
-        try {
-          const c = await api(`/posts/${post.id}/comments`, { body: { text, replyTo: to?.id || null } });
-          cs.push(c); post.commentCount++;
-          if (c.parentId) open.add(c.parentId);
-          setReply(null); paint();
-          list.querySelector(`[data-cid="${CSS.escape(c.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } catch (er) { toast(er.message); f.t.value = text; }
+        try { await post_(text, null); } catch (er) { toast(er.message); f.t.value = text; }
+      };
+      sh.querySelector('.cgif').onclick = async () => {
+        const src = await pickGif({ title: 'GIF ile yorum yap', upload: false }); if (!src || src.startsWith('/media/')) return;
+        const text = f.t.value.trim(); f.t.value = '';
+        try { await post_(text, src); } catch (er) { toast(er.message); f.t.value = text; }
+      };
+      sh.querySelector('.c-quick').onclick = (e) => {
+        const b = e.target.closest('button'); if (!b) return;
+        const i = f.t.selectionStart ?? f.t.value.length; f.t.value = f.t.value.slice(0, i) + b.textContent + f.t.value.slice(i); f.t.focus();
       };
     },
   });

@@ -28,8 +28,8 @@ export default function settings(view) {
       <a class="it" href="#/gorunum">${icon('crown')}<span class="grow">Çerçeve ve rozetler<div class="sub">Profil fotoğrafına çerçeve, sınırlı etkinlik rozetleri</div></span></a>
       <a class="it" href="#/ziyaretciler">${icon('eye')}<span class="grow">Profilini kimler gördü<div class="sub">Son 7 günün ziyaretçileri</div></span></a>
       <a class="it" href="#/odalar">${icon('users')}<span class="grow">Etkinlik odaları ve hızlı tanışma<div class="sub">Konu odaları, 3 dakikalık görüntülü turlar</div></span></a>
-      <a class="it" href="#/reklam">🚀<span class="grow">Öne çıkarmalarım<div class="sub">Gönderilerini jetonla daha çok kişiye göster</div></span></a>
-      <a class="it" href="#/cark">🎡<span class="grow">Hediye çarkı<div class="sub">Her hafta bir çevirme hakkı, cuma yenilenir</div></span></a>
+      <a class="it" href="#/reklam">${icon('rocket')}<span class="grow">Öne çıkarmalarım<div class="sub">Gönderilerini jetonla daha çok kişiye göster</div></span></a>
+      <a class="it" href="#/cark">${icon('wheel')}<span class="grow">Hediye çarkı<div class="sub">Her hafta bir çevirme hakkı, cuma yenilenir</div></span></a>
       <a class="it" href="#/yarismalar">${icon('trophy')}<span class="grow">Yarışmalar<div class="sub">En çok paylaşan, beğeni ya da yorum alan kazanır</div></span></a>
       <a class="it" href="#/mekan">${icon('mapPin')}<span class="grow">Mekandayım<div class="sub">Bulunduğun mekanı etiketle, aynı yerdekilerle eşleş</div></span></a>
       <a class="it" href="#/sarki">${icon('music')}<span class="grow">Şarkı yarışması<div class="sub">3 ayda bir; kazanan şarkı Spotify’da yayınlanır</div></span></a>

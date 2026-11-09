@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, clock, dayLabel, lastSeen, avatar, toast, pickFile, compressImage, uploadFile, refreshBadges, el, sheet, audioRecorder, fmtDur, reportUser, reportMessage, nm,
+  state, api, esc, on, clock, dayLabel, lastSeen, avatar, toast, pickFile, compressImage, uploadFile, refreshBadges, el, sheet, audioRecorder, fmtDur, reportUser, reportMessage, nm, pickGif, inlineHint,
 } from '../core.js';
 import { restoreDraft } from '../update.js';
 import { startCall } from '../calls.js';
@@ -166,7 +166,7 @@ export default async function chat(view, chatId) {
   const bubbleInner = (m) => {
     const meta = `<span class="meta">${m.expiresAt ? icon('timer', 'ttl-i') : ''}${clock(m.at)}<span class="tk">${tick(m)}</span></span>`;
     if (m.deleted) return `<div class="msg deleted">${icon('block', '', 'style="width:14px;height:14px;vertical-align:-2px"')} Bu mesaj silindi${meta}</div>`;
-    const reply = m.reply ? `<span class="reply"><b>${esc(m.reply.from === state.me.id ? 'Sen' : (m.reply.fromName || ''))}</b>${esc(m.reply.text || { audio: '🎤 Sesli mesaj', video: '🎥 Video', image: '📷 Fotoğraf' }[m.reply.mediaType] || '')}</span>` : '';
+    const reply = m.reply ? `<span class="reply"><b>${esc(m.reply.from === state.me.id ? 'Sen' : (m.reply.fromName || ''))}</b>${esc(m.reply.text || { audio: '🎤 Sesli mesaj', video: '🎥 Video', image: '📷 Fotoğraf', gif: 'GIF' }[m.reply.mediaType] || '')}</span>` : '';
     const story = m.story ? `<span class="story-ref">${m.story.media ? `<img src="${esc(m.story.media)}" alt="">` : ''}<span>${m.story.reaction ? (m.from === state.me.id ? 'Hikayesine tepki verdin' : 'Hikayene tepki verdi') : 'Hikayeye yanıt'}</span></span>` : '';
     if (m.fal) {
       const f = m.fal; const t = FAL_TYPES[f.type] || { em: '🔮', name: 'Fal' };
@@ -202,6 +202,7 @@ export default async function chat(view, chatId) {
         <span class="loc-t">${icon('mapPin')}<span><b>${esc(l.label || 'Konum')}</b><small>Haritada aç</small></span></span></a>${meta}</div>`;
     }
     if (m.mediaType === 'audio') return `<div class="msg">${reply}${audioHtml(m)}${meta}</div>`;
+    if (m.mediaType === 'gif') return `<div class="msg media gifm">${reply}<img src="${esc(m.media)}" alt="GIF" loading="lazy">${meta}</div>`;
     if (m.media) {
       return `<div class="msg media">${m.mediaType === 'video'
         ? `<video src="${esc(m.media)}" controls playsinline preload="metadata"></video>`
@@ -437,12 +438,7 @@ export default async function chat(view, chatId) {
     m.openedBy = [...(m.openedBy || []), state.me.id]; upd({ ...m, viewOnceState: 'opened' });
   }
 
-  try {
-    if (!localStorage.getItem('su_hint_msgmenu')) {
-      localStorage.setItem('su_hint_msgmenu', '1');
-      setTimeout(() => toast('İpucu: Bir mesaja basılı tutarak yanıtlayabilir, tepki verebilir ya da mesajı bildirebilirsin.', { ms: 6000 }), 900);
-    }
-  } catch {}
+  setTimeout(() => inlineHint(comp, 'su_hint_msgmenu', 'İpucu: Bir mesaja basılı tutarak yanıtlayabilir, tepki verebilir ya da bildirebilirsin.'), 700);
   // ---- Mesaj menüsü: uzun bas / sağ tık / çift dokun / sağa kaydır ----
   const findMsg = (node) => { const w = node.closest?.('.mwrap'); return w && msgs.find((m) => m.id === w.dataset.id); };
   const react = (m, emoji) => s?.emit('message:react', { id: m.id, emoji });
@@ -599,7 +595,7 @@ export default async function chat(view, chatId) {
     if (!m) { r.hidden = true; return; }
     r.hidden = false;
     r.querySelector('.who-r').textContent = m.from === state.me.id ? 'Kendine yanıt' : `${(members.get(m.from)?.name || other.name).split(' ')[0]} kişisine yanıt`;
-    r.querySelector('.txt').textContent = m.text || { audio: '🎤 Sesli mesaj', video: '🎥 Video' }[m.mediaType] || '📷 Fotoğraf';
+    r.querySelector('.txt').textContent = m.text || { audio: '🎤 Sesli mesaj', video: '🎥 Video', gif: 'GIF' }[m.mediaType] || '📷 Fotoğraf';
     comp.querySelector('textarea')?.focus();
   }
 
@@ -623,6 +619,7 @@ export default async function chat(view, chatId) {
         <div class="box">
           <button type="button" class="icon-btn pic" aria-label="Fotoğraf veya video gönder">${icon('image')}</button>
           <textarea rows="1" placeholder="Mesaj yaz..." aria-label="Mesaj yaz" maxlength="4000"></textarea>
+          ${falChat ? '' : `<button type="button" class="icon-btn gifb" aria-label="GIF gönder">${icon('gif')}</button>`}
           <button type="button" class="icon-btn more-b" aria-label="Diğer">${icon('plusSq')}</button>
         </div>
         <button class="go" aria-label="Basılı tutarak sesli mesaj kaydet">${icon('mic')}</button>
@@ -664,6 +661,10 @@ export default async function chat(view, chatId) {
       } catch (er) { toast(er.message); }
     };
     comp.querySelector('.pic').onclick = () => sendMedia('image/*,video/*');
+    comp.querySelector('.gifb')?.addEventListener('click', async () => {
+      const src = await pickGif({ title: 'GIF gönder', upload: false }); if (!src) return;
+      try { await send({ media: src, mediaType: src.startsWith('/media/') ? 'image' : 'gif' }); } catch (er) { toast(er.message); }
+    });
     comp.querySelector('.more-b').onclick = () => sheet(null, `<div class="menu">
       <button data-a="cam">${icon('camera')}Fotoğraf çek</button>
       <button data-a="once">${icon('eye')}<span class="grow">Tek seferlik fotoğraf<div class="sub muted" style="font-size:12.5px">Bir kez açılır, sonra silinir</div></span></button>

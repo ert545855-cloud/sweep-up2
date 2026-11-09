@@ -70,7 +70,7 @@ export default async function store(view) {
         ${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ''}<b>${p.days >= 30 && p.days % 30 === 0 ? `${p.days / 30} ay` : `${p.days} gün`}</b><span class="price">${TL(p.price)}</span><small>${TL(p.price / Math.max(1, p.days / 30))} / ay</small></button>`).join('')}</div>
       <h3 class="shop-h">${icon('coin')} Jeton</h3>
       <p class="muted" style="margin:-4px 2px 10px;font-size:14px">Canlı yayınlarda hediye gönder, Falcı Teyze’ye fal baktır, boost ile öne çık.</p>
-      <div class="packs">${s.coinPacks.map((p) => `<button class="pack" data-p="${esc(p.id)}" ${s.payEnabled ? '' : 'disabled'}>${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ''}
+      <div class="packs" style="--cols:${s.coinPacks.length === 4 || s.coinPacks.length < 3 ? 2 : 3}">${s.coinPacks.map((p) => `<button class="pack" data-p="${esc(p.id)}" ${s.payEnabled ? '' : 'disabled'}>${p.tag ? `<span class="tag">${esc(p.tag)}</span>` : ''}
         <span class="coins">${icon('coin')}${p.coins.toLocaleString('tr-TR')}</span><span class="price">${TL(p.price)}</span></button>`).join('')}</div>
       <div class="uses">
         <div>${icon('gift')}<span><b>Hediyeler</b>${s.gifts.slice(0, 4).map((g) => `${g.em} ${g.coins}`).join(' · ')}…</span></div>

@@ -255,6 +255,8 @@ function falLock(chat, fromId) {
 }
 function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal, location, quote, game, plan, superMsg, viewOnce, share, compat, gift }) {
   text = String(text || '').slice(0, 4000).trim();
+  // Medya sadece kendi yüklemelerimizden; GIF ise GIPHY/Tenor bağlantısı olabilir
+  if (mediaType === 'gif') { if (!GIF_HOSTS.test(String(media || ''))) media = null; } else if (media && !isMedia(media)) media = null;
   let loc = null;
   if (location && Number.isFinite(+location.lat) && Number.isFinite(+location.lng)) {
     loc = { lat: Math.round(+location.lat * 1e5) / 1e5, lng: Math.round(+location.lng * 1e5) / 1e5, label: String(location.label || '').slice(0, 80) };
@@ -274,7 +276,7 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
   }
   const msg = store.put('messages', {
     id: nanoid(14), chatId: chat.id, from: fromId, text,
-    media: media || null, mediaType: ['image', 'video', 'audio'].includes(mediaType) ? mediaType : (media ? 'image' : null),
+    media: media || null, mediaType: media ? (['image', 'video', 'audio', 'gif'].includes(mediaType) ? mediaType : 'image') : null,
     duration: duration ? Math.min(600, Math.round(duration)) : null,
     reply, story: story || null, fal: fal || null, location: loc, system: !!system, reactions: {},
     quote: quote || null, game: game || null, plan: plan || null, superMsg: !!superMsg, share: share || null, compat: compat || null, gift: gift || null,
@@ -300,7 +302,7 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
       chat.members.forEach((x) => emitTo(x, 'message:update', msgOut(m)));
     });
   }
-  const preview = fal ? `🔮 Yeni ${FAL_TYPES[fal.type]} isteği` : loc ? '📍 Konum' : share && !text ? `📤 ${share.label} paylaştı` : msg.viewOnce ? '📷 Tek seferlik fotoğraf' : text || { video: '🎥 Video', audio: '🎤 Sesli mesaj' }[msg.mediaType] || '📷 Fotoğraf';
+  const preview = fal ? `🔮 Yeni ${FAL_TYPES[fal.type]} isteği` : loc ? '📍 Konum' : share && !text ? `📤 ${share.label} paylaştı` : msg.viewOnce ? '📷 Tek seferlik fotoğraf' : text || { video: '🎥 Video', audio: '🎤 Sesli mesaj', gif: 'GIF gönderdi' }[msg.mediaType] || '📷 Fotoğraf';
   chat.members.filter((m) => m !== fromId).forEach((m) => {
     notify(m, {
       type: 'message', fromId, tag: 'chat-' + chat.id,
@@ -836,18 +838,20 @@ app.get('/api/posts/:id/comments', auth, (req, res) => {
 app.post('/api/posts/:id/comments', auth, (req, res) => {
   const p = store.get('posts', req.params.id);
   const text = moderation.mask(String(req.body?.text || '').trim().slice(0, 500));
-  if (!p || !text) return res.status(400).json({ error: 'Yorum boş olamaz.' });
+  const gif = GIF_HOSTS.test(String(req.body?.gif || '')) ? String(req.body.gif).slice(0, 300) : null;
+  if (!p || (!text && !gif)) return res.status(400).json({ error: 'Yorum boş olamaz.' });
   if (!canSee(req.user.id, store.get('users', p.userId))) return res.status(403).json({ error: 'Bu gönderiye yorum yapamazsın.' });
   if (isBlocked(req.user.id, p.userId)) return res.status(403).json({ error: 'Bu gönderiye yorum yapamazsın.' });
   if (limited('cm:' + req.user.id, 30, 600000)) return res.status(429).json({ error: 'Çok hızlı yorum yapıyorsun, biraz bekle.' });
   // Bir yoruma cevap: cevaplar ana yorumun altında toplanır
   const target = req.body?.replyTo ? p.comments.find((x) => x.id === req.body.replyTo) : null;
   const parent = target ? (target.parentId ? p.comments.find((x) => x.id === target.parentId) || target : target) : null;
-  const c = { id: nanoid(10), userId: req.user.id, text, at: now(), parentId: parent?.id || null, replyToUserId: target ? target.userId : null };
+  const c = { id: nanoid(10), userId: req.user.id, text, gif, at: now(), parentId: parent?.id || null, replyToUserId: target ? target.userId : null };
   p.comments.push(c);
   store.update('posts', p.id, {});
-  if (target && target.userId !== req.user.id) notify(target.userId, { type: 'comment', fromId: req.user.id, ref: p.id, text: `${req.user.username} yorumuna cevap verdi: ${text.slice(0, 80)}`, url: `/#/p/${p.id}` });
-  if (p.userId !== req.user.id && p.userId !== target?.userId) notify(p.userId, { type: 'comment', fromId: req.user.id, ref: p.id, text: `${req.user.username} yorum yaptı: ${text.slice(0, 80)}`, url: `/#/p/${p.id}` });
+  const said = text ? text.slice(0, 80) : 'GIF';
+  if (target && target.userId !== req.user.id) notify(target.userId, { type: 'comment', fromId: req.user.id, ref: p.id, text: `${req.user.username} yorumuna cevap verdi: ${said}`, url: `/#/p/${p.id}` });
+  if (p.userId !== req.user.id && p.userId !== target?.userId) notify(p.userId, { type: 'comment', fromId: req.user.id, ref: p.id, text: `${req.user.username} yorum yaptı: ${said}`, url: `/#/p/${p.id}` });
   if (p.userId !== req.user.id) featureCtx.contestEvent?.('comment', p.userId);
   notifyMentions(text, req.user, `/#/p/${p.id}`, 'bir yorumda');
   featureCtx.quest?.(req.user.id, 'yorum'); featureCtx.track?.('comment');
@@ -866,7 +870,7 @@ app.post('/api/posts/:id/comments/:cid/private', auth, (req, res) => {
   if (!text) return res.status(400).json({ error: 'Bir şey yaz.' });
   if (limited('pvr:' + req.user.id, 40, DAY)) return res.status(429).json({ error: 'Bugün çok fazla özel yanıt gönderdin.' });
   const chat = chatBetween(req.user.id, t.id);
-  const msg = sendMessage(chat, req.user.id, { text, quote: { kind: 'comment', q: 'Gönderindeki yorumuna özel yanıt', a: c.text.slice(0, 200), postId: p.id } });
+  const msg = sendMessage(chat, req.user.id, { text, quote: { kind: 'comment', q: 'Gönderindeki yorumuna özel yanıt', a: (c.text || 'GIF').slice(0, 200), postId: p.id } });
   if (!msg) return res.status(400).json({ error: 'Gönderilemedi.' });
   res.json({ ok: true, chatId: chat.id });
 });
@@ -1482,28 +1486,37 @@ app.get('/api/music/search', auth, wrap(async (req, res) => {
 }));
 // GIF arama (GIPHY_API_KEY ya da TENOR_API_KEY varsa); yoksa kullanıcı cihazından GIF yükler
 const gifCache = new Map();
-app.get('/api/gifs', auth, wrap(async (req, res) => {
-  const q = String(req.query.q || '').trim().slice(0, 60);
+// GIF ve hareketli çıkartma araması (GIPHY; yoksa Tenor). Sonuçlar 1 saat önbellekte tutulur.
+async function gifSearch({ q = '', type = 'gifs', offset = 0 } = {}) {
   const giphy = process.env.GIPHY_API_KEY; const tenor = process.env.TENOR_API_KEY;
-  if (!giphy && !tenor) return res.json({ enabled: false, items: [] });
-  const key = `${giphy ? 'g' : 't'}|${q.toLowerCase()}`;
-  const c = gifCache.get(key); if (c && c.at > now() - 3600000) return res.json({ enabled: true, items: c.items });
-  let items = [];
+  if (!giphy && !tenor) return { enabled: false, items: [] };
+  const kind = type === 'stickers' && giphy ? 'stickers' : 'gifs';
+  const key = `${giphy ? 'g' : 't'}|${kind}|${q.toLowerCase()}|${offset}`;
+  const c = gifCache.get(key); if (c && c.at > now() - 3600000) return { enabled: true, provider: giphy ? 'giphy' : 'tenor', items: c.items, next: c.next };
+  let items = []; let next = null;
   try {
     if (giphy) {
-      const u = q ? `https://api.giphy.com/v1/gifs/search?api_key=${giphy}&q=${encodeURIComponent(q)}&limit=30&rating=pg-13&lang=tr` : `https://api.giphy.com/v1/gifs/trending?api_key=${giphy}&limit=30&rating=pg-13`;
-      const j = await (await fetch(u)).json();
-      items = (j.data || []).map((g) => ({ id: g.id, src: g.images?.fixed_width?.url || g.images?.original?.url, w: +g.images?.fixed_width?.width || 200, h: +g.images?.fixed_width?.height || 200 })).filter((g) => g.src);
+      const base = `https://api.giphy.com/v1/${kind}/${q ? 'search' : 'trending'}?api_key=${giphy}&limit=24&offset=${offset}&rating=pg-13&bundle=messaging_non_clips`;
+      const r = await fetch(q ? `${base}&q=${encodeURIComponent(q)}&lang=tr` : base, { signal: AbortSignal.timeout(8000) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) console.error('[gif] giphy', r.status, j?.meta?.msg || j?.message || '');
+      items = (j.data || []).map((g) => { const im = g.images?.fixed_width || g.images?.downsized || g.images?.original; return { id: g.id, src: im?.url, w: +im?.width || 200, h: +im?.height || 200, title: String(g.title || '').slice(0, 80) }; }).filter((g) => g.src);
+      const pg = j.pagination; if (pg && pg.offset + pg.count < Math.min(pg.total_count || 0, 480)) next = pg.offset + pg.count;
     } else {
-      const u = `https://tenor.googleapis.com/v2/${q ? 'search' : 'featured'}?key=${tenor}${q ? `&q=${encodeURIComponent(q)}` : ''}&limit=30&contentfilter=medium&media_filter=tinygif,gif&locale=tr_TR`;
-      const j = await (await fetch(u)).json();
-      items = (j.results || []).map((g) => ({ id: g.id, src: g.media_formats?.tinygif?.url || g.media_formats?.gif?.url, w: g.media_formats?.tinygif?.dims?.[0] || 200, h: g.media_formats?.tinygif?.dims?.[1] || 200 })).filter((g) => g.src);
+      const u = `https://tenor.googleapis.com/v2/${q ? 'search' : 'featured'}?key=${tenor}${q ? `&q=${encodeURIComponent(q)}` : ''}&limit=24${offset ? `&pos=${offset}` : ''}&contentfilter=medium&media_filter=tinygif,gif&locale=tr_TR`;
+      const j = await (await fetch(u, { signal: AbortSignal.timeout(8000) })).json();
+      items = (j.results || []).map((g) => ({ id: g.id, src: g.media_formats?.tinygif?.url || g.media_formats?.gif?.url, w: g.media_formats?.tinygif?.dims?.[0] || 200, h: g.media_formats?.tinygif?.dims?.[1] || 200, title: String(g.content_description || '').slice(0, 80) })).filter((g) => g.src);
+      next = j.next ? +j.next || null : null;
     }
   } catch (e) { console.error('[gif]', e.message); }
-  items = items.map((g) => ({ ...g, src: g.src.replace(/\?.*$/, '') }));
-  gifCache.set(key, { at: now(), items });
-  if (gifCache.size > 300) gifCache.delete(gifCache.keys().next().value);
-  res.json({ enabled: true, items });
+  items = items.map((g) => ({ ...g, src: g.src.replace(/\?.*$/, '') })).filter((g) => GIF_HOSTS.test(g.src));
+  if (items.length) { gifCache.set(key, { at: now(), items, next }); if (gifCache.size > 400) gifCache.delete(gifCache.keys().next().value); }
+  return { enabled: true, provider: giphy ? 'giphy' : 'tenor', items, next };
+}
+app.get('/api/gifs', auth, wrap(async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 60);
+  const offset = Math.max(0, Math.min(480, parseInt(req.query.offset, 10) || 0));
+  res.json(await gifSearch({ q, type: req.query.type === 'stickers' ? 'stickers' : 'gifs', offset }));
 }));
 app.get('/api/music/featured', auth, wrap(async (req, res) => res.json({ items: await music.getFeatured(), spotify: music.enabled() })));
 
@@ -1598,7 +1611,7 @@ app.post('/api/admin/push/test', adminApi.adminAuth, wrap(async (req, res) => {
 // ---------- Ek özellikler (mağaza, doğrulama, gizlilik, çıkartmalar, etiketler…) ----------
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
-  isBlocked, limited, isMedia, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
+  isBlocked, limited, isMedia, isGif: (u) => GIF_HOSTS.test(String(u || '')), cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
   online, appEvent, falci, msgOut, falLock, shownAge, tagsOf, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id), pushAdmins,
 };
 require('./server/features')(app, featureCtx);
@@ -1977,7 +1990,11 @@ async function ensureOfficial() {
   await ensureOfficial();
   await adminApi.ensureAdmin?.();
   music.selfTest().catch(() => {});
-  server.listen(PORT, () => console.log(`SwipeUp hazır · port ${PORT} · sürüm ${APP_VERSION}`));
+  server.listen(PORT, () => {
+    console.log(`SwipeUp hazır · port ${PORT} · sürüm ${APP_VERSION}`);
+    // GIF anahtarı tanımlıysa bir kez dene, sonucu kayda yaz
+    if (process.env.GIPHY_API_KEY || process.env.TENOR_API_KEY) gifSearch({}).then((r) => console.log(`[gif] ${r.provider} ${r.items.length ? `hazır (${r.items.length} sonuç)` : 'sonuç dönmedi, anahtarı kontrol et'}`)).catch(() => {});
+  });
 
   // Render ücretsiz planda uykuya geçmemek için kendine ping at
   const selfUrl = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL;

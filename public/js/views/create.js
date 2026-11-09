@@ -123,8 +123,8 @@ export default function create(view, kind) {
     if (mode === 'text') return paintText();
     if (mode === 'story' && !file && !storyBg) {
       stopAudio();
-      picker.innerHTML = `<div class="pick-two"><button class="pick-empty pk-file">${icon('image', '', 'style="width:48px;height:48px;margin:0 auto 10px"')}<div class="b" style="color:var(--text)">Fotoğraf ya da video</div><div>24 saat sonra kaybolur</div></button>
-        <button class="pick-empty pk-text tbg-g2">${icon('text', '', 'style="width:48px;height:48px;margin:0 auto 10px"')}<div class="b">Yazı hikayesi</div><div>Renkli arka plana yaz</div></button></div>`;
+      picker.innerHTML = `<div class="pick-two"><button class="pick-empty pk-file"><span class="pk-ic">${icon('image')}</span><b>Fotoğraf ya da video</b><small>Galeriden seç · 24 saat sonra kaybolur</small></button>
+        <button class="pick-empty pk-text tbg-g2"><span class="pk-ic">${icon('text')}</span><b>Yazı hikayesi</b><small>Renkli arka plana yaz</small></button></div>`;
       picker.querySelector('.pk-file').onclick = choose;
       picker.querySelector('.pk-text').onclick = () => { storyBg = 'g2'; paint(); addSticker('text'); };
       return;
@@ -238,7 +238,7 @@ export default function create(view, kind) {
         pane.onclick = async (e) => {
           const k = e.target.closest('[data-k]')?.dataset.k; if (!k) return;
           if (edit.stickers.length >= 6) return toast('En fazla 6 çıkartma ekleyebilirsin.');
-          if (k === 'gif') { const src = await pickGif(); if (src) edit.stickers.push({ type: 'gif', src, x: 50, y: 40, s: 1 }); }
+          if (k === 'gif') { const src = await pickGif({ tab: 'stickers', title: 'GIF ve çıkartma' }); if (src) edit.stickers.push({ type: 'gif', src, x: 50, y: 40, s: 1 }); }
           if (k === 'emoji') { const em = await pickEmoji(); if (em) edit.stickers.push({ type: 'emoji', em, x: 50, y: 45, s: 1 }); }
           if (k === 'text') { const tx = await textForm(); if (tx) edit.stickers.push({ type: 'text', ...tx, x: 50, y: 30, s: 1 }); }
           paintOvl();
@@ -348,7 +348,7 @@ export default function create(view, kind) {
       return;
     }
     if (k === 'emoji') { const em = await pickEmoji(); if (em) { stickers.push({ type: 'emoji', em, x: 50, y: 40, s: 1 }); paint(); } return; }
-    if (k === 'gif') { const src = await pickGif(); if (src) { stickers.push({ type: 'gif', src, x: 50, y: 45, s: 1 }); paint(); } return; }
+    if (k === 'gif') { const src = await pickGif({ tab: 'stickers', title: 'GIF ve çıkartma' }); if (src) { stickers.push({ type: 'gif', src, x: 50, y: 45, s: 1 }); paint(); } return; }
     if (k === 'text') { const tx = await textForm(); if (tx) { stickers.push({ type: 'text', ...tx, x: 50, y: 30, s: 1 }); paint(); } return; }
     if (k === 'music') {
       pickMusic().then((m) => {

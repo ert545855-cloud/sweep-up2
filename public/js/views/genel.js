@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, clock, dayLabel, avatar, toast, pickFile, compressImage, uploadFile, el, sheet, reportUser, reportMessage, nm, richText,
+  state, api, esc, on, clock, dayLabel, avatar, toast, pickFile, compressImage, uploadFile, el, sheet, reportUser, reportMessage, nm, richText, pickGif, inlineHint,
 } from '../core.js';
 import { restoreDraft } from '../update.js';
 
@@ -23,6 +23,7 @@ export default async function genel(view, roomId) {
       <form class="row1"><div class="box">
         <button type="button" class="icon-btn pic" aria-label="Fotoğraf gönder">${icon('image')}</button>
         <textarea rows="1" placeholder="Herkese yaz..." aria-label="Mesaj yaz" maxlength="1000"></textarea>
+        <button type="button" class="icon-btn gifb" aria-label="GIF gönder">${icon('gif')}</button>
       </div><button class="go" aria-label="Gönder">${icon('send')}</button></form></div>
   </div>`;
   const box = view.querySelector('.msgs');
@@ -41,7 +42,7 @@ export default async function genel(view, roomId) {
     const counts = reacts.reduce((a, e) => ((a[e] = (a[e] || 0) + 1), a), {});
     const body = m.deleted ? `<i class="muted">${icon('block', '', 'style="width:14px;height:14px;vertical-align:-2px"')} Bu mesaj silindi</i>`
       : [m.reply ? `<span class="reply"><b>${esc(m.reply.userId === state.me.id ? 'Sen' : m.reply.name)}</b>${esc(m.reply.text)}</span>` : '',
-        m.media ? `<a href="${esc(m.media)}" target="_blank" rel="noopener" class="gimg"><img src="${esc(m.media)}" alt="Fotoğraf" loading="lazy"></a>` : '',
+        m.media && m.mediaType === 'gif' ? `<span class="gimg ggif"><img src="${esc(m.media)}" alt="GIF" loading="lazy"></span>` : m.media ? `<a href="${esc(m.media)}" target="_blank" rel="noopener" class="gimg"><img src="${esc(m.media)}" alt="Fotoğraf" loading="lazy"></a>` : '',
         m.text ? richText(m.text) : ''].join('');
     return `${dayHtml}<div class="gm ${mine ? 'me' : 'them'} ${grouped ? 'grp' : ''}" data-id="${esc(m.id)}">
       ${mine ? '' : `<a class="ga" href="#/u/${esc(m.user?.username)}">${grouped ? '' : avatar(m.user, 32, { dot: false })}</a>`}
@@ -101,12 +102,7 @@ export default async function genel(view, roomId) {
   });
 
 
-  try {
-    if (!localStorage.getItem('su_hint_msgmenu')) {
-      localStorage.setItem('su_hint_msgmenu', '1');
-      setTimeout(() => toast('İpucu: Bir mesaja basılı tutarak yanıtlayabilir, tepki verebilir ya da mesajı bildirebilirsin.', { ms: 6000 }), 900);
-    }
-  } catch {}
+  setTimeout(() => inlineHint(view.querySelector('.composer'), 'su_hint_msgmenu', 'İpucu: Bir mesaja basılı tutarak yanıtlayabilir, tepki verebilir ya da bildirebilirsin.'), 700);
   // ---- Menü ----
   const find = (node) => { const w = node.closest?.('.gm'); return w && msgs.find((m) => m.id === w.dataset.id); };
   function openMenu(m, wrap) {
@@ -184,6 +180,10 @@ export default async function genel(view, roomId) {
   comp.querySelector('.pic').onclick = async () => {
     const f = await pickFile('image/*'); if (!f) return;
     try { const up = await uploadFile(await compressImage(f)); await send({ media: up.url }); } catch (er) { toast(er.message); }
+  };
+  comp.querySelector('.gifb').onclick = async () => {
+    const src = await pickGif({ title: 'GIF gönder', upload: false }); if (!src) return;
+    try { await send({ media: src, mediaType: src.startsWith('/media/') ? 'image' : 'gif' }); } catch (er) { toast(er.message); }
   };
   view.querySelector('.rules').onclick = () => sheet('Genel sohbet kuralları', `<div style="padding:0 18px 20px;display:grid;gap:8px;font-size:15px">
     <p style="margin:0">Burada yazdıklarını tüm üyeler görür.</p>

@@ -10,7 +10,7 @@ export default async function quests(view) {
   const paint = () => {
     if (!q.enabled) { box.innerHTML = '<div class="empty">Görevler şu an kapalı.</div>'; return; }
     const pct = Math.round((q.doneCount / q.total) * 100);
-    box.innerHTML = `<section class="qs-hero"><div class="qs-ring" style="--p:${pct}"><b>${q.doneCount}/${q.total}</b></div><div class="grow"><b>Bugünün görevleri</b><small>Tamamla, jetonunu al. Hepsini bitirince <b>+${q.bonus}</b> bonus! Yenilenmesine <span class="ql">${left()}</span></small></div></section>
+    box.innerHTML = `<section class="qs-hero"><div class="qs-ring" style="--p:${pct}"><b>${q.doneCount}/${q.total}</b></div><div class="grow"><b>Bugünün görevleri</b><small>Tamamla, jetonunu al. Hepsini bitirince <strong>+${q.bonus} jeton</strong> bonus! Yenilenmesine <span class="ql">${left()}</span></small></div></section>
       ${q.items.map((x) => `<div class="qs-it ${x.done ? 'done' : ''} ${x.claimed ? 'claimed' : ''}">
         <span class="qs-em">${x.em}</span>
         <div class="grow"><b>${esc(x.title)}</b><div class="qs-bar"><i style="width:${Math.min(100, (x.progress / x.goal) * 100)}%"></i></div><small>${x.progress}/${x.goal}</small></div>
