@@ -1,4 +1,4 @@
-// Parti Kupası (3D): her kupada dokuz moddan üç tur çekilir. Karakter: "Lokum" (özgün tasarım).
+// Parti Kupası (3D): her kupada on moddan üç tur çekilir; oda sahibi tek bir oyunu da seçebilir. Karakter: "Lokum" (özgün tasarım).
 // Kendi karakterin cihazında hareket eder; engeller sunucu saatine göre hesaplanır, botlar, top ve elemeler sunucudan gelir.
 import { icon } from '../icons.js';
 import { api, esc, toast, on, state, sheet, pickPerson } from '../core.js';
@@ -12,7 +12,12 @@ const PAL = [[0xff6fa5, 'Pembe'], [0xffd43b, 'Sarı'], [0x69c96b, 'Yeşil'], [0x
 const TEAM = [[0xff6fa5, 'Pembe'], [0x4aa8ff, 'Mavi']];
 const TIPS = { cubuk: 'Çubuğun üstünden zıpla, platformdan düşme!', zemin: 'Bastığın karo çöker. Hep hareket et!', kosu: 'Engelleri aş, bitişe ilk sen ulaş!',
   kuyruk: 'Süre bitince kuyruğu olan tur atlar. Kuyruğun yoksa birine dokunup kap!', sumo: 'Platform daralıyor. “İt” ile rakibini aşağı gönder!', renk: 'Söylenen renge koş, diğer karolar düşer!',
-  lav: 'Basamaklardan zirveye tırman, lav yükseliyor!', bomba: 'Bomba sendeyse birine dokunup devret. Patladığında elinde olan elenir!' };
+  lav: 'Basamaklardan zirveye tırman, lav yükseliyor!', bomba: 'Bomba sendeyse birine dokunup devret. Patladığında elinde olan elenir!',
+  sakla: 'Ebe saymayı bitirince aramaya çıkar. Engellerin arkasına saklan, ışığına yakalanma!' };
+// Oyun seçicideki açıklamalar (tek oyun olarak oynandığında kimin kazandığı)
+const INFO = { kupa: 'On oyundan karışık üç tur. Her turda elenenler olur, finali kazanan kupayı alır.', cubuk: 'Dönen çubuğun üstünden zıpla. Son kalan kazanır.', zemin: 'Bastığın karo çöker. Son kalan kazanır.',
+  kosu: 'Engelli parkuru ilk bitiren kazanır.', kuyruk: 'Süre bitince kuyruğu olanlar kazanır.', sumo: 'Daralan platformda rakibini aşağı it. Son kalan kazanır.', renk: 'Söylenen renge koş, diğer karolar düşer. Son kalan kazanır.',
+  lav: 'Lav yükselirken zirveye ilk çıkan kazanır.', futbol: 'İki takım, dev top. Çok gol atan takım kazanır.', bomba: 'Bomba patladığında elinde olan elenir. Son kalan kazanır.', sakla: 'Ebeden saklan. Süre bitene kadar bulunmayanlar kazanır.' };
 const TRACK = { w: 4.5, floors: [[5, -41], [-59, -124]], plats: [{ z: -44, amp: 2.2, w: 0.9, ph: 0 }, { z: -50, amp: 2.2, w: 1.1, ph: 2 }, { z: -56, amp: 2.2, w: 0.8, ph: 4 }],
   sweeps: [{ z: -16, w: 1.6 }, { z: -24, w: -1.9 }, { z: -32, w: 2.2 }, { z: -88, w: -2.6 }, { z: -98, w: 2.9 }], hammers: [{ z: -68, w: 1.7, ph: 0 }, { z: -76, w: 1.9, ph: 1.6 }], ice: [-62, -80], cps: [0, -60.5, -82] };
 const barW = (b, t) => (t < b.from ? 0 : Math.min(b.wmax, b.w0 + b.acc * (t - b.from)));
@@ -38,7 +43,7 @@ export default async function kupa(view, id) {
     <header class="k3-top"><button class="ib k3-x" aria-label="Çık">${icon('back')}</button><span class="k3-chip k3-round"></span><span class="grow"></span><span class="k3-chip k3-left" hidden></span></header>
     <div class="k3-call" hidden><i></i><b></b><em><s></s></em></div>
     <div class="k3-banner" hidden></div><div class="k3-feed"></div>
-    <div class="k3-joy" hidden><i></i></div><button class="k3-jump" hidden>Zıpla</button>
+    <div class="k3-zone" hidden></div><div class="k3-joy" hidden><i></i></div><button class="k3-jump" hidden>Zıpla</button>
     <div class="k3-over" hidden></div></div>`;
   const $ = (s) => view.querySelector(s); const wrap = $('.k3'); const canvas = $('canvas');
   let T; let renderer;
@@ -68,7 +73,7 @@ export default async function kupa(view, id) {
   }
   function makeLokum(look) {
     const g = new T.Group(); const body = new T.Group(); g.add(body);
-    const col = COLORS[look?.color] || COLORS.gul; const mat = lam(col); const deep = lam(new T.Color(col).multiplyScalar(0.55));
+    const col = look?.hex ?? (COLORS[look?.color] || COLORS.gul); const mat = lam(col); const deep = lam(new T.Color(col).multiplyScalar(0.55));
     const b = mesh(cubeGeo, mat, 0, 0.56, 0); b.scale.set(1, 0.9, 1); body.add(b);
     const cap = mesh(cubeGeo, white, 0, 0.93, 0); cap.scale.set(1.03, 0.2, 1.03); body.add(cap);
     [-1, 1].forEach((s) => { const e = mesh(ball, dark, s * 0.17, 0.62, 0.48); e.scale.set(0.065, 0.085, 0.04); body.add(e); const h = mesh(ball, white, s * 0.17 + 0.02, 0.65, 0.5); h.scale.setScalar(0.022); body.add(h); });
@@ -82,10 +87,10 @@ export default async function kupa(view, id) {
     const ring = lay(mesh(ringGeo, flat(0xffffff, { transparent: true, opacity: 0.92, depthWrite: false, side: T.DoubleSide }), 0, 0.03, 0)); ring.visible = false; g.add(ring);
     return { g, body, feet, hands, sh, tail, ring, ph: Math.random() * 6, sq: 0 };
   }
-  function label(text, me) {
+  function label(text, me, bg) {
     const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d');
     x.font = '700 30px system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; const w = Math.min(240, x.measureText(text).width + 28);
-    x.fillStyle = me ? 'rgba(255,212,94,.95)' : 'rgba(20,14,34,.62)'; x.beginPath(); x.roundRect(128 - w / 2, 10, w, 44, 22); x.fill(); x.fillStyle = me ? '#2b1c00' : '#fff'; x.fillText(text, 128, 33, 230);
+    x.fillStyle = bg || (me ? 'rgba(255,212,94,.95)' : 'rgba(20,14,34,.62)'); x.beginPath(); x.roundRect(128 - w / 2, 10, w, 44, 22); x.fill(); x.fillStyle = me && !bg ? '#2b1c00' : '#fff'; x.fillText(text, 128, 33, 230);
     const s = new T.Sprite(new T.SpriteMaterial({ map: new T.CanvasTexture(c), depthTest: false, transparent: true })); s.scale.set(2.3, 0.575, 1); s.position.y = 1.75; s.renderOrder = 5; return s;
   }
   // Koşma / zıplama canlandırması (kemiksiz: ayak salınımı, gövde esnemesi)
@@ -101,18 +106,21 @@ export default async function kupa(view, id) {
   // ---- Durum ----
   let off = Date.now() - v.now; const srv = () => Date.now() - off;
   let arena = null; let arenaKey = ''; let dyn = {}; const chars = new Map(); let charKey = ''; let tiles = new Map(); let TL = [];
-  const me = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, ry: 0, ground: false, stun: 0, cp: 0, fin: false, gone: false, dash: 0, dcd: 0, dfl: 0, dvx: 0, dvz: 0, top: false, dead: false, finAt: 0, jbuf: 0, air: 0, jumped: false };
+  const me = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, ry: 0, ground: false, stun: 0, cp: 0, fin: false, gone: false, dash: 0, dcd: 0, dfl: 0, dvx: 0, dvz: 0, top: false, dead: false, finAt: 0, jbuf: 0, air: 0, jumped: false, hideAt: 0 };
   const inp = { x: 0, z: 0, jump: false }; const keys = new Set(); let raf = 0; let last = performance.now(); let sent = 0; let closed = false; let roundSeen = 0; let wardrobe = null;
-  let rk = { lay: new Map(), key: '' }; let lf = [0, -1]; const cl = { x: 0, y: 0.8, z: 0 }; const tops = new Set(); const hits = new Map(); const dashHit = new Set(); let fx = []; let ap = { cur: 0, back: false }; let hudAt = 0; let callKey = '';
+  let rk = { lay: new Map(), key: '' }; let lf = [0, -1]; const cl = { x: 0, y: 0.8, z: 0 }; const tops = new Set(); const hits = new Map(); const dashHit = new Set(); let fx = []; let ap = { cur: 0, back: false }; let hudAt = 0; let callKey = ''; let joinAt = 0;
   const tmpC = new T.Color(); const tmpV = new T.Vector3();
   const auto = (() => { try { return location.hostname === 'localhost' && localStorage.getItem('k3auto') === '1'; } catch { return false; } })(); // yalnızca yerel deneme
-  try { if (location.hostname === 'localhost') window.__k3 = () => ({ me, v, dyn, cam }); } catch { /* yalnızca yerel deneme */ }
+  try { if (location.hostname === 'localhost') window.__k3 = () => ({ me, v, dyn, cam, chars }); } catch { /* yalnızca yerel deneme */ }
   const alive = () => v.players.filter((p) => p.alive).length;
   const iAmIn = () => v.status === 'playing' && v.players[v.me]?.alive && !me.gone;
   const nm = (i) => (i === v.me ? 'Sen' : (v.players[i]?.name || '').replace(' (bot)', ''));
   const myTeam = () => v.st?.teams?.[v.me];
   const hasBomb = (i) => !!v.st?.bombs?.some((b) => b[0] === i);
-  const tip = () => (v.mode === 'futbol' ? `Takımın ${TEAM[myTeam() || 0][1]}. Dev topu ${TEAM[1 - (myTeam() || 0)][1].toLowerCase()} kaleye sok!` : TIPS[v.mode]);
+  const lastRound = () => v.round >= (v.rounds || 3); // tek oyunda ya da kupa finalinde: tur atlanmaz, kazanılır
+  const tip = () => (v.mode === 'futbol' ? `Takımın ${TEAM[myTeam() || 0][1]}. Dev topu ${TEAM[1 - (myTeam() || 0)][1].toLowerCase()} kaleye sok!` : v.mode === 'kuyruk' && lastRound() ? 'Süre bitince kuyruğu olan kazanır. Kuyruğun yoksa birine dokunup kap!' : TIPS[v.mode]);
+  const modeName = (k) => (v.modes || []).find((x) => x[0] === k)?.[1] || k;
+  const after = () => (v.players.some((p, i) => i !== v.me && !p.bot && p.alive) ? 'Kalanları izleyebilirsin.' : ''); // izlenecek başka oyuncu varsa
   const buzz = (p) => { try { navigator.vibrate?.(p); } catch { /* titreşim yok */ } };
 
   function buildChars() {
@@ -156,7 +164,7 @@ export default async function kupa(view, id) {
       for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; const rr = i % 2 ? R - 2.2 : R - 5.4; arena.add(lay(mesh(new T.CircleGeometry(i % 2 ? 0.55 : 0.4, 16), lam(bom ? (i % 2 ? 0xffd9a8 : 0xbfe9dc) : (i % 2 ? 0xffc2d4 : 0xffe3a8)), Math.cos(a) * rr, 0.01, Math.sin(a) * rr))); }
       const rail = mesh(new T.TorusGeometry(R - 0.15, 0.09, 8, 72), bom ? lam(0xffb300) : nar, 0, 0.78, 0); rail.rotation.x = Math.PI / 2; arena.add(rail);
       const posts = new T.InstancedMesh(new T.CylinderGeometry(0.11, 0.14, 0.84, 8), plum, 28); for (let i = 0; i < 28; i++) { const a = (i / 28) * Math.PI * 2; d.position.set(Math.cos(a) * (R - 0.15), 0.42, Math.sin(a) * (R - 0.15)); d.updateMatrix(); posts.setMatrixAt(i, d.matrix); } arena.add(posts);
-      if (bom) dyn.bombs = [0, 1].map(() => { const g = new T.Group(); const mat = lam(0x2a1d3a); const b = mesh(ball, mat); b.scale.setScalar(0.36); g.add(b); g.add(mesh(new T.CylinderGeometry(0.05, 0.05, 0.2, 6), lam(0xc9a36b), 0, 0.42, 0)); const sp = mesh(ball, flat(0xffb300), 0, 0.56, 0); sp.scale.setScalar(0.09); g.add(sp); g.visible = false; arena.add(g); return { g, mat, sp }; });
+      if (bom) dyn.bombs = [0, 1, 2].map(() => { const g = new T.Group(); const mat = lam(0x2a1d3a); const b = mesh(ball, mat); b.scale.setScalar(0.36); g.add(b); g.add(mesh(new T.CylinderGeometry(0.05, 0.05, 0.2, 6), lam(0xc9a36b), 0, 0.42, 0)); const sp = mesh(ball, flat(0xffb300), 0, 0.56, 0); sp.scale.setScalar(0.09); g.add(sp); g.visible = false; arena.add(g); return { g, mat, sp }; });
     } else if (m === 'sumo') { // daralan platform: birim yarıçaplı, her karede ölçeklenir
       const g = new T.Group(); g.add(mesh(new T.CylinderGeometry(1, 0.93, 1.4, 64), lam(0xf4dba8), 0, -0.7, 0));
       g.add(lay(mesh(new T.RingGeometry(0.9, 1, 64), flat(0xe23e6d), 0, 0.012, 0))); arena.add(g); dyn.sumo = g;
@@ -193,13 +201,29 @@ export default async function kupa(view, id) {
       dyn.ball = mesh(new T.SphereGeometry(br, 28, 20), new T.MeshLambertMaterial({ map: new T.CanvasTexture(cv) }), 0, br, 0); arena.add(dyn.ball);
       dyn.bsh = lay(mesh(new T.CircleGeometry(br * 0.92, 24), flat(0x000000, { transparent: true, opacity: 0.2, depthWrite: false }), 0, 0.02, 0)); arena.add(dyn.bsh);
       dyn.bs = { x: 0, z: 0, vx: 0, vz: 0, sx: 0, sz: 0, svx: 0, svz: 0, own: 0, fr: 0 };
+    } else if (m === 'sakla') { // çitle çevrili bahçe: duvarlar, sandıklar, çalılar; ebe ve görüş ışığı
+      const H = c.h; arena.add(mesh(new T.BoxGeometry(H * 2 + 1.6, 1, H * 2 + 1.6), lam(0xb9e2a6), 0, -0.5, 0));
+      for (let i = 0; i < 18; i++) arena.add(lay(mesh(new T.CircleGeometry(0.9 + (i % 3) * 0.5, 14), lam(0xc9ecb6), ((i * 7.3) % (H * 2 - 3)) - H + 1.5, 0.008, ((i * 11.9) % (H * 2 - 3)) - H + 1.5)));
+      arena.add(lay(mesh(new T.RingGeometry(1.7, 1.95, 40), flat(0xfffaf2), 0, 0.012, 0))); // ebenin saydığı yer
+      [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([sx, sz]) => arena.add(mesh(new T.BoxGeometry(sx ? 0.5 : H * 2 + 1.4, 1.1, sx ? H * 2 + 1.4 : 0.5), plum, sx * (H + 0.45), 0.55, sz * (H + 0.45))));
+      const wm = [cream, lam(0xdba463), lam(0x58b368)];
+      c.walls.forEach(([x, z, w, dd, k]) => {
+        if (k === 2) { const b = mesh(cubeGeo, wm[2], x, 0.8, z); b.scale.set(w + 0.25, 1.75, dd + 0.25); arena.add(b); return; }
+        arena.add(mesh(new T.BoxGeometry(w, k ? 1.5 : 1.7, dd), wm[k], x, k ? 0.75 : 0.85, z)); arena.add(mesh(new T.BoxGeometry(w + 0.14, 0.2, dd + 0.14), k ? lam(0xb9813f) : nar, x, k ? 1.5 : 1.75, z));
+      });
+      dyn.ebes = c.ebes.map(([x, z, ry]) => { // ebe: iri mor lokum; önünde duvarlarda kesilen görüş ışığı
+        const ch = makeLokum({ hex: 0x4a2d7a, hat: 'yok' }); ch.g.scale.setScalar(1.4); ch.g.add(label('Ebe', true, 'rgba(226,62,109,.96)')); ch.g.position.set(x, 0, z); ch.g.rotation.y = ry; arena.add(ch.g);
+        const N = 26; const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(new Float32Array((N + 2) * 3), 3)); const ix = []; for (let i = 1; i <= N; i++) ix.push(0, i, i + 1); geo.setIndex(ix);
+        const cone = new T.Mesh(geo, flat(0xffe45e, { transparent: true, opacity: 0.4, depthWrite: false, side: T.DoubleSide })); cone.frustumCulled = false; cone.visible = false; arena.add(cone);
+        return { ch, cone, N, x, z, ry, t: [x, z, ry], on: 0 };
+      });
     }
   }
   function placeAll() { // tur başı: herkes başlangıç yerine
     Object.entries(v.spawn || {}).forEach(([i, p]) => { const c = chars.get(+i); if (c) { c.g.position.set(p[0], p[1], p[2]); c.t = [p[0], p[1], p[2], 0]; c.v = [0, 0]; c.g.visible = true; c.fl = 0; c.body.rotation.x = 0; c.seen = performance.now() + 9e6; } });
     chars.forEach((c, i) => { if (!v.spawn?.[i]) c.g.visible = false; });
-    const s = v.spawn?.[v.me]; Object.assign(me, { x: s ? s[0] : 0, y: 0, z: s ? s[2] : 0, vx: 0, vy: 0, vz: 0, stun: 0, cp: 0, fin: false, gone: !s, ry: v.mode === 'kosu' || (v.mode === 'futbol' && !myTeam()) ? Math.PI : 0, dash: 0, dcd: 0, dfl: 0, top: false, dead: false, finAt: 0, jbuf: 0, air: 0, jumped: false });
-    tops.clear(); hits.clear(); dashHit.clear(); ap = { cur: 0, back: false }; lf = [0, -1]; if (dyn.bs) Object.assign(dyn.bs, { x: 0, z: 0, vx: 0, vz: 0, sx: 0, sz: 0, svx: 0, svz: 0, own: 0, fr: 0 });
+    const s = v.spawn?.[v.me]; Object.assign(me, { x: s ? s[0] : 0, y: 0, z: s ? s[2] : 0, vx: 0, vy: 0, vz: 0, stun: 0, cp: 0, fin: false, gone: !s, ry: v.mode === 'kosu' || (v.mode === 'futbol' && !myTeam()) ? Math.PI : 0, dash: 0, dcd: 0, dfl: 0, top: false, dead: false, finAt: 0, jbuf: 0, air: 0, jumped: false, hideAt: 0 });
+    wrap.classList.remove('seen'); tops.clear(); hits.clear(); dashHit.clear(); ap = { cur: 0, back: false }; lf = [0, -1]; if (dyn.bs) Object.assign(dyn.bs, { x: 0, z: 0, vx: 0, vz: 0, sx: 0, sz: 0, svx: 0, svz: 0, own: 0, fr: 0 });
   }
 
   // ---- Zemin ve engeller ----
@@ -217,7 +241,7 @@ export default async function kupa(view, id) {
       if (best < 0 || bd > c.hex * 0.93) return null; const at = tiles.get(best); if (at && srv() >= at) return null;
       return { y: 0, vx: 0, tile: best };
     }
-    if (m === 'kuyruk' || m === 'bomba' || m === 'futbol') return FLAT;
+    if (m === 'kuyruk' || m === 'bomba' || m === 'futbol' || m === 'sakla') return FLAT;
     if (m === 'sumo') return Math.hypot(me.x, me.z) <= sumoR(c, t) ? FLAT : null;
     if (m === 'renk') { const h = (c.n * c.size) / 2; const cx = Math.floor((me.x + h) / c.size); const cz = Math.floor((me.z + h) / c.size); if (cx < 0 || cz < 0 || cx >= c.n || cz >= c.n) return null; const s = rkState(t); return s.phase === 2 && s.lay[cz * c.n + cx] !== s.col ? null : FLAT; }
     if (m === 'lav') { // ayağın altındaki en yüksek basamak (basamaklara alttan zıplanabilir)
@@ -228,6 +252,22 @@ export default async function kupa(view, id) {
     if (Math.abs(me.x) <= TRACK.w && TRACK.floors.some(([a, b]) => me.z <= a && me.z >= b)) return { y: 0, vx: 0, ice: me.z < TRACK.ice[0] && me.z > TRACK.ice[1] };
     for (const p of TRACK.plats) { const px = p.amp * Math.sin(p.w * t + p.ph); if (Math.abs(me.x - px) <= 2.3 && Math.abs(me.z - p.z) <= 2.3) return { y: 0, vx: p.amp * p.w * Math.cos(p.w * t + p.ph) }; }
     return null;
+  }
+  // Saklambaç: ışının ilk engele uzaklığı (görüş ışığını duvarda kesmek ve "görülüyor muyum" için)
+  function rayWalls(ox, oz, dx, dz, max) {
+    let best = max;
+    for (const [x, z, w, d] of v.conf.walls) {
+      let t0 = 0; let t1 = best;
+      if (Math.abs(dx) < 1e-9) { if (ox < x - w / 2 || ox > x + w / 2) continue; } else { let a = (x - w / 2 - ox) / dx; let b = (x + w / 2 - ox) / dx; if (a > b) [a, b] = [b, a]; t0 = Math.max(t0, a); t1 = Math.min(t1, b); if (t0 > t1) continue; }
+      if (Math.abs(dz) < 1e-9) { if (oz < z - d / 2 || oz > z + d / 2) continue; } else { let a = (z - d / 2 - oz) / dz; let b = (z + d / 2 - oz) / dz; if (a > b) [a, b] = [b, a]; t0 = Math.max(t0, a); t1 = Math.min(t1, b); if (t0 > t1) continue; }
+      best = t0;
+    }
+    return best;
+  }
+  function seenByEbe() { // ebe beni şu an görüyor mu? (asıl karar sunucuda; bu yalnızca uyarı içindir)
+    const c = v.conf; return (dyn.ebes || []).some((e) => { if (!e.on) return false; const dx = me.x - e.x; const dz = me.z - e.z; const d = Math.hypot(dx, dz); if (d > c.range) return false;
+      if (d > 1.1) { let a = Math.atan2(dx, dz) - e.ry; a = Math.atan2(Math.sin(a), Math.cos(a)); if (Math.abs(a) > c.half) return false; }
+      return d < 0.05 || rayWalls(e.x, e.z, dx / d, dz / d, d) >= d - 0.02; });
   }
   function knock(vx, vz, up = 6.5) { me.vx = vx; me.vz = vz; me.vy = up; me.stun = 0.7; me.ground = false; buzz(40); }
   function barHit(cx, cz, ang, len, w) { // alçak dönen çubuk: üstünden zıplanır
@@ -282,6 +322,7 @@ export default async function kupa(view, id) {
     else if (m === 'lav') { if (me.top) return; if (me.ground) ap.cur = Math.round(me.y / c.step); const nx = padAt(c, Math.min(c.n, ap.cur + 1)); const d = Math.hypot(nx.x - me.x, nx.z - me.z);
       if (me.ground) { if (d < 3.3) ap.back = true; else if (d >= 3.95) ap.back = false; } go(nx.x, nx.z, ap.back && me.ground ? -1 : 1);
       if (me.ground && !ap.back && d <= 4.35 && (me.vx * (nx.x - me.x) + me.vz * (nx.z - me.z)) / d > 4.8) inp.jump = true; }
+    else if (m === 'sakla') { let best = null; let bd = -1; [[12.6, 13], [-12.6, 13], [12.6, -13], [-12.6, -13], [0, 12], [0, -12]].forEach(([x, z]) => { const d = Math.min(...dyn.ebes.map((e) => Math.hypot(e.x - x, e.z - z))); if (d > bd) { bd = d; best = [x, z]; } }); const d = Math.hypot(best[0] - me.x, best[1] - me.z); if (d > 0.5) go(best[0], best[1], Math.min(1, d)); }
     else if (m === 'futbol') { const b = dyn.bs; const gz = myTeam() ? c.hz : -c.hz; let gx = -b.x; let gq = gz - b.z; const gl = Math.hypot(gx, gq) || 1; gx /= gl; gq /= gl; const px = b.x - gx * 1.9; const pz = b.z - gq * 1.9;
       if ((me.x - b.x) * gx + (me.z - b.z) * gq < -0.6 && Math.hypot(me.x - px, me.z - pz) < 2.2) go(b.x + gx * 2, b.z + gq * 2); else go(px, pz); }
   }
@@ -321,6 +362,14 @@ export default async function kupa(view, id) {
     else if (m === 'futbol') { me.x = Math.max(-c.hx + 0.4, Math.min(c.hx - 0.4, me.x)); me.z = Math.max(-c.hz + 0.4, Math.min(c.hz - 0.4, me.z)); kick(nowMs); }
     else if (m === 'lav') { const r = Math.hypot(me.x, me.z); const lim = c.col + PR; if (r < lim && me.y < c.n * c.step) { if (r < 0.01) me.x = lim; else { me.x *= lim / r; me.z *= lim / r; } } }
     else if (m === 'sumo') shove(nowMs);
+    else if (m === 'sakla') { // bahçenin içinde kal, engellerin içinden geçme (daire - kutu çarpışması)
+      const L = c.h - 0.5; me.x = Math.max(-L, Math.min(L, me.x)); me.z = Math.max(-L, Math.min(L, me.z));
+      for (const [x, z, w, d] of c.walls) {
+        const nx = Math.max(x - w / 2, Math.min(x + w / 2, me.x)); const nz = Math.max(z - d / 2, Math.min(z + d / 2, me.z)); const dx = me.x - nx; const dz = me.z - nz; const dist = Math.hypot(dx, dz); if (dist >= PR) continue;
+        if (dist > 1e-4) { me.x = nx + (dx / dist) * PR; me.z = nz + (dz / dist) * PR; } else if (w / 2 - Math.abs(me.x - x) < d / 2 - Math.abs(me.z - z)) me.x = x + Math.sign(me.x - x || 1) * (w / 2 + PR); else me.z = z + Math.sign(me.z - z || 1) * (d / 2 + PR);
+      }
+    }
+    if (m === 'lav' && me.top) { const tp = padAt(c, c.n); const dx = me.x - tp.x; const dz = me.z - tp.z; const d = Math.hypot(dx, dz); const lim = c.top - 0.5; if (d > lim) { me.x = tp.x + (dx / d) * lim; me.z = tp.z + (dz / d) * lim; } } // zirveye çıkan aşağı düşmesin
     const g = ground(t, py);
     if (g && me.vy <= 0 && me.y <= g.y && py >= g.y - 0.55) { me.y = g.y; me.vy = 0; me.ground = true; me.jumped = false; me.x += g.vx * dt; if (g.tile !== undefined && !tiles.has(g.tile)) { tiles.set(g.tile, srv() + (c.ms || 1100)); state.socket?.emit('k3:tile', g.tile); } } else me.ground = false;
     if (Math.hypot(me.vx, me.vz) > 0.6) me.ry = Math.atan2(me.vx, me.vz);
@@ -333,11 +382,11 @@ export default async function kupa(view, id) {
       if (!me.top && me.ground && me.y >= c.n * c.step - 0.1) { me.top = true; me.finAt = 0; banner('Zirvedesin! 🎉', '', 1600); buzz(60); }
       if (me.top && !tops.has(v.me) && nowMs - me.finAt > 900) { me.finAt = nowMs; state.socket?.emit('k3:s', [me.x, me.y, me.z, me.ry, 0]); state.socket?.emit('k3:fin'); } // sunucu onaylayana dek yinele
       if (!me.top && me.y < lavaY(c, t) - 0.15) die('Lav seni yakaladı!', 0, 5, 0);
-    } else if (me.y < -7 && !me.gone) { me.gone = true; state.socket?.emit('k3:out'); banner('Düştün!', 'Bu turda elendin. Kalanları izleyebilirsin.', 2600); }
+    } else if (me.y < -7 && !me.gone) { me.gone = true; state.socket?.emit('k3:out'); banner('Düştün!', after(), 2600); }
   }
   function die(title, vx, vy, vz, tell = true) { // elendim: karakter savrulur, kalanları izlerim
     if (me.gone) return; Object.assign(me, { gone: true, dead: true, vx, vy, vz, ground: false, stun: 3 }); if (tell) state.socket?.emit('k3:out');
-    banner(title, 'Bu turda elendin. Kalanları izleyebilirsin.', 2600); buzz([70, 40, 70]);
+    banner(title, after(), 2600); buzz([70, 40, 70]);
   }
   function boom(x, y, z) { const m = mesh(ball, flat(0xffb347, { transparent: true, opacity: 0.85, depthWrite: false }), x, y + 0.8, z); m.scale.setScalar(0.3); scene.add(m); fx.push({ m, t0: performance.now() }); }
 
@@ -348,41 +397,53 @@ export default async function kupa(view, id) {
   function leftText(t) { // sağ üstteki durum yazısı
     const m = v.mode; const st = v.st || {}; const n = alive(); t = Math.max(0, t);
     if (m === 'kosu') return `${n} yarışçı · ilk bitiren kazanır`;
-    if (m === 'kuyruk') return `${clock(v.conf.len - t)} · ${st.tails?.includes(v.me) ? 'Kuyruk sende, kaç!' : iAmIn() ? 'Kuyruk kap!' : 'Kuyruğu olan tur atlar'}`;
+    if (m === 'kuyruk') return `${clock(v.conf.len - t)} · ${st.tails?.includes(v.me) ? 'Kuyruk sende, kaç!' : iAmIn() ? 'Kuyruk kap!' : lastRound() ? 'Kuyruğu olan kazanır' : 'Kuyruğu olan tur atlar'}`;
     if (m === 'futbol') return `${TEAM[0][1]} ${st.score?.[0] ?? 0} – ${st.score?.[1] ?? 0} ${TEAM[1][1]} · ${st.ot ? 'Altın gol' : clock(v.conf.len - t)}${myTeam() != null ? ` · Sen: ${TEAM[myTeam()][1]}` : ''}`;
     if (m === 'lav') return me.top && v.keep > 1 ? `Zirvedesin · ${tops.size}/${v.keep} kişi çıktı` : v.keep > 1 ? `Zirveye ilk ${v.keep} kişi tur atlar` : 'Zirveye ilk çıkan kazanır';
     if (m === 'bomba' && hasBomb(v.me)) return 'Bomba sende! Birine dokun';
+    if (m === 'sakla') return t < v.conf.wait ? `Ebe sayıyor: ${Math.ceil(v.conf.wait - t)} · saklan!` : `${clock(v.conf.len - t)} · Kalan ${n}${v.keep > 1 ? ` · ${v.keep} kişi tur atlar` : ''}`;
     return v.keep > 1 ? `Kalan ${n} · ${v.keep} kişi tur atlar` : `Kalan ${n} · son kalan kazanır`;
   }
   let leftStr = ''; const setLeft = (s) => { if (s !== leftStr) { leftStr = s; $('.k3-left').textContent = s; } }; // yalnızca değişince yaz (çeviri katmanı her yazışta yeniden çalışmasın)
   function hud() {
-    const playing = v.status === 'playing'; $('.k3-round').textContent = playing ? `${v.round}. tur · ${v.title}` : 'Parti Kupası';
+    const playing = v.status === 'playing'; $('.k3-round').textContent = playing ? (v.rounds > 1 ? `${v.round}. tur · ${v.title}` : v.title) : 'Parti Kupası';
     const left = $('.k3-left'); left.hidden = !playing; if (playing) setLeft(leftText(v.playAt ? (srv() - v.playAt) / 1000 : 0)); else leftStr = '';
-    const ctl = playing && v.phase !== 'final' && iAmIn(); $('.k3-joy').hidden = !ctl; const jb = $('.k3-jump'); jb.hidden = !ctl; const jl = v.mode === 'sumo' ? 'İt' : 'Zıpla'; if (jb.dataset.l !== jl) { jb.dataset.l = jl; jb.textContent = jl; } if (v.mode !== 'sumo') jb.classList.remove('cd');
+    const ctl = playing && v.phase !== 'final' && iAmIn(); $('.k3-joy').hidden = !ctl; $('.k3-zone').hidden = !ctl; const jb = $('.k3-jump'); jb.hidden = !ctl; const jl = v.mode === 'sumo' ? 'İt' : 'Zıpla'; if (jb.dataset.l !== jl) { jb.dataset.l = jl; jb.textContent = jl; } if (v.mode !== 'sumo') jb.classList.remove('cd');
     if (!playing || v.mode !== 'renk') { $('.k3-call').hidden = true; callKey = ''; }
+    if (!playing || v.mode !== 'sakla') wrap.classList.remove('seen');
     const over = $('.k3-over');
+    // Oyun seçici: oda sahibi değiştirir, diğerleri seçileni görür
+    const game = `<button class="k3-mode"${v.host ? '' : ' disabled'}><span><small>Oyun</small><b>${v.pick ? esc(modeName(v.pick)) : 'Kupa · karışık üç tur'}</b></span>${v.host ? '<i>Değiştir</i>' : ''}</button>`;
     if (v.status === 'waiting') {
       over.hidden = false; over.className = 'k3-over side';
-      over.innerHTML = `<div class="k3-card"><h2>Parti Kupası</h2><p>Dokuz oyundan üç tur, tek kupa. Boş yerlere bot oturur.</p>
+      over.innerHTML = `<div class="k3-card"><h2>Parti Kupası</h2>${game}<p>${esc(INFO[v.pick || 'kupa'])} Boş yerlere bot oturur.</p>
         <div class="k3-pl">${v.players.map((p, i) => `<span class="${i === v.me ? 'me' : ''}"><i style="background:${hex(COLORS[p.look?.color] || COLORS.gul)}"></i>${esc(i === v.me ? 'Sen' : p.name)}</span>`).join('')}</div>
         <small class="k3-cnt">${v.players.length}/${v.max} oyuncu${v.startAt ? ` · <b class="k3-auto"></b>` : ''}</small>
         <div class="k3-btns">${v.host ? '<button class="btn primary k3-start">Hemen başlat</button>' : '<span class="muted">Odayı açan başlatacak…</span>'}<button class="btn k3-ward">Gardırop</button><button class="btn k3-inv">${icon('userPlus')} Davet et</button></div></div>`;
     } else if (v.status === 'ended') {
-      const o = v.result?.order || []; const w = v.players[v.result?.winner]; const mine = v.players[v.me]?.place;
+      const res = v.result || {}; const o = res.order || []; const wins = res.winners || [res.winner]; const won = wins.includes(v.me); const w = v.players[res.winner]; const mine = v.players[v.me]?.place; const wn = esc((w?.name || '').replace(' (bot)', ''));
+      const head = res.single ? (won ? 'Kazandın! 🏆' : wins.length > 1 ? (res.mode === 'futbol' && v.st?.teams ? `${TEAM[v.st.teams[wins[0]] || 0][1]} takım kazandı` : 'Oyun bitti') : `${wn} kazandı`) : won ? 'Kupa senin!' : `Kupayı ${wn} kazandı`;
       over.hidden = false; over.className = 'k3-over side';
-      over.innerHTML = `<div class="k3-card"><div class="k3-cup">🏆</div><h2>${v.result?.winner === v.me ? 'Kupa senin!' : `Kupayı ${esc((w?.name || '').replace(' (bot)', ''))} kazandı`}</h2>
-        <div class="k3-rank">${o.slice(0, 3).map((i, k) => `<span class="${i === v.me ? 'me' : ''}"><b>${k + 1}.</b>${esc(i === v.me ? 'Sen' : v.players[i].name)}</span>`).join('')}</div>
-        ${mine && mine > 3 ? `<small class="k3-cnt">Sen ${mine}. oldun</small>` : ''}
+      over.innerHTML = `<div class="k3-card"><h2 class="k3-win"><span class="k3-cup">🏆</span>${head}</h2>
+        ${wins.length > 1 ? `<small class="k3-cnt">Kazananlar</small><div class="k3-pl">${wins.map((i) => `<span class="${i === v.me ? 'me' : ''}"><i style="background:${hex(COLORS[v.players[i]?.look?.color] || COLORS.gul)}"></i>${esc(nm(i))}</span>`).join('')}</div>`
+    : `<div class="k3-rank">${o.slice(0, 3).map((i, k) => `<span class="${i === v.me ? 'me' : ''}"><b>${k + 1}.</b>${esc(nm(i))}</span>`).join('')}</div>${mine && mine > 3 ? `<small class="k3-cnt">Sen ${mine}. oldun</small>` : ''}`}
+        ${game}
         <div class="k3-btns">${v.host ? '<button class="btn primary k3-start">Yeniden oyna</button>' : ''}<button class="btn k3-ward">Gardırop</button><button class="btn k3-x">Çık</button></div></div>`;
     } else over.hidden = true;
   }
+  function openModes() { // oda sahibi: kupa ya da tek oyun
+    const row = (k, name) => `<button data-mode="${k}" class="${(v.pick || '') === k ? 'on' : ''}"><b>${esc(name)}</b><small>${esc(INFO[k || 'kupa'])}</small></button>`;
+    sheet('Oyun seç', `<div class="k3-ml">${row('', 'Kupa · karışık üç tur')}${(v.modes || []).map(([k, name]) => row(k, name)).join('')}</div>`, { onMount(sh, close) { sh.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-mode]'); if (!b) return; try { apply(await api(`/kupa/${id}/opts`, { body: { mode: b.dataset.mode } })); close(); } catch (er) { toast(er.message); }
+    }); } });
+  }
   function apply(nv) {
     off = Math.min(off, Date.now() - nv.now); const was = `${v.status}:${v.round}:${v.phase}`; v = nv; buildChars(); buildArena();
-    if (v.status === 'playing' && v.phase === 'intro' && roundSeen !== v.round) { roundSeen = v.round; placeAll(); banner(`${v.round}. tur · ${v.title}`, tip()); }
+    if (v.status === 'playing' && v.phase === 'intro' && roundSeen !== v.round) { roundSeen = v.round; placeAll(); banner(v.rounds > 1 ? `${v.round}. tur · ${v.title}` : v.title, tip()); }
     if (v.status === 'playing' && v.phase === 'play' && roundSeen !== v.round) { roundSeen = v.round; placeAll(); } // oyuna sonradan bağlanan
-    if (v.phase === 'result' && was !== `${v.status}:${v.round}:${v.phase}`) { const th = v.result?.through || []; const ok = th.includes(v.me); const fin = v.round >= 3 || th.length <= 1; // finalde tur atlanmaz, kupa kazanılır
-      banner(ok ? (fin ? 'Kazandın! 🏆' : 'Tur atladın! 🎉') : 'Tur bitti', ok ? (fin ? '' : 'Sıradaki tura hazırlan.') : fin ? `${nm(th[0])} kazandı` : `${th.length} kişi tur atladı.`); }
-    if (v.status !== 'playing') { $('.k3-banner').hidden = true; if (was.startsWith('playing')) { me.gone = false; me.dead = false; } }
+    if (v.phase === 'result' && was !== `${v.status}:${v.round}:${v.phase}`) { const th = v.result?.through || []; const ok = th.includes(v.me); const fin = v.result?.last || th.length <= 1; // son turda tur atlanmaz, kazanılır
+      banner(ok ? (fin ? 'Kazandın! 🏆' : 'Tur atladın! 🎉') : fin ? 'Oyun bitti' : 'Tur bitti', ok ? (fin ? '' : 'Sıradaki tura hazırlan.') : fin ? (th.length === 1 ? `${nm(th[0])} kazandı` : v.mode === 'futbol' && v.st?.teams ? `${TEAM[v.st.teams[th[0]] || 0][1]} takım kazandı.` : `${th.length} kişi kazandı.`) : `${th.length} kişi tur atladı.`); }
+    if (v.status !== 'playing') { $('.k3-banner').hidden = true; $('.k3-feed').innerHTML = ''; roundSeen = 0; if (was.startsWith('playing')) { me.gone = false; me.dead = false; me.hideAt = 0; } } // roundSeen: yeni oyunun ilk turunda herkes yeniden yerleşsin
     hud();
   }
   async function openWardrobe() {
@@ -401,7 +462,8 @@ export default async function kupa(view, id) {
     if (closed) return; raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs; const t = v.playAt ? (srv() - v.playAt) / 1000 : 0; const playing = v.status === 'playing'; const m = playing ? v.mode : null; const c = v.conf; const tt = Math.max(0, t);
     const W = wrap.clientWidth; const H = wrap.clientHeight; if (canvas.width !== Math.floor(W * renderer.getPixelRatio()) || canvas.height !== Math.floor(H * renderer.getPixelRatio())) { renderer.setSize(W, H, false); cam.aspect = W / H; cam.updateProjectionMatrix(); }
-    const si = !playing && v.status === 'ended' && chars.has(v.result?.winner) ? v.result.winner : v.me; // kaidede gösterilecek karakter
+    const si = !playing && v.status === 'ended' && chars.has(v.result?.winner) && !v.result.winners?.includes(v.me) ? v.result.winner : v.me; // kaidede gösterilecek karakter
+    if (nowMs - joinAt > 4000) { joinAt = nowMs; join(); } // soket odasına katılım kaçtıysa telafi et
     const mc = chars.get(si);
     if (playing && v.phase === 'intro') { const left = Math.ceil((v.playAt - srv()) / 1000); const b = $('.k3-banner'); if (left <= 3 && left > 0 && b.dataset.n !== String(left)) { b.dataset.n = String(left); banner(String(left), tip()); } }
     if (playing && v.phase === 'play' && $('.k3-banner').dataset.n) { delete $('.k3-banner').dataset.n; banner('Başla!', '', 700); }
@@ -409,7 +471,7 @@ export default async function kupa(view, id) {
     else if (playing && me.dead && me.y > -12) { me.vy -= G * dt; me.x += me.vx * dt; me.y += me.vy * dt; me.z += me.vz * dt; } // elenince savrulma
     if (mc) {
       if (!playing) { mc.g.visible = true; mc.g.position.set(0, 0, 0); mc.g.rotation.y += dt * 0.7; animate(mc, dt, 0, false, false); chars.forEach((ch, i) => { if (i !== si) ch.g.visible = false; }); }
-      else if (v.spawn?.[v.me] && !(me.gone && me.y < -7)) { mc.g.position.set(me.x, me.y, me.z); mc.g.rotation.y = me.ry; mc.sh.visible = me.ground; animate(mc, dt, Math.hypot(me.vx, me.vz), !me.ground, me.stun > 0.3, me.dash > 0); mc.g.visible = me.y > -9; }
+      else if (v.spawn?.[v.me] && !(me.gone && (me.y < -7 || (me.hideAt && nowMs > me.hideAt)))) { mc.g.position.set(me.x, me.y, me.z); mc.g.rotation.y = me.ry; mc.sh.visible = me.ground; animate(mc, dt, Math.hypot(me.vx, me.vz), !me.ground, me.stun > 0.3, me.dash > 0); mc.g.visible = me.y > -9; }
       else mc.g.visible = false;
     }
     if (playing) chars.forEach((ch, i) => { if (i === v.me) return; const p = ch.g.position; const k = Math.min(1, dt * 13); const sp = Math.hypot(ch.t[0] - p.x, ch.t[2] - p.z) / Math.max(dt, 0.001) * k;
@@ -439,17 +501,28 @@ export default async function kupa(view, id) {
       else { const k = Math.min(1, dt * 12); b.x += (b.sx - b.x) * k; b.z += (b.sz - b.z) * k; b.vx = b.svx; b.vz = b.svz; }
       const o = dyn.ball; const dx = b.x - o.position.x; const dz = b.z - o.position.z; const dist = Math.hypot(dx, dz); if (dist > 1e-4 && dist < 3) o.rotateOnWorldAxis(tmpV.set(dz / dist, 0, -dx / dist), dist / c.br); // yuvarlanma
       o.position.x = b.x; o.position.z = b.z; dyn.bsh.position.x = b.x; dyn.bsh.position.z = b.z; }
+    if (playing && dyn.ebes) { // ebeler ve görüş ışıkları
+      const k = Math.min(1, dt * 12);
+      dyn.ebes.forEach((e) => { e.x += (e.t[0] - e.x) * k; e.z += (e.t[1] - e.z) * k; let d = e.t[2] - e.ry; d = Math.atan2(Math.sin(d), Math.cos(d)); e.ry += d * k;
+        const sp = Math.hypot(e.t[0] - e.x, e.t[1] - e.z) * 12; e.ch.g.position.set(e.x, 0, e.z); e.ch.g.rotation.y = e.ry; animate(e.ch, dt, Math.min(SPEED, sp), false, false);
+        e.cone.visible = !!e.on && v.phase === 'play'; if (!e.cone.visible) return; const P = e.cone.geometry.attributes.position; P.setXYZ(0, e.x, 0.06, e.z);
+        for (let i = 0; i <= e.N; i++) { const a = e.ry - c.half + (2 * c.half * i) / e.N; const sx = Math.sin(a); const sz = Math.cos(a); const d2 = rayWalls(e.x, e.z, sx, sz, c.range); P.setXYZ(i + 1, e.x + sx * d2, 0.06, e.z + sz * d2); }
+        P.needsUpdate = true; });
+      const seen = v.phase === 'play' && iAmIn() && seenByEbe(); if (seen !== wrap.classList.contains('seen')) { wrap.classList.toggle('seen', seen); if (seen) buzz(30); }
+      if (v.phase === 'play' && !dyn.go && t >= c.wait) { dyn.go = true; if (iAmIn()) { banner('Ebe geliyor!', '', 1200); buzz(80); } }
+    }
     if (fx.length) fx = fx.filter(({ m: o, t0 }) => { const e = (nowMs - t0) / 450; if (e >= 1) { scene.remove(o); o.material.dispose(); return false; } o.scale.setScalar(0.3 + e * 3.2); o.material.opacity = 0.85 * (1 - e); return true; });
     // Kamera: f bakış yönü
     let tx = 0; let ty = 0; let tz = 0; let oy = 6.6; let oz = 8.2; let f = [0, -1];
     if (!playing) { oy = 1.5; oz = 5.4; ty = 0.9; tx = W > H ? 1.9 : 0; tz = W > H ? 0 : -0.2; }
     else if (iAmIn() || (m === 'kosu' && v.spawn?.[v.me])) { tx = me.x; ty = Math.max(-2, me.y); tz = me.z; f = look(me.x, me.z);
-      if (m === 'kosu') { oy = 5.2; oz = 8.6; tz -= 3; tx *= 0.6; } else if (m === 'lav') { oy = 4.6; oz = 9.5; } else if (m === 'futbol') { oy = 8.6; oz = 9; tx = me.x * 0.75 + dyn.bs.x * 0.25; tz = me.z * 0.75 + dyn.bs.z * 0.25; } }
+      if (m === 'kosu') { oy = 5.2; oz = 8.6; tz -= 3; tx *= 0.6; } else if (m === 'lav') { oy = 4.6; oz = 9.5; } else if (m === 'sakla') { oy = 13.5; oz = 7.5; } else if (m === 'futbol') { oy = 8.6; oz = 9; tx = me.x * 0.75 + dyn.bs.x * 0.25; tz = me.z * 0.75 + dyn.bs.z * 0.25; } }
     else { const lead = [...chars.entries()].find(([i, ch]) => v.players[i]?.alive && ch.g.visible);
       if (m === 'kosu' && lead) { tz = lead[1].g.position.z - 3; oy = 6; oz = 10; }
       else if (m === 'lav') { let best = null; chars.forEach((ch, i) => { if (i !== v.me && v.players[i]?.alive && ch.g.visible && (!best || ch.g.position.y > best.y)) best = ch.g.position; }); if (best) { tx = best.x; ty = best.y; tz = best.z; f = look(best.x, best.z); oy = 6; oz = 13; } else { ty = Math.max(0, me.y); f = look(me.x, me.z); oy = 7; oz = 14; } }
       else if (m === 'futbol') { f = look(0, 0); tx = dyn.bs.x * 0.5; tz = dyn.bs.z * 0.6; oy = 13; oz = 11; }
-      else { oy = 15; oz = 15; } }
+      else if (m === 'sakla') { oy = 27; oz = 15; }
+      else { oy = c?.r > 11 || c?.r0 > 10 ? 20 : 15; oz = oy; } }
     const ck = Math.min(1, dt * 6); cam.position.x += (tx - f[0] * oz - cam.position.x) * ck; cam.position.y += (ty + oy - cam.position.y) * ck; cam.position.z += (tz - f[1] * oz - cam.position.z) * ck;
     cl.x += (tx - cl.x) * ck; cl.y += (ty + 0.8 - cl.y) * ck; cl.z += (tz - cl.z) * ck; cam.lookAt(cl.x, cl.y, cl.z);
     if (playing && nowMs - hudAt > 250) { hudAt = nowMs; setLeft(leftText(t)); if (m === 'sumo') $('.k3-jump').classList.toggle('cd', t < me.dcd - 0.05); }
@@ -458,11 +531,12 @@ export default async function kupa(view, id) {
   }
 
   // ---- Girdi ----
-  const joy = $('.k3-joy'); let jid = null; let jo = null;
+  const joy = $('.k3-joy'); const zone = $('.k3-zone'); let jid = null; let jo = null;
   const jmove = (e) => { if (e.pointerId !== jid) return; const p = toLocal(e.clientX, e.clientY); let dx = p.x - jo.x; let dy = p.y - jo.y; const l = Math.hypot(dx, dy); const mx = 46; if (l > mx) { dx *= mx / l; dy *= mx / l; } inp.x = dx / mx; inp.z = dy / mx; joy.firstElementChild.style.transform = `translate(${dx}px, ${dy}px)`; };
-  const jend = (e) => { if (e.pointerId !== jid) return; jid = null; inp.x = 0; inp.z = 0; joy.firstElementChild.style.transform = ''; };
-  joy.addEventListener('pointerdown', (e) => { jid = e.pointerId; joy.setPointerCapture?.(jid); const r = toLocal(e.clientX, e.clientY); jo = r; jmove(e); });
-  joy.addEventListener('pointermove', jmove); joy.addEventListener('pointerup', jend); joy.addEventListener('pointercancel', jend);
+  const jend = (e) => { if (e.pointerId !== jid) return; jid = null; inp.x = 0; inp.z = 0; joy.firstElementChild.style.transform = ''; joy.style.left = ''; joy.style.top = ''; joy.style.bottom = ''; };
+  zone.addEventListener('pointerdown', (e) => { if (jid !== null) return; jid = e.pointerId; zone.setPointerCapture?.(jid); jo = toLocal(e.clientX, e.clientY); const b = wrap.getBoundingClientRect(); const o = toLocal(b.left, b.top); const o2 = toLocal(b.right, b.bottom); // joystick parmağın altında belirir
+    joy.style.left = `${jo.x - Math.min(o.x, o2.x) - 66}px`; joy.style.top = `${jo.y - Math.min(o.y, o2.y) - 66}px`; joy.style.bottom = 'auto'; jmove(e); });
+  zone.addEventListener('pointermove', jmove); zone.addEventListener('pointerup', jend); zone.addEventListener('pointercancel', jend); zone.addEventListener('lostpointercapture', jend);
   $('.k3-jump').addEventListener('pointerdown', (e) => { e.preventDefault(); inp.jump = true; });
   const kd = (e) => { if (e.target.closest?.('input, textarea')) return; keys.add(e.key.toLowerCase()); if (e.key === ' ') { e.preventDefault(); if (!e.repeat) inp.jump = true; } }; const ku = (e) => { keys.delete(e.key.toLowerCase()); if (!keys.size) { inp.x = 0; inp.z = 0; } };
   window.addEventListener('keydown', kd); window.addEventListener('keyup', ku);
@@ -470,29 +544,33 @@ export default async function kupa(view, id) {
     if (e.target.closest('.k3-x')) { if (v.status === 'playing' && !(await ask('Oyundan çık', 'Çıkarsan bu kupadan elenirsin. Emin misin?', 'Çık', { danger: true }))) return; await api(`/kupa/${id}/leave`, { body: {} }).catch(() => {}); leaveTo('#/oyunlar'); return; }
     if (e.target.closest('.k3-start')) { try { apply(await api(`/kupa/${id}/start`, { body: {} })); } catch (er) { toast(er.message); } return; }
     if (e.target.closest('.k3-ward')) return openWardrobe();
+    if (e.target.closest('.k3-mode')) { if (v.host) openModes(); return; }
     if (e.target.closest('.k3-inv')) pickPerson('Parti Kupası’na çağır', async (u) => { if (!u) return; try { await api(`/kupa/${id}/invite`, { body: { userId: u.id } }); toast(`${u.username} çağrıldı.`); } catch (er) { toast(er.message); } });
   });
   const join = () => state.socket?.emit('k3:join', { id });
   // Sunucu olayları: eleme, kuyruk / bomba el değiştirmesi, gol, zirve
+  const said = new Map(); // aynı eleme için iki satır yazma ("bulundu" + "elendi")
   function onEv(ev) {
     const st = v.st; const p = v.players[ev.i]; const ch = chars.get(ev.i);
-    if (ev.t === 'out' && p) { p.alive = false; p.out = true; if (ch) ch.seen = performance.now(); if (ev.i !== v.me) feed(`${nm(ev.i)} elendi`); else if (!me.gone) { me.gone = true; banner('Elendin', 'Bu turda elendin. Kalanları izleyebilirsin.', 2600); } hud(); }
+    if (ev.t === 'out' && p) { p.alive = false; p.out = true; if (ch) ch.seen = performance.now(); if (ev.i !== v.me) { if (performance.now() - (said.get(ev.i) || 0) > 700) feed(`${nm(ev.i)} elendi`); } else if (!me.gone) { me.gone = true; banner('Elendin', after(), 2600); } hud(); }
     else if (ev.t === 'tail' && st) { const old = st.tails || []; st.tails = ev.tails; const got = ev.tails.find((i) => !old.includes(i)); const lost = old.find((i) => !ev.tails.includes(i));
       if (got === v.me) { banner('Kuyruk sende!', 'Süre bitene kadar kaçır.', 1500); buzz(60); } else if (lost === v.me) { banner('Kuyruğun kapıldı!', 'Birine dokunup geri al.', 1500); buzz([50, 40, 50]); } else if (got != null) feed(`${nm(got)} kuyruk kaptı`); }
     else if (ev.t === 'bomb' && st) { const had = hasBomb(v.me); st.bombs = ev.b; if (hasBomb(v.me) && !had) { banner('Bomba sende!', 'Birine dokunup devret.', 1500); buzz([60, 40, 60]); } else if (had && !hasBomb(v.me) && v.players[v.me]?.alive) banner('Kurtuldun!', '', 800); }
-    else if (ev.t === 'boom') { const q = ev.i === v.me ? me : ch?.g.position; if (q) boom(q.x, q.y, q.z); if (ev.i === v.me) die('Bomba elinde patladı!', (Math.random() - 0.5) * 6, 9, (Math.random() - 0.5) * 6, false); else if (p) feed(`${nm(ev.i)} patladı 💥`); }
+    else if (ev.t === 'boom') { const q = ev.i === v.me ? me : ch?.g.position; if (q) boom(q.x, q.y, q.z); if (ev.i === v.me) die('Bomba elinde patladı!', (Math.random() - 0.5) * 6, 9, (Math.random() - 0.5) * 6, false); else if (p) { said.set(ev.i, performance.now()); feed(`${nm(ev.i)} patladı 💥`); } }
     else if (ev.t === 'goal' && st) { st.score = ev.s; if (dyn.bs) Object.assign(dyn.bs, { x: 0, z: 0, vx: 0, vz: 0, sx: 0, sz: 0, svx: 0, svz: 0, own: 0, fr: performance.now() + 2200 });
       const s = v.spawn?.[v.me]; if (s && iAmIn()) Object.assign(me, { x: s[0], z: s[2], vx: 0, vz: 0 }); banner(ev.team === myTeam() ? 'Gol! 🎉' : 'Gol yedik!', `${TEAM[0][1]} ${ev.s[0]} – ${ev.s[1]} ${TEAM[1][1]}`, 1700); buzz(80); }
-    else if (ev.t === 'ot' && st) { st.ot = 1; banner('Uzatma!', 'İlk golü atan takım kazanır.', 1900); }
+    else if (ev.t === 'ot' && st) { st.ot = 1; banner('Uzatma!', 'İlk gol kazandırır. Gol olmazsa top kimin sahasındaysa o takım kaybeder.', 3200); }
     else if (ev.t === 'top') { tops.add(ev.i); if (ev.i !== v.me) feed(`${nm(ev.i)} zirvede`); }
+    else if (ev.t === 'catch') { const q = ev.i === v.me ? me : ch?.g.position; if (q) boom(q.x, q.y, q.z); if (ev.i === v.me) { die('Ebe seni buldu!', 0, 0, 0, false); me.dead = false; me.hideAt = performance.now() + 900; wrap.classList.remove('seen'); } else if (p) { said.set(ev.i, performance.now()); feed(`${nm(ev.i)} bulundu`); } }
   }
   const offs = [on('k3', (nv) => { if (nv.id === id) apply(nv); }),
-    on('k3:snap', ([sn, list, bl]) => { off = Math.min(off, Date.now() - sn); const n = performance.now();
+    on('k3:snap', ([sn, list, bl, es]) => { off = Math.min(off, Date.now() - sn); const n = performance.now();
       list.forEach(([i, x, y, z, ry, fl]) => { const ch = chars.get(i); if (!ch || i === v.me) return; const d = ch.seen > n ? 0.1 : Math.min(0.3, Math.max(0.05, (n - ch.seen) / 1000)); ch.v = [(x - ch.t[0]) / d, (z - ch.t[2]) / d]; ch.t = [x, y, z, ry]; ch.fl = fl; ch.seen = n; ch.g.visible = true; });
-      if (bl && dyn.bs) Object.assign(dyn.bs, { sx: bl[0], sz: bl[1], svx: bl[2], svz: bl[3] }); }),
+      if (bl && dyn.bs) Object.assign(dyn.bs, { sx: bl[0], sz: bl[1], svx: bl[2], svz: bl[3] });
+      if (es && dyn.ebes) es.forEach((e, k) => { const o = dyn.ebes[k]; if (o) { o.t = [e[0], e[1], e[2]]; o.on = e[3]; } }); }),
     on('k3:tile', ([i, at]) => { tiles.set(i, at); }),
     on('k3:ev', onEv),
-    on('reconnected', () => { join(); api(`/kupa/${id}`).then(apply).catch(() => {}); })];
+    on('reconnected', () => { join(); api(`/kupa/${id}`).then(apply).catch((e) => { if (/bulunamadı/i.test(e?.message || '')) { toast('Oyun sona erdi.'); leaveTo('#/oyunlar'); } }); })];
   join(); buildChars(); buildArena(); if (v.status === 'playing') { roundSeen = v.round; placeAll(); } hud(); cam.position.set(0, 9, 12); raf = requestAnimationFrame(frame);
   return () => { closed = true; cancelAnimationFrame(raf); offs.forEach((f) => f()); clearTimeout(banT); window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku); state.socket?.emit('k3:leave', { id }); wardrobe = null; renderer.dispose(); offLand(); };
 }
