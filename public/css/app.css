@@ -3908,7 +3908,15 @@ html.land-game #fx-layer { display: none; }
 .k3-joy i { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; background: #fff; box-shadow: 0 6px 14px rgba(40, 10, 60, .4); pointer-events: none; }
 .k3-jump { position: absolute; right: calc(26px + var(--safe-r, 0px)); bottom: calc(30px + var(--safe-b, 0px)); z-index: 6; width: 104px; height: 104px; border-radius: 50%; border: 0; background: #ffd45e; color: #4a2c00; font: inherit; font-family: var(--display); font-size: 19px; font-weight: 900; box-shadow: 0 7px 0 #c98a12, 0 14px 24px rgba(40, 10, 60, .45); touch-action: none; }
 .k3-jump:active { transform: translateY(5px); box-shadow: 0 2px 0 #c98a12, 0 6px 12px rgba(40, 10, 60, .45); }
-.k3-joy[hidden], .k3-jump[hidden], .k3-over[hidden], .k3-banner[hidden], .k3-chip[hidden] { display: none; }
+.k3-joy[hidden], .k3-jump[hidden], .k3-over[hidden], .k3-banner[hidden], .k3-chip[hidden], .k3-call[hidden] { display: none; }
+.k3-jump.cd { opacity: .5; }
+/* Renk Zemini: söylenen renk */
+.k3-call { position: absolute; left: 50%; top: calc(52px + var(--safe-t, 0px)); z-index: 6; transform: translateX(-50%); display: grid; grid-template-columns: auto auto; align-items: center; gap: 6px 10px; padding: 8px 18px 10px 10px; border-radius: 22px; background: rgba(30, 14, 48, .66); pointer-events: none; }
+.k3-call i { width: 34px; height: 34px; border-radius: 11px; box-shadow: inset 0 6px 0 rgba(255, 255, 255, .5), 0 0 0 2px #fff; }
+.k3-call b { font-family: var(--display); font-size: 24px; font-weight: 900; line-height: 1; }
+.k3-call em { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .22); overflow: hidden; }
+.k3-call s { display: block; height: 100%; background: #fff; transform-origin: left center; }
+.k3-call.gone em { visibility: hidden; }
 /* Bekleme / sonuç kartı */
 .k3-over { position: absolute; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center; padding: calc(54px + var(--safe-t, 0px)) calc(14px + var(--safe-r, 0px)) 14px calc(14px + var(--safe-l, 0px)); pointer-events: none; }
 .k3-over.side { justify-content: flex-end; }

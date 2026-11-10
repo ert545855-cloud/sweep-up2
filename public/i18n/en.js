@@ -362,6 +362,8 @@ const D = {
   'Düştün!': 'You fell!', 'Bu turda elendin. Kalanları izleyebilirsin.': 'You’re out this round. You can watch the rest.', 'Tur atladın! 🎉': 'You qualified! 🎉', 'Tur bitti': 'Round over', 'Sıradaki tura hazırlan.': 'Get ready for the next round.',
   'Başla!': 'Go!', 'Lezzet': 'Flavour', 'Şapka': 'Hat', 'Üzerinde': 'Wearing', 'Giy': 'Wear', 'Kostüm alındı 🎉': 'Costume bought 🎉', 'Bu kostümü jetonla almak istiyor musun?': 'Buy this costume with coins?', 'Satın al': 'Buy',
   'Çıkarsan bu kupadan elenirsin. Emin misin?': 'If you leave you’re out of this cup. Are you sure?', 'Üç turlu 3D eleme: çubuktan zıpla, çöken zeminden kaç, engelli koşuyu kazan.': 'Three-round 3D knockout: jump the bar, escape the falling floor, win the obstacle run.',
+  // Parti Kupası: ek modlar
+  'Kuyruk Kapmaca': 'Tail Tag', 'Sumo': 'Sumo', 'Renk Zemini': 'Colour Floor', 'Lav Yükseliyor': 'Rising Lava', 'Dev Top Futbolu': 'Giant Ball Football', 'Bomba Elden Ele': 'Hot Bomb', 'İt': 'Push', 'Süre bitince kuyruğu olan tur atlar. Kuyruğun yoksa birine dokunup kap!': 'When time runs out, players with a tail qualify. No tail? Touch someone to grab one!', 'Platform daralıyor. “İt” ile rakibini aşağı gönder!': 'The platform is shrinking. Use “Push” to knock rivals off!', 'Söylenen renge koş, diğer karolar düşer!': 'Run to the called colour — the other tiles drop!', 'Basamaklardan zirveye tırman, lav yükseliyor!': 'Climb the steps to the top — the lava is rising!', 'Bomba sendeyse birine dokunup devret. Patladığında elinde olan elenir!': 'If you hold the bomb, touch someone to pass it. Whoever holds it when it blows is out!', 'Pembe': 'Pink', 'Mor': 'Purple', 'Kuyruk sende!': 'You’ve got a tail!', 'Süre bitene kadar kaçır.': 'Keep it until time runs out.', 'Kuyruğun kapıldı!': 'Your tail was grabbed!', 'Birine dokunup geri al.': 'Touch someone to get one back.', 'Bomba sende!': 'You have the bomb!', 'Birine dokunup devret.': 'Touch someone to pass it.', 'Kurtuldun!': 'Passed it!', 'Bomba elinde patladı!': 'The bomb blew up on you!', 'Bomba sende! Birine dokun': 'You have the bomb! Touch someone', 'Gol! 🎉': 'Goal! 🎉', 'Gol yedik!': 'They scored!', 'Uzatma!': 'Overtime!', 'İlk golü atan takım kazanır.': 'Next goal wins.', 'Zirvedesin! 🎉': 'You’re at the top! 🎉', 'Lav seni yakaladı!': 'The lava got you!', 'Elendin': 'You’re out', 'Kazandın! 🏆': 'You won! 🏆', 'Zirveye ilk çıkan kazanır': 'First to the top wins', 'Dokuz oyundan üç tur, tek kupa. Boş yerlere bot oturur.': 'Three rounds drawn from nine games, one cup. Bots fill the empty spots.', 'Üç turlu 3D eleme. Her kupada dokuz oyundan üçü gelir: sumo, lav kulesi, dev top futbolu, bomba ve dahası.': 'Three-round 3D knockout. Each cup draws three of nine games: sumo, lava tower, giant ball football, bomb tag and more.',
 };
 
 // Sayı / isim içeren metinler
@@ -390,7 +392,17 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
-  [/^(\d+)\. tur · (.+)$/, (_, n, t) => `Round ${n} · ${({ 'Dönen Çubuk': 'Spinning Bar', 'Zemin Çöküyor': 'Falling Floor', 'Engelli Koşu': 'Obstacle Run' })[t] || t}`],
+  [/^Kalan (\d+) · son kalan kazanır$/, (_, n) => `${n} left · last one standing wins`],
+  [/^Zirveye ilk (\d+) kişi tur atlar$/, (_, n) => `First ${n} to the top qualify`],
+  [/^Zirvedesin · (\d+)\/(\d+) kişi çıktı$/, (_, a, b) => `You’re at the top · ${a}/${b} made it`],
+  [/^(\d+:\d\d) · (Kuyruk sende, kaç!|Kuyruk kap!|Kuyruğu olan tur atlar)$/, (_, t, m) => `${t} · ${({ 'Kuyruk sende, kaç!': 'You have a tail, run!', 'Kuyruk kap!': 'Grab a tail!' })[m] || 'Tails qualify'}`],
+  [/^Pembe (\d+) – (\d+) Mavi(?: · (Altın gol|\d+:\d\d))?(?: · Sen: (Pembe|Mavi))?$/, (_, a, b, t, me) => `Pink ${a} – ${b} Blue${t ? ` · ${t === 'Altın gol' ? 'Golden goal' : t}` : ''}${me ? ` · You: ${me === 'Pembe' ? 'Pink' : 'Blue'}` : ''}`],
+  [/^Takımın (Pembe|Mavi)\. Dev topu (pembe|mavi) kaleye sok!$/, (_, a, b) => `You’re on ${a === 'Pembe' ? 'Pink' : 'Blue'}. Push the giant ball into the ${b === 'pembe' ? 'pink' : 'blue'} goal!`],
+  [/^(.+) kuyruk kaptı$/, (_, u) => `${u} grabbed a tail`],
+  [/^(.+) patladı 💥$/, (_, u) => `${u} blew up 💥`],
+  [/^(.+) zirvede$/, (_, u) => `${u} reached the top`],
+  [/^(\d+) kişi tur atladı\.$/, (_, n) => `${n} qualified.`],
+  [/^(\d+)\. tur · (.+)$/, (_, n, t) => `Round ${n} · ${({ 'Dönen Çubuk': 'Spinning Bar', 'Zemin Çöküyor': 'Falling Floor', 'Engelli Koşu': 'Obstacle Run', 'Kuyruk Kapmaca': 'Tail Tag', 'Renk Zemini': 'Colour Floor', 'Lav Yükseliyor': 'Rising Lava', 'Dev Top Futbolu': 'Giant Ball Football', 'Bomba Elden Ele': 'Hot Bomb' })[t] || t}`],
   [/^Kalan (\d+) · (\d+) kişi tur atlar$/, (_, a, b) => `${a} left · ${b} qualify`],
   [/^(\d+) yarışçı · ilk bitiren kazanır$/, (_, n) => `${n} racers · first to finish wins`],
   [/^Kupayı (.+) kazandı$/, (_, u) => `${u} won the cup`],
