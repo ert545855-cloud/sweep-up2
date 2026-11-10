@@ -3887,3 +3887,52 @@ html.land-game #fx-layer { display: none; }
 .ok-wrap.land .ok-btns .grow { display: none; }
 .ok-wrap.land .ok-end-c { max-height: 100%; overflow-y: auto; width: min(520px, 100%); padding: 14px 18px; gap: 8px; }
 .ok-wrap.land .ok-end-c .big { font-size: 32px; }
+
+/* ===== Parti Kupası (3D) ===== */
+.k3 { position: fixed; inset: 0; z-index: 40; overflow: hidden; color: #fff; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  background: linear-gradient(180deg, #5b2a8c 0%, #a2489f 46%, #ff8f8f 78%, #ffd3a3 100%); }
+.k3 canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.k3-top { position: absolute; top: 0; left: var(--safe-l, 0px); right: var(--safe-r, 0px); z-index: 6; display: flex; align-items: center; gap: 8px; padding: calc(8px + var(--safe-t, 0px)) 10px 0; pointer-events: none; }
+.k3-top > * { pointer-events: auto; }
+.k3-top .ib { width: 38px; height: 38px; border-radius: 50%; background: rgba(30, 14, 48, .45); color: #fff; }
+.k3-top .ib svg { width: 19px; height: 19px; }
+.k3-chip { padding: 7px 13px; border-radius: 999px; background: rgba(30, 14, 48, .45); font-size: 13px; font-weight: 750; white-space: nowrap; }
+.k3-banner { position: absolute; left: 50%; top: 24%; z-index: 5; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 4px; text-align: center; pointer-events: none; width: min(86%, 520px); }
+.k3-banner b { font-family: var(--display); font-size: clamp(30px, 7vmin, 52px); font-weight: 900; line-height: 1.05; letter-spacing: -.02em; text-shadow: 0 3px 0 rgba(60, 20, 80, .55), 0 10px 26px rgba(40, 10, 60, .5); animation: k3Pop .35s cubic-bezier(.2, 1.5, .4, 1); }
+.k3-banner small { font-size: 15px; font-weight: 650; padding: 5px 12px; border-radius: 999px; background: rgba(30, 14, 48, .5); }
+@keyframes k3Pop { from { transform: scale(.5); opacity: 0; } }
+.k3-feed { position: absolute; top: calc(54px + var(--safe-t, 0px)); right: calc(10px + var(--safe-r, 0px)); z-index: 5; display: grid; justify-items: end; gap: 4px; pointer-events: none; }
+.k3-feed span { padding: 4px 10px; border-radius: 999px; background: rgba(30, 14, 48, .5); font-size: 12.5px; font-weight: 650; animation: k3Pop .25s ease; }
+/* Kumanda: solda yön çubuğu, sağda zıpla */
+.k3-joy { position: absolute; left: calc(22px + var(--safe-l, 0px)); bottom: calc(22px + var(--safe-b, 0px)); z-index: 6; width: 132px; height: 132px; border-radius: 50%; background: rgba(255, 255, 255, .16); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .35); touch-action: none; }
+.k3-joy i { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; background: #fff; box-shadow: 0 6px 14px rgba(40, 10, 60, .4); pointer-events: none; }
+.k3-jump { position: absolute; right: calc(26px + var(--safe-r, 0px)); bottom: calc(30px + var(--safe-b, 0px)); z-index: 6; width: 104px; height: 104px; border-radius: 50%; border: 0; background: #ffd45e; color: #4a2c00; font: inherit; font-family: var(--display); font-size: 19px; font-weight: 900; box-shadow: 0 7px 0 #c98a12, 0 14px 24px rgba(40, 10, 60, .45); touch-action: none; }
+.k3-jump:active { transform: translateY(5px); box-shadow: 0 2px 0 #c98a12, 0 6px 12px rgba(40, 10, 60, .45); }
+.k3-joy[hidden], .k3-jump[hidden], .k3-over[hidden], .k3-banner[hidden], .k3-chip[hidden] { display: none; }
+/* Bekleme / sonuç kartı */
+.k3-over { position: absolute; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center; padding: calc(54px + var(--safe-t, 0px)) calc(14px + var(--safe-r, 0px)) 14px calc(14px + var(--safe-l, 0px)); pointer-events: none; }
+.k3-over.side { justify-content: flex-end; }
+@media (orientation: portrait) and (pointer: fine), (max-aspect-ratio: 1/1) and (pointer: fine) { .k3-over.side { justify-content: center; align-items: flex-end; } }
+.k3-card { pointer-events: auto; width: min(360px, 100%); max-height: 100%; overflow-y: auto; display: grid; gap: 10px; padding: 18px; border-radius: 26px; background: rgba(34, 16, 54, .72); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), 0 24px 60px -24px rgba(20, 0, 40, .8); }
+.k3-card h2 { margin: 0; font-family: var(--display); font-size: 24px; line-height: 1.1; letter-spacing: -.01em; } .k3-card p { margin: 0; font-size: 14px; opacity: .85; }
+.k3-pl { display: flex; flex-wrap: wrap; gap: 6px; }
+.k3-pl span { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 6px; border-radius: 999px; background: rgba(255, 255, 255, .12); font-size: 13px; font-weight: 650; }
+.k3-pl span.me { background: #fff; color: #2b1640; } .k3-pl i { width: 16px; height: 16px; border-radius: 5px; box-shadow: inset 0 3px 0 rgba(255, 255, 255, .7); }
+.k3-cnt { font-size: 13px; opacity: .8; }
+.k3-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.k3-btns .btn { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; } .k3-btns .btn:not(.primary) { background: rgba(255, 255, 255, .14); color: #fff; } .k3-btns .btn svg { width: 16px; height: 16px; }
+.k3-btns .muted { color: rgba(255, 255, 255, .7); font-size: 13px; }
+.k3-cup { font-size: 52px; line-height: 1; animation: k3Pop .5s cubic-bezier(.2, 1.6, .4, 1); }
+.k3-rank { display: grid; gap: 6px; } .k3-rank span { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 14px; background: rgba(255, 255, 255, .1); font-weight: 650; }
+.k3-rank span.me { box-shadow: inset 0 0 0 1.5px #ffd45e; } .k3-rank b { font-family: var(--display); color: #ffd45e; }
+/* Gardırop */
+.k3-w { padding: 0 16px 18px; display: grid; gap: 8px; } .k3-w h3 { margin: 6px 0 0; font-size: 15px; } .k3-w p { margin: 0; }
+.k3-wg { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.k3-wg button { display: grid; justify-items: center; gap: 3px; padding: 10px 6px; border-radius: 16px; background: var(--surface); color: var(--text); font: inherit; }
+.k3-wg button.on { box-shadow: inset 0 0 0 2px var(--uv); }
+.k3-wg i { width: 38px; height: 38px; border-radius: 12px; box-shadow: inset 0 7px 0 rgba(255, 255, 255, .75), 0 4px 8px rgba(0, 0, 0, .15); font-style: normal; }
+.k3-wg i.em { box-shadow: none; display: grid; place-items: center; font-size: 28px; }
+.k3-wg b { font-size: 13px; } .k3-wg small { font-size: 11.5px; color: var(--muted); font-weight: 650; }
+.g-kupa { --g1: #ff6fa3; --g2: #6a2a8e; }
+.gm-tag { position: absolute; bottom: 12px; right: 14px; font-style: normal; font-size: 11px; font-weight: 900; padding: 2px 8px; border-radius: 999px; background: #ffd45e; color: #4a2c00; }
+.gm-tile.wide .gm-tag { bottom: auto; top: 12px; right: 16px; }

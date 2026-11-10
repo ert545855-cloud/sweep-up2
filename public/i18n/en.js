@@ -355,6 +355,13 @@ const D = {
   'Tek başına da başlayabilirsin: eksik yerlere 6 kişiye kadar bot oturur.': 'You can start alone: bots fill the empty seats up to 6 players.',
   'Botsuz oyun için en az 5 kişi gerekli. Arkadaşlarını davet et.': 'A game without bots needs at least 5 people. Invite your friends.',
   'Eşleştiğin ya da mesajlaştığın biriyle sohbetteki + menüsünden başlat.': 'Start one from the + menu in a chat with a match or friend.',
+  // Parti Kupası (3D)
+  'Parti Kupası': 'Party Cup', 'Dönen Çubuk': 'Spinning Bar', 'Zemin Çöküyor': 'Falling Floor', 'Engelli Koşu': 'Obstacle Run', 'Zıpla': 'Jump', 'Gardırop': 'Wardrobe', 'Hemen başlat': 'Start now',
+  'Üç tur, tek kupa. Boş yerlere bot oturur.': 'Three rounds, one cup. Bots fill the empty spots.', 'Odayı açan başlatacak…': 'The host will start…', 'Kupa senin!': 'The cup is yours!',
+  'Çubuğun üstünden zıpla, platformdan düşme!': 'Jump over the bar, don’t fall off!', 'Bastığın karo çöker. Hep hareket et!': 'Tiles you step on collapse. Keep moving!', 'Engelleri aş, bitişe ilk sen ulaş!': 'Beat the obstacles, reach the finish first!',
+  'Düştün!': 'You fell!', 'Bu turda elendin. Kalanları izleyebilirsin.': 'You’re out this round. You can watch the rest.', 'Tur atladın! 🎉': 'You qualified! 🎉', 'Tur bitti': 'Round over', 'Sıradaki tura hazırlan.': 'Get ready for the next round.',
+  'Başla!': 'Go!', 'Lezzet': 'Flavour', 'Şapka': 'Hat', 'Üzerinde': 'Wearing', 'Giy': 'Wear', 'Kostüm alındı 🎉': 'Costume bought 🎉', 'Bu kostümü jetonla almak istiyor musun?': 'Buy this costume with coins?', 'Satın al': 'Buy',
+  'Çıkarsan bu kupadan elenirsin. Emin misin?': 'If you leave you’re out of this cup. Are you sure?', 'Üç turlu 3D eleme: çubuktan zıpla, çöken zeminden kaç, engelli koşuyu kazan.': 'Three-round 3D knockout: jump the bar, escape the falling floor, win the obstacle run.',
 };
 
 // Sayı / isim içeren metinler
@@ -383,6 +390,14 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^(\d+)\. tur · (.+)$/, (_, n, t) => `Round ${n} · ${({ 'Dönen Çubuk': 'Spinning Bar', 'Zemin Çöküyor': 'Falling Floor', 'Engelli Koşu': 'Obstacle Run' })[t] || t}`],
+  [/^Kalan (\d+) · (\d+) kişi tur atlar$/, (_, a, b) => `${a} left · ${b} qualify`],
+  [/^(\d+) yarışçı · ilk bitiren kazanır$/, (_, n) => `${n} racers · first to finish wins`],
+  [/^Kupayı (.+) kazandı$/, (_, u) => `${u} won the cup`],
+  [/^(.+) elendi$/, (_, u) => `${u} is out`],
+  [/^Sen (\d+)\. oldun$/, (_, n) => `You finished #${n}`],
+  [/^(\d+) sn sonra başlıyor$/, (_, n) => `starts in ${n}s`],
+  [/^(\d+) jeton$/, (_, n) => `${n} coins`],
   [/^(\d+) kişi oynuyor$/, (_, n) => `${n} playing`],
   [/^(\d+)\/(\d+) oyuncu$/, (_, a, b) => `${a}/${b} players`],
   [/^Onay bekliyor (\d+)\/(\d+)$/, (_, a, b) => `Awaiting approval ${a}/${b}`],

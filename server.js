@@ -1735,6 +1735,7 @@ require('./server/community')(app, featureCtx); // seviye, haftanın en beğenil
 require('./server/games')(app, featureCtx); // oyun salonu: Okey, Çiz Bil
 require('./server/playkit')(app, featureCtx); // oyun altyapısı + server/play/*.js oyunları
 require('./server/minigames')(app, featureCtx); // sohbet içi mini oyunlar: XOX, Dört Taş, TKM, Amiral Battı
+require('./server/kupa')(app, featureCtx); // Parti Kupası (3D)
 require('./server/engage')(app, featureCtx); // seriler, kulüpler, günün sorusu, seçki, karaoke… (en son yüklenir)
 gameOut = featureCtx.gameOut;
 
@@ -1763,6 +1764,8 @@ app.get(['/icons/apple-touch.png', '/apple-touch-icon.png', '/apple-touch-icon-p
 featureCtx.pushIcon = (u) => `${iconBase(LOGO_ICONS.has(u?.logo) && isPlus(u) ? u.logo : '')}/icon-192.png`;
 
 // ---------- Statik ----------
+// 3D oyunlar için three.js (yalnızca 3D oyun açılınca yüklenir)
+app.use('/vendor/three', express.static(path.join(__dirname, 'node_modules', 'three', 'build'), { maxAge: '30d', immutable: true, index: false }));
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, p) {
     if (p.endsWith('sw.js') || p.endsWith('.html') || p.endsWith('.js') || p.endsWith('.css')) res.setHeader('Cache-Control', 'no-cache');
@@ -1849,6 +1852,7 @@ io.on('connection', (socket) => {
   featureCtx.genelSocket(socket);
   featureCtx.speedSocket(socket);
   featureCtx.gamesSocket?.(socket);
+  featureCtx.kupaSocket?.(socket);
 
   socket.on('message:send', (data, ack) => {
     const c = store.get('chats', data?.chatId);

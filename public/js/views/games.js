@@ -11,6 +11,7 @@ const GAMES = [
   { k: 'pisti', cat: 'masa', name: 'Pişti', sub: 'Yerdeki kartı aynı kartla al, tek kartta pişti yap!', who: '2 ya da 4 kişi', time: '5–10 dk' },
   { k: 'renk', cat: 'masa', name: 'Renk Eşle', sub: 'Rengi ya da sayıyı eşle, +2 ve +4’lerle rakibini zorla.', who: '2–6 kişi', time: '5–10 dk' },
   { k: 'kizma', cat: 'masa', name: 'Kızma Birader', sub: 'Zar at, 6 ile çık, rakibi eve gönder, kızma!', who: '2–4 kişi', time: '10–15 dk' },
+  { k: 'kupa', cat: 'parti', legacy: true, api: '/kupa', icon: 'odul', wide: true, tag: '3D', name: 'Parti Kupası', sub: 'Üç turlu 3D eleme: çubuktan zıpla, çöken zeminden kaç, engelli koşuyu kazan.', who: '1–8 kişi', time: '3–5 dk' },
   { k: 'cizbil', cat: 'parti', legacy: true, name: 'Çiz Bil', sub: 'Biri çizer, diğerleri tahmin eder.', who: '2–8 kişi', time: '8–12 dk' },
   { k: 'casus', cat: 'parti', name: 'Kim Casus?', sub: 'Herkes kelimeyi biliyor, biri hariç. Casusu bul!', who: '3–10 kişi', time: '8–12 dk' },
   { k: 'isimsehir', cat: 'parti', name: 'İsim Şehir', sub: 'Harf gelir, kategorileri en hızlı sen doldur.', who: '2–8 kişi', time: '8–12 dk' },
@@ -21,7 +22,8 @@ const GAMES = [
 ];
 const MINI = [['xox', 'XOX'], ['dorttas', 'Dört Taş'], ['tkm', 'Taş Kağıt Makas'], ['amiral', 'Amiral Battı']];
 const CATS = [['masa', 'Masa oyunları'], ['parti', 'Parti oyunları']];
-const base = (g) => (g.legacy ? `/games/${g.k}` : `/play/${g.k}`);
+const base = (g) => g.api || (g.legacy ? `/games/${g.k}` : `/play/${g.k}`);
+const ic = (g, n) => egi(g.icon || g.k, n);
 
 export default async function games(view) {
   view.innerHTML = `<header class="topbar bordered"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button><div class="center">Oyunlar</div><span class="ib"></span></header>
@@ -41,14 +43,15 @@ export default async function games(view) {
       return `<h2 class="gm-ch">${title}</h2><div class="gm-grid">${list.map((g, i) => {
         const st = info[g.k]?.current ? '<i class="gm-mine">Masan açık</i>' : info[g.k]?.players ? `<i class="gm-live">${info[g.k].players} kişi oynuyor</i>` : '';
         // Tek kalan son karo da geniş olur (boşluk kalmasın)
-        const wide = (c === 'masa' && i === 0) || (i === list.length - 1 && (list.length - (c === 'masa' ? 1 : 0)) % 2 === 1);
-        return `<button class="gm-tile g-${g.k} ${wide ? 'wide' : ''}" data-k="${g.k}"><span class="gm-ic">${egi(g.k, wide ? 76 : 56)}</span><span class="gm-tx"><b>${esc(g.name)}</b><small>${esc(g.who)}</small>${wide ? `<em>${esc(g.sub)}</em>` : ''}</span>${st}</button>`;
+        const feat = (x, k) => x.wide || (c === 'masa' && k === 0); const rest = list.filter((x, k) => !feat(x, k)).length;
+        const wide = feat(g, i) || (i === list.length - 1 && rest % 2 === 1);
+        return `<button class="gm-tile g-${g.k} ${wide ? 'wide' : ''}" data-k="${g.k}"><span class="gm-ic">${ic(g, wide ? 76 : 56)}</span><span class="gm-tx"><b>${esc(g.name)}</b><small>${esc(g.who)}</small>${wide ? `<em>${esc(g.sub)}</em>` : ''}</span>${st}${g.tag && !st ? `<i class="gm-tag">${g.tag}</i>` : ''}</button>`;
       }).join('')}</div>`;
     }).join('');
     const cur = ready.filter((g) => info[g.k]?.current);
-    view.querySelector('.gm-cur-list').innerHTML = cur.map((g) => `<a class="gm-back" href="#/oyun/${g.k}/${esc(info[g.k].current)}">${egi(g.k, 30)}<span class="grow"><b>${esc(g.name)}</b><small>Masana dön</small></span>${icon('play')}</a>`).join('');
+    view.querySelector('.gm-cur-list').innerHTML = cur.map((g) => `<a class="gm-back" href="#/oyun/${g.k}/${esc(info[g.k].current)}">${ic(g, 30)}<span class="grow"><b>${esc(g.name)}</b><small>Masana dön</small></span>${icon('play')}</a>`).join('');
   };
-  const detail = (g) => sheet(null, `<div class="gm-d"><div class="gm-band g-${g.k}">${egi(g.k, 72)}<div><h2>${esc(g.name)}</h2><small>${icon('users')} ${esc(g.who)}<i></i>${icon('timer')} ${esc(g.time)}</small></div></div><p>${esc(g.sub)}</p>
+  const detail = (g) => sheet(null, `<div class="gm-d"><div class="gm-band g-${g.k}">${ic(g, 72)}<div><h2>${esc(g.name)}</h2><small>${icon('users')} ${esc(g.who)}<i></i>${icon('timer')} ${esc(g.time)}</small></div></div><p>${esc(g.sub)}</p>
       ${info[g.k]?.current ? `<a class="btn block" href="#/oyun/${g.k}/${esc(info[g.k].current)}">${icon('play')} Masana dön</a>` : ''}
       <div class="gm-btns"><button class="btn primary quick">Hemen oyna</button><button class="btn friends">Arkadaşlarla</button></div>
       <div class="gm-open"><div class="spinner"></div></div></div>`, {
