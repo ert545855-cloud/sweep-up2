@@ -4,6 +4,7 @@ import { icon } from '../icons.js';
 import { api, esc, toast, on, state, sheet, pickPerson } from '../core.js';
 import { enterLandscape, toLocal, ask } from '../land.js';
 import { leaveTo } from '../nav.js';
+import { t as tr } from '../i18n.js'; // tuvale çizilen etiketler (Sen, Ebe) sayfa çevirisinden geçmez: elle çevrilir
 
 const G = 22; const JUMP = 8.5; const SPEED = 7; const PR = 0.45; // sunucuyla aynı fizik sabitleri
 export const COLORS = { gul: 0xf48fb1, limon: 0xffe066, fistik: 0xa5d66f, portakal: 0xffb061, nar: 0xe23e6d, nane: 0x5fe0c4, bogurtlen: 0x8a63d2, cikolata: 0x8a5636, altin: 0xf5c542 };
@@ -49,7 +50,7 @@ export default async function kupa(view, id) {
   let T; let renderer;
   try { T = await import('/vendor/three/three.module.min.js'); renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' }); }
   catch { $('.k3-over').hidden = false; $('.k3-over').innerHTML = '<div class="k3-card"><h2>3D oyun açılamadı</h2><p>Bu cihaz ya da tarayıcı 3D grafikleri desteklemiyor. Tarayıcını güncelleyip tekrar dene.</p><button class="btn primary k3-x">Geri dön</button></div>'; wrap.onclick = (e) => { if (e.target.closest('.k3-x')) { api(`/kupa/${id}/leave`, { body: {} }).catch(() => {}); offLand(); leaveTo('#/oyunlar'); } }; return () => offLand(); }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+  let pr = Math.min(window.devicePixelRatio || 1, 1.75); renderer.setPixelRatio(pr); const openedAt = performance.now(); let fAcc = 0; let fN = 0; let slow = 0;
   const scene = new T.Scene(); const cam = new T.PerspectiveCamera(55, 1, 0.1, 220);
   scene.add(new T.HemisphereLight(0xffffff, 0x8a6bb8, 1.15)); const sun = new T.DirectionalLight(0xfff1dd, 1.5); sun.position.set(6, 12, 7); scene.add(sun);
   scene.fog = new T.Fog(0x8a4aa8, 60, 170);
@@ -121,12 +122,12 @@ export default async function kupa(view, id) {
   const tip = () => (v.mode === 'futbol' ? `Takımın ${TEAM[myTeam() || 0][1]}. Dev topu ${TEAM[1 - (myTeam() || 0)][1].toLowerCase()} kaleye sok!` : v.mode === 'kuyruk' && lastRound() ? 'Süre bitince kuyruğu olan kazanır. Kuyruğun yoksa birine dokunup kap!' : TIPS[v.mode]);
   const modeName = (k) => (v.modes || []).find((x) => x[0] === k)?.[1] || k;
   const after = () => (v.players.some((p, i) => i !== v.me && !p.bot && p.alive) ? 'Kalanları izleyebilirsin.' : ''); // izlenecek başka oyuncu varsa
-  const buzz = (p) => { try { navigator.vibrate?.(p); } catch { /* titreşim yok */ } };
+  const buzz = (p) => { try { if (navigator.userActivation?.hasBeenActive !== false) navigator.vibrate?.(p); } catch { /* titreşim yok */ } }; // dokunulmadan titreşim istenirse tarayıcı uyarı basar
 
   function buildChars() {
     const k = v.players.map((p) => `${p.name}|${p.look?.color}|${p.look?.hat}`).join(',') + v.me; if (k === charKey) return; charKey = k;
     chars.forEach((c) => scene.remove(c.g)); chars.clear();
-    v.players.forEach((p, i) => { const c = makeLokum(p.look); c.g.add(label(i === v.me ? 'Sen' : p.name.replace(' (bot)', ''), i === v.me)); c.t = [0, 0, 0, 0]; c.v = [0, 0]; c.fl = 0; c.seen = 0; scene.add(c.g); chars.set(i, c); });
+    v.players.forEach((p, i) => { const c = makeLokum(p.look); c.lbl = label(i === v.me ? tr('Sen') : p.name.replace(' (bot)', ''), i === v.me); c.g.add(c.lbl); c.t = [0, 0, 0, 0]; c.v = [0, 0]; c.fl = 0; c.seen = 0; scene.add(c.g); chars.set(i, c); });
   }
   function buildArena() {
     const key = v.status === 'playing' ? `${v.round}:${v.mode}` : `idle:${v.status}`; if (key === arenaKey) return; arenaKey = key;
@@ -203,16 +204,16 @@ export default async function kupa(view, id) {
       dyn.bs = { x: 0, z: 0, vx: 0, vz: 0, sx: 0, sz: 0, svx: 0, svz: 0, own: 0, fr: 0 };
     } else if (m === 'sakla') { // çitle çevrili bahçe: duvarlar, sandıklar, çalılar; ebe ve görüş ışığı
       const H = c.h; arena.add(mesh(new T.BoxGeometry(H * 2 + 1.6, 1, H * 2 + 1.6), lam(0xb9e2a6), 0, -0.5, 0));
-      for (let i = 0; i < 18; i++) arena.add(lay(mesh(new T.CircleGeometry(0.9 + (i % 3) * 0.5, 14), lam(0xc9ecb6), ((i * 7.3) % (H * 2 - 3)) - H + 1.5, 0.008, ((i * 11.9) % (H * 2 - 3)) - H + 1.5)));
+      const inst = (geo, mat, list, put) => { const im = new T.InstancedMesh(geo, mat, list.length); list.forEach((it, k) => { d.rotation.set(0, 0, 0); d.scale.set(1, 1, 1); put(it, k); d.updateMatrix(); im.setMatrixAt(k, d.matrix); }); arena.add(im); return im; }; // aynı türden parçalar tek çizim
+      inst(new T.CircleGeometry(1, 14), lam(0xc9ecb6), [...Array(18).keys()], (i) => { d.position.set(((i * 7.3) % (H * 2 - 3)) - H + 1.5, 0.008, ((i * 11.9) % (H * 2 - 3)) - H + 1.5); d.rotation.x = -Math.PI / 2; d.scale.setScalar(0.9 + (i % 3) * 0.5); });
       arena.add(lay(mesh(new T.RingGeometry(1.7, 1.95, 40), flat(0xfffaf2), 0, 0.012, 0))); // ebenin saydığı yer
       [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([sx, sz]) => arena.add(mesh(new T.BoxGeometry(sx ? 0.5 : H * 2 + 1.4, 1.1, sx ? H * 2 + 1.4 : 0.5), plum, sx * (H + 0.45), 0.55, sz * (H + 0.45))));
-      const wm = [cream, lam(0xdba463), lam(0x58b368)];
-      c.walls.forEach(([x, z, w, dd, k]) => {
-        if (k === 2) { const b = mesh(cubeGeo, wm[2], x, 0.8, z); b.scale.set(w + 0.25, 1.75, dd + 0.25); arena.add(b); return; }
-        arena.add(mesh(new T.BoxGeometry(w, k ? 1.5 : 1.7, dd), wm[k], x, k ? 0.75 : 0.85, z)); arena.add(mesh(new T.BoxGeometry(w + 0.14, 0.2, dd + 0.14), k ? lam(0xb9813f) : nar, x, k ? 1.5 : 1.75, z));
-      });
+      const box = new T.BoxGeometry(1, 1, 1); const of = (k) => c.walls.filter((w) => w[4] === k);
+      inst(box, cream, of(0), ([x, z, w, dd]) => { d.position.set(x, 0.85, z); d.scale.set(w, 1.7, dd); }); inst(box, nar, of(0), ([x, z, w, dd]) => { d.position.set(x, 1.75, z); d.scale.set(w + 0.14, 0.2, dd + 0.14); }); // duvar ve kırmızı üst şeridi
+      inst(box, lam(0xdba463), of(1), ([x, z, w, dd]) => { d.position.set(x, 0.75, z); d.scale.set(w, 1.5, dd); }); inst(box, lam(0xb9813f), of(1), ([x, z, w, dd]) => { d.position.set(x, 1.5, z); d.scale.set(w + 0.14, 0.2, dd + 0.14); }); // sandık
+      inst(cubeGeo, lam(0x58b368), of(2), ([x, z, w, dd]) => { d.position.set(x, 0.8, z); d.scale.set(w + 0.25, 1.75, dd + 0.25); }); // çalı
       dyn.ebes = c.ebes.map(([x, z, ry]) => { // ebe: iri mor lokum; önünde duvarlarda kesilen görüş ışığı
-        const ch = makeLokum({ hex: 0x4a2d7a, hat: 'yok' }); ch.g.scale.setScalar(1.4); ch.g.add(label('Ebe', true, 'rgba(226,62,109,.96)')); ch.g.position.set(x, 0, z); ch.g.rotation.y = ry; arena.add(ch.g);
+        const ch = makeLokum({ hex: 0x4a2d7a, hat: 'yok' }); ch.g.scale.setScalar(1.4); ch.g.add(label(tr('Ebe'), true, 'rgba(226,62,109,.96)')); ch.g.position.set(x, 0, z); ch.g.rotation.y = ry; arena.add(ch.g);
         const N = 26; const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(new Float32Array((N + 2) * 3), 3)); const ix = []; for (let i = 1; i <= N; i++) ix.push(0, i, i + 1); geo.setIndex(ix);
         const cone = new T.Mesh(geo, flat(0xffe45e, { transparent: true, opacity: 0.4, depthWrite: false, side: T.DoubleSide })); cone.frustumCulled = false; cone.visible = false; arena.add(cone);
         return { ch, cone, N, x, z, ry, t: [x, z, ry], on: 0 };
@@ -220,9 +221,10 @@ export default async function kupa(view, id) {
     }
   }
   function placeAll() { // tur başı: herkes başlangıç yerine
-    Object.entries(v.spawn || {}).forEach(([i, p]) => { const c = chars.get(+i); if (c) { c.g.position.set(p[0], p[1], p[2]); c.t = [p[0], p[1], p[2], 0]; c.v = [0, 0]; c.g.visible = true; c.fl = 0; c.body.rotation.x = 0; c.seen = performance.now() + 9e6; } });
+    Object.entries(v.spawn || {}).forEach(([i, p]) => { const c = chars.get(+i); if (c) { c.g.position.set(p[0], p[1], p[2]); c.t = [p[0], p[1], p[2], 0]; c.v = [0, 0]; c.g.visible = !!v.players[+i]?.alive; c.fl = 0; c.body.rotation.x = 0; c.seen = performance.now() + 9e6; } }); // tur ortasında bağlanan, elenmişleri görmez
     chars.forEach((c, i) => { if (!v.spawn?.[i]) c.g.visible = false; });
-    const s = v.spawn?.[v.me]; Object.assign(me, { x: s ? s[0] : 0, y: 0, z: s ? s[2] : 0, vx: 0, vy: 0, vz: 0, stun: 0, cp: 0, fin: false, gone: !s, ry: v.mode === 'kosu' || (v.mode === 'futbol' && !myTeam()) ? Math.PI : 0, dash: 0, dcd: 0, dfl: 0, top: false, dead: false, finAt: 0, jbuf: 0, air: 0, jumped: false, hideAt: 0 });
+    const s = v.spawn?.[v.me]; const out = !s || !v.players[v.me]?.alive; const at = !out && v.phase === 'play' && v.at ? v.at : null; // at: sayfa yenilendiyse kaldığım yer
+    Object.assign(me, { x: at ? at[0] : s ? s[0] : 0, y: at ? at[1] : 0, z: at ? at[2] : s ? s[2] : 0, vx: 0, vy: 0, vz: 0, stun: 0, cp: 0, fin: false, gone: out, ry: v.mode === 'kosu' || (v.mode === 'futbol' && !myTeam()) ? Math.PI : 0, dash: 0, dcd: 0, dfl: 0, top: false, dead: false, finAt: 0, jbuf: 0, air: 0, jumped: false, hideAt: out ? 1 : 0 });
     wrap.classList.remove('seen'); tops.clear(); hits.clear(); dashHit.clear(); ap = { cur: 0, back: false }; lf = [0, -1]; if (dyn.bs) Object.assign(dyn.bs, { x: 0, z: 0, vx: 0, vz: 0, sx: 0, sz: 0, svx: 0, svz: 0, own: 0, fr: 0 });
   }
 
@@ -428,7 +430,7 @@ export default async function kupa(view, id) {
         ${wins.length > 1 ? `<small class="k3-cnt">Kazananlar</small><div class="k3-pl">${wins.map((i) => `<span class="${i === v.me ? 'me' : ''}"><i style="background:${hex(COLORS[v.players[i]?.look?.color] || COLORS.gul)}"></i>${esc(nm(i))}</span>`).join('')}</div>`
     : `<div class="k3-rank">${o.slice(0, 3).map((i, k) => `<span class="${i === v.me ? 'me' : ''}"><b>${k + 1}.</b>${esc(nm(i))}</span>`).join('')}</div>${mine && mine > 3 ? `<small class="k3-cnt">Sen ${mine}. oldun</small>` : ''}`}
         ${game}
-        <div class="k3-btns">${v.host ? '<button class="btn primary k3-start">Yeniden oyna</button>' : ''}<button class="btn k3-ward">Gardırop</button><button class="btn k3-x">Çık</button></div></div>`;
+        <div class="k3-btns">${v.host ? '<button class="btn primary k3-start">Yeniden oyna</button>' : ''}<button class="btn k3-ward">Gardırop</button><button class="btn k3-x">Çık</button>${v.host ? '' : '<span class="muted">Odayı açan yeniden başlatabilir.</span>'}</div></div>`;
     } else over.hidden = true;
   }
   function openModes() { // oda sahibi: kupa ya da tek oyun
@@ -460,7 +462,9 @@ export default async function kupa(view, id) {
   // ---- Döngü ----
   function frame(nowMs) {
     if (closed) return; raf = requestAnimationFrame(frame);
-    const dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs; const t = v.playAt ? (srv() - v.playAt) / 1000 : 0; const playing = v.status === 'playing'; const m = playing ? v.mode : null; const c = v.conf; const tt = Math.max(0, t);
+    const raw = (nowMs - last) / 1000; const dt = Math.min(0.05, raw); last = nowMs;
+    if (raw < 0.25 && nowMs - openedAt > 4000) { fAcc += raw; fN++; if (fAcc > 2) { const fps = fN / fAcc; fAcc = 0; fN = 0; // yavaş cihazda keskinlikten kıs, akıcılığı koru
+      if (fps < 40 && pr > 1) { if (++slow >= 2) { slow = 0; pr = Math.max(1, pr - 0.25); renderer.setPixelRatio(pr); } } else slow = 0; } } const t = v.playAt ? (srv() - v.playAt) / 1000 : 0; const playing = v.status === 'playing'; const m = playing ? v.mode : null; const c = v.conf; const tt = Math.max(0, t);
     const W = wrap.clientWidth; const H = wrap.clientHeight; if (canvas.width !== Math.floor(W * renderer.getPixelRatio()) || canvas.height !== Math.floor(H * renderer.getPixelRatio())) { renderer.setSize(W, H, false); cam.aspect = W / H; cam.updateProjectionMatrix(); }
     const si = !playing && v.status === 'ended' && chars.has(v.result?.winner) && !v.result.winners?.includes(v.me) ? v.result.winner : v.me; // kaidede gösterilecek karakter
     if (nowMs - joinAt > 4000) { joinAt = nowMs; join(); } // soket odasına katılım kaçtıysa telafi et
@@ -477,8 +481,8 @@ export default async function kupa(view, id) {
     if (playing) chars.forEach((ch, i) => { if (i === v.me) return; const p = ch.g.position; const k = Math.min(1, dt * 13); const sp = Math.hypot(ch.t[0] - p.x, ch.t[2] - p.z) / Math.max(dt, 0.001) * k;
       p.x += (ch.t[0] - p.x) * k; p.y += (ch.t[1] - p.y) * k; p.z += (ch.t[2] - p.z) * k; let d = ch.t[3] - ch.g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); ch.g.rotation.y += d * k;
       animate(ch, dt, Math.min(SPEED, sp), ch.fl === 1, ch.fl === 2, ch.fl === 3); ch.sh.visible = ch.fl !== 1 && ch.fl !== 2 && p.y > -0.3; if (!v.players[i].alive && nowMs - ch.seen > 900) ch.g.visible = false; });
-    // Kuyruk ve takım halkası
-    chars.forEach((ch, i) => { ch.tail.visible = m === 'kuyruk' && !!v.st?.tails?.includes(i); if (ch.tail.visible) ch.tail.rotation.z = Math.sin(nowMs / 110 + ch.ph) * 0.22; const tm = m === 'futbol' ? v.st?.teams?.[i] : null; ch.ring.visible = tm != null; if (tm != null) ch.ring.material.color.setHex(TEAM[tm][0]); });
+    // Kuyruk ve takım halkası; kameraya çok yakın karakterin isim etiketi ekranı kaplamasın
+    chars.forEach((ch, i) => { if (ch.g.visible) { const k = Math.max(0.42, Math.min(1, cam.position.distanceTo(ch.g.position) / 7.5)); ch.lbl.scale.set(2.3 * k, 0.575 * k, 1); } ch.tail.visible = m === 'kuyruk' && !!v.st?.tails?.includes(i); if (ch.tail.visible) ch.tail.rotation.z = Math.sin(nowMs / 110 + ch.ph) * 0.22; const tm = m === 'futbol' ? v.st?.teams?.[i] : null; ch.ring.visible = tm != null; if (tm != null) ch.ring.material.color.setHex(TEAM[tm][0]); });
     // Hareketli engeller
     if (playing && dyn.bars) dyn.bars.forEach((o, i) => { const b = c.bars[i]; o.visible = t >= b.from - 3; o.rotation.y = -barAngle(b, tt); o.position.y = t < b.from ? 0.45 + Math.max(0, b.from - t) * 0.5 : 0.45; });
     if (playing && dyn.sweeps) { dyn.sweeps.forEach((o, i) => { o.rotation.y = -TRACK.sweeps[i].w * tt; }); dyn.plats.forEach((o, i) => { const p = TRACK.plats[i]; o.position.x = p.amp * Math.sin(p.w * tt + p.ph); }); dyn.hams.forEach((o, i) => { const h = TRACK.hammers[i]; o.rotation.z = Math.sin(h.w * tt + h.ph); }); }
@@ -509,7 +513,7 @@ export default async function kupa(view, id) {
         for (let i = 0; i <= e.N; i++) { const a = e.ry - c.half + (2 * c.half * i) / e.N; const sx = Math.sin(a); const sz = Math.cos(a); const d2 = rayWalls(e.x, e.z, sx, sz, c.range); P.setXYZ(i + 1, e.x + sx * d2, 0.06, e.z + sz * d2); }
         P.needsUpdate = true; });
       const seen = v.phase === 'play' && iAmIn() && seenByEbe(); if (seen !== wrap.classList.contains('seen')) { wrap.classList.toggle('seen', seen); if (seen) buzz(30); }
-      if (v.phase === 'play' && !dyn.go && t >= c.wait) { dyn.go = true; if (iAmIn()) { banner('Ebe geliyor!', '', 1200); buzz(80); } }
+      if (v.phase === 'play' && !dyn.go && t >= c.wait) { dyn.go = true; if (iAmIn() && t < c.wait + 1.5) { banner('Ebe geliyor!', '', 1200); buzz(80); } }
     }
     if (fx.length) fx = fx.filter(({ m: o, t0 }) => { const e = (nowMs - t0) / 450; if (e >= 1) { scene.remove(o); o.material.dispose(); return false; } o.scale.setScalar(0.3 + e * 3.2); o.material.opacity = 0.85 * (1 - e); return true; });
     // Kamera: f bakış yönü
@@ -522,7 +526,7 @@ export default async function kupa(view, id) {
       else if (m === 'lav') { let best = null; chars.forEach((ch, i) => { if (i !== v.me && v.players[i]?.alive && ch.g.visible && (!best || ch.g.position.y > best.y)) best = ch.g.position; }); if (best) { tx = best.x; ty = best.y; tz = best.z; f = look(best.x, best.z); oy = 6; oz = 13; } else { ty = Math.max(0, me.y); f = look(me.x, me.z); oy = 7; oz = 14; } }
       else if (m === 'futbol') { f = look(0, 0); tx = dyn.bs.x * 0.5; tz = dyn.bs.z * 0.6; oy = 13; oz = 11; }
       else if (m === 'sakla') { oy = 27; oz = 15; }
-      else { oy = c?.r > 11 || c?.r0 > 10 ? 20 : 15; oz = oy; } }
+      else { oy = c?.r > 11 || c?.r0 > 10 || c?.rings > 6 ? 21 : 15; oz = oy; } }
     const ck = Math.min(1, dt * 6); cam.position.x += (tx - f[0] * oz - cam.position.x) * ck; cam.position.y += (ty + oy - cam.position.y) * ck; cam.position.z += (tz - f[1] * oz - cam.position.z) * ck;
     cl.x += (tx - cl.x) * ck; cl.y += (ty + 0.8 - cl.y) * ck; cl.z += (tz - cl.z) * ck; cam.lookAt(cl.x, cl.y, cl.z);
     if (playing && nowMs - hudAt > 250) { hudAt = nowMs; setLeft(leftText(t)); if (m === 'sumo') $('.k3-jump').classList.toggle('cd', t < me.dcd - 0.05); }

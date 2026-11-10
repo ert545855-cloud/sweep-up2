@@ -11,7 +11,8 @@ const GAMES = [
   { k: 'pisti', cat: 'masa', name: 'Pişti', sub: 'Yerdeki kartı aynı kartla al, tek kartta pişti yap!', who: '2 ya da 4 kişi', time: '5–10 dk' },
   { k: 'renk', cat: 'masa', name: 'Renk Eşle', sub: 'Rengi ya da sayıyı eşle, +2 ve +4’lerle rakibini zorla.', who: '2–6 kişi', time: '5–10 dk' },
   { k: 'kizma', cat: 'masa', name: 'Kızma Birader', sub: 'Zar at, 6 ile çık, rakibi eve gönder, kızma!', who: '2–4 kişi', time: '10–15 dk' },
-  { k: 'kupa', cat: 'parti', legacy: true, api: '/kupa', icon: 'odul', wide: true, tag: '3D', name: 'Parti Kupası', sub: 'Üç turlu 3D eleme: saklambaç, sumo, lav kulesi, dev top futbolu ve dahası. Odada istersen tek bir oyunu da seçebilirsin.', who: '1–16 kişi', time: '3–5 dk' },
+  { k: 'kupa', cat: 'parti', legacy: true, api: '/kupa', icon: 'odul', wide: true, tag: '3D', name: 'Parti Kupası', sub: 'Üç turlu 3D eleme: saklambaç, sumo, lav kulesi, dev top futbolu ve dahası. Odada istersen tek bir oyunu da seçebilirsin.', who: '1–8 kişi', time: '3–5 dk',
+    modes: [['sakla', 'Saklambaç'], ['sumo', 'Sumo'], ['futbol', 'Dev Top Futbolu'], ['lav', 'Lav Yükseliyor'], ['bomba', 'Bomba Elden Ele'], ['kuyruk', 'Kuyruk Kapmaca'], ['renk', 'Renk Zemini'], ['kosu', 'Engelli Koşu'], ['zemin', 'Zemin Çöküyor'], ['cubuk', 'Dönen Çubuk']] },
   { k: 'cizbil', cat: 'parti', legacy: true, name: 'Çiz Bil', sub: 'Biri çizer, diğerleri tahmin eder.', who: '2–8 kişi', time: '8–12 dk' },
   { k: 'casus', cat: 'parti', name: 'Kim Casus?', sub: 'Herkes kelimeyi biliyor, biri hariç. Casusu bul!', who: '3–10 kişi', time: '8–12 dk' },
   { k: 'isimsehir', cat: 'parti', name: 'İsim Şehir', sub: 'Harf gelir, kategorileri en hızlı sen doldur.', who: '2–8 kişi', time: '8–12 dk' },
@@ -54,11 +55,13 @@ export default async function games(view) {
   const detail = (g) => sheet(null, `<div class="gm-d"><div class="gm-band g-${g.k}">${ic(g, 72)}<div><h2>${esc(g.name)}</h2><small>${icon('users')} ${esc(g.who)}<i></i>${icon('timer')} ${esc(g.time)}</small></div></div><p>${esc(g.sub)}</p>
       ${info[g.k]?.current ? `<a class="btn block" href="#/oyun/${g.k}/${esc(info[g.k].current)}">${icon('play')} Masana dön</a>` : ''}
       <div class="gm-btns"><button class="btn primary quick">Hemen oyna</button><button class="btn friends">Arkadaşlarla</button></div>
+      ${g.modes ? `<div class="gm-oh">Tek oyun</div><div class="gm-modes">${g.modes.map(([k, n]) => `<button data-mode="${k}">${esc(n)}</button>`).join('')}</div>` : ''}
       <div class="gm-open"><div class="spinner"></div></div></div>`, {
     async onMount(sh, close) {
       const go = async (body) => { try { const r = await api(base(g), { body }); close(); location.hash = `#/oyun/${g.k}/${r.id}`; } catch (e) { toast(e.message); } };
       sh.querySelector('.quick').onclick = () => go({ quick: true });
       sh.querySelector('.friends').onclick = () => go({ private: true });
+      sh.querySelector('.gm-modes')?.addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b) go({ private: true, mode: b.dataset.mode }); }); // tek oyunla oda aç
       const box = sh.querySelector('.gm-open');
       let d; try { d = await api(base(g)); } catch { box.innerHTML = ''; return; }
       box.innerHTML = d.open.length ? `<div class="gm-oh">Açık masalar</div>${d.open.map((t) => {
