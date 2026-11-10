@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, on, isOn, toast, enablePush, pushSupported, pushEnabled, pushHint, logo, openChatWith, nm, setStoryMap,
+  state, api, esc, on, isOn, toast, enablePush, pushSupported, pushEnabled, pushHint, logo, openChatWith, nm, setStoryMap, storyAllSeen,
 } from '../core.js';
 import { postCard, wirePost, autoplay } from '../components.js';
 import { trackSeen } from '../insta.js';
@@ -48,7 +48,7 @@ export default async function feed(view) {
     const liveIds = new Set(lives.map((l) => l.userId));
     storiesEl.innerHTML = `
       <a class="story" href="${mine ? `#/stories/${state.me.id}` : '#/create/story'}">
-        <div class="${mine ? 'ring' : 'plain'}"><img src="${esc(state.me.avatar)}" alt=""></div>
+        <div class="${mine ? `ring ${storyAllSeen(mine) ? 'seen' : ''}` : 'plain'}"><img src="${esc(state.me.avatar)}" alt=""></div>
         ${mine ? '' : `<span class="add">${icon('plus')}</span>`}
         <span class="name">Hikayen</span></a>
       <a class="story" href="#/live">
@@ -58,7 +58,7 @@ export default async function feed(view) {
         <div class="ring live"><img src="${esc(l.user.avatar)}" alt=""></div>
         <span class="live-tag">CANLI</span><span class="name">${esc(l.user.username)}</span></a>`).join('')}
       ${others.filter((g) => !liveIds.has(g.user.id)).map((g) => `<a class="story" href="#/stories/${esc(g.user.id)}">
-        <div class="ring ${g.allSeen ? 'seen' : g.close ? 'close' : ''}"><img src="${esc(g.user.avatar)}" alt=""></div>
+        <div class="ring ${storyAllSeen(g) ? 'seen' : g.close ? 'close' : ''}"><img src="${esc(g.user.avatar)}" alt=""></div>
         ${isOn(g.user) ? '<i class="online"></i>' : ''}<span class="name">${esc(g.user.username)}</span></a>`).join('')}`;
   };
 

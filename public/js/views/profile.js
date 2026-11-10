@@ -179,7 +179,7 @@ export default async function profile(view, username) {
     <section class="ig-hero">
       <div class="ig-top">
         <${avHref ? `a href="${esc(avHref)}"` : 'div'} class="av-wrap ${u.frame ? `fr fr-${esc(u.frame)}` : ''}">
-          ${u.live || u.hasStory ? `<div class="ring ${u.live ? 'live' : ''}"><img class="av" src="${esc(u.avatar)}" alt=""></div>` : `<img class="av" src="${esc(u.avatar)}" alt="">`}
+          ${u.live || u.hasStory ? `<div class="ring ${u.live ? 'live' : u.storySeen ? 'seen' : ''}"><img class="av" src="${esc(u.avatar)}" alt=""></div>` : `<img class="av" src="${esc(u.avatar)}" alt="">`}
           ${u.live ? '<span class="live-tag">CANLI</span>' : self && !u.hasStory ? `<span class="plus">${icon('plus')}</span>` : (!self && isOn(u) ? '<i class="online"></i>' : '')}
         </${avHref ? 'a' : 'div'}>
         <div class="ig-stats">

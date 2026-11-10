@@ -350,6 +350,11 @@ const D = {
   'Masadan kalkarsan yerine bot oynar. Emin misin?': 'If you leave, a bot will take your seat. Are you sure?', 'Oyundan çıkmak istiyor musun?': 'Do you want to leave the game?',
   'Seçili taşı atarak eli bitirmek istiyor musun?': 'Finish the hand by discarding the selected tile?', 'sözlükte yok': 'not in dictionary', 'Onayla': 'Approve', '✓ Onayladın': '✓ Approved',
   'Süre doldu! Sözlükte olmayan cevaplara bakın: doğruysa onaylayın.': 'Time’s up! Check answers not in the dictionary and approve the correct ones.', 'Süre doldu! Cevaplar kontrol edildi.': 'Time’s up! Answers checked.',
+  // Oyun salonu ve bekleme odası
+  'Masa oyunları': 'Table games', 'Parti oyunları': 'Party games', 'Masan açık': 'Your table is open', 'Botlarla başlat': 'Start with bots',
+  'Tek başına da başlayabilirsin: eksik yerlere 6 kişiye kadar bot oturur.': 'You can start alone: bots fill the empty seats up to 6 players.',
+  'Botsuz oyun için en az 5 kişi gerekli. Arkadaşlarını davet et.': 'A game without bots needs at least 5 people. Invite your friends.',
+  'Eşleştiğin ya da mesajlaştığın biriyle sohbetteki + menüsünden başlat.': 'Start one from the + menu in a chat with a match or friend.',
 };
 
 // Sayı / isim içeren metinler
@@ -378,6 +383,8 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^(\d+) kişi oynuyor$/, (_, n) => `${n} playing`],
+  [/^(\d+)\/(\d+) oyuncu$/, (_, a, b) => `${a}/${b} players`],
   [/^Onay bekliyor (\d+)\/(\d+)$/, (_, a, b) => `Awaiting approval ${a}/${b}`],
   [/^Onayla (\d+)\/(\d+)$/, (_, a, b) => `Approve ${a}/${b}`],
   [/^✓ Onayladın (\d+)\/(\d+)$/, (_, a, b) => `✓ Approved ${a}/${b}`],

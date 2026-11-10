@@ -1,7 +1,7 @@
 // Masa oyunları yatay ekranda oynanır.
 // Telefon dikey tutuluyorsa sayfa 90° döndürülerek yatay gösterilir (iPhone'da yön kilidi yok);
 // Android'de ilk dokunuşta tam ekran + yatay yön kilidi denenir, olursa döndürmeye gerek kalmaz.
-import { sheet } from './core.js';
+import { ask as baseAsk } from './engage.js';
 
 const html = document.documentElement;
 const portrait = matchMedia('(orientation: portrait) and (pointer: coarse)');
@@ -46,13 +46,5 @@ export function toLocal(x, y) {
   return { x: y, y: window.innerWidth - x };
 }
 
-// confirm() yerine: döndürülmüş ekranda da düzgün görünen onay
-export function ask(title, text, okLabel = 'Evet', { danger = false } = {}) {
-  return new Promise((resolve) => {
-    let done = false;
-    sheet(title, `<div class="ask-b"><p>${text}</p><div class="ask-btns"><button class="btn" data-a="0">Vazgeç</button><button class="btn ${danger ? 'danger' : 'primary'}" data-a="1">${okLabel}</button></div></div>`, {
-      onClose: () => { if (!done) { done = true; resolve(false); } },
-      onMount(sh, close) { sh.querySelector('.ask-btns').onclick = (e) => { const b = e.target.closest('[data-a]'); if (!b) return; done = true; resolve(b.dataset.a === '1'); close(); }; },
-    });
-  });
-}
+// confirm() yerine: döndürülmüş ekranda da düzgün görünen uygulama içi onay
+export const ask = (title, text, okLabel = 'Evet', { danger = false } = {}) => baseAsk(title, text, { ok: okLabel, danger });

@@ -1,4 +1,5 @@
 import { icon } from './icons.js';
+import { initNav } from './nav.js';
 import {
   state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin, notifHref, applyLogo, refreshStoryMap,
 } from './core.js';
@@ -325,6 +326,7 @@ async function boot() {
   setTimeout(maybeShowInstall, state.token ? 4000 : 1500);
   // Beklenmeyen modül hataları (eski sürüm kalıntısı) → güncelleme ekranı
   window.addEventListener('unhandledrejection', (e) => { recover(e.reason); });
+  initNav(); // router'dan önce: geçmiş sırası güncel olsun
   window.addEventListener('hashchange', router);
   router();
 }

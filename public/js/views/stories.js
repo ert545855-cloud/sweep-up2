@@ -1,6 +1,6 @@
 import { icon } from '../icons.js';
 import {
-  state, api, esc, ago, toast, sheet, avatar, emit, nm, filterCss, scaleStickerLayer, stkPos,
+  state, api, esc, ago, toast, sheet, avatar, emit, nm, filterCss, scaleStickerLayer, stkPos, markStorySeen,
 } from '../core.js';
 import { musicLine } from '../music.js';
 import { falCardHtml } from '../falshare.js';
@@ -78,7 +78,7 @@ export default async function stories(view, userId) {
     : g.user.role === 'falci' || state.me.role === 'falci' ? `<a class="rp-fal" href="#/fal">🔮 ${state.me.role === 'falci' ? 'Hikayelere yanıt kapalı' : 'Falcı Teyze’ye fal baktır'}</a>`
     : `${(it.stickers || []).some((x) => x.type === 'mention' && x.username === state.me.username) ? `<button class="rs-add">${icon('plus')} Hikayene ekle</button>` : ''}<div class="sr-bar" hidden>${['😂', '😮', '😍', '😢', '👏', '🔥', '🎉', '💯'].map((e) => `<button type="button" data-e="${e}">${e}</button>`).join('')}</div><form class="rp" style="display:flex;gap:10px;flex:1"><input placeholder="${esc(g.user.name.split(' ')[0])} kişisine yanıt ver..." maxlength="500"><button type="button" class="sr-heart ${it.myReaction === '❤️' ? 'on' : ''}" aria-label="Beğen">${icon('heart', '', it.myReaction === '❤️' ? 'fill="currentColor"' : '')}</button><button aria-label="Gönder">${icon('send')}</button></form>`}</div>
     </div>`;
-    if (!mine && !hl && !it.seen) { it.seen = true; api(`/stories/${it.id}/view`, { body: {} }).catch(() => {}); }
+    if (!hl && !it.seen) { it.seen = true; markStorySeen(it.id); api(`/stories/${it.id}/view`, { body: {} }).catch(() => {}); }
     const v = view.querySelector('video');
     const mu = (it.stickers || []).find((x) => x.type === 'music');
     dur = mu ? 15000 : 5000;

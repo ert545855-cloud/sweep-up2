@@ -439,8 +439,12 @@ export function avatar(u, size = 44, { ring = false, dot = true } = {}) {
 
 // Hikayesi olan kişilerin avatarında Instagram gibi renkli halka; dokununca hikaye açılır
 let storyAt = 0; let storyReq = null;
+// Bu oturumda izlenen hikayeler: sunucu cevabı gecikse bile halka hemen "okundu" olsun
+const seenLocal = new Set();
+export function markStorySeen(id) { seenLocal.add(id); storyAt = 0; }
+export const storyAllSeen = (g) => !!g && (g.items?.length ? g.items.every((i) => i.seen || seenLocal.has(i.id)) : !!g.allSeen);
 export function setStoryMap(groups) {
-  state.storyMap = new Map((groups || []).map((g) => [g.user.id, !!g.allSeen])); storyAt = Date.now();
+  state.storyMap = new Map((groups || []).map((g) => [g.user.id, storyAllSeen(g)])); storyAt = Date.now();
   state.storyClose = new Set((groups || []).filter((g) => g.close).map((g) => g.user.id));
   markStoryRings(document.body);
 }

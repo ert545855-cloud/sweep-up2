@@ -12,12 +12,15 @@ const LABEL = { roles: 'Roller', night: (d) => `🌙 ${d}. gece`, dawn: () => '�
 
 export default function vampir(view, id) {
   return playTable(view, 'vampir', id, {
-    title: 'Vampir Köylü', emoji: '🧛', theme: 'pk-night', chat: 'inline', bots: false, minHumans: 3, party: true, minSize: 6, maxSize: 12, roundWord: 'oyun', againLabel: 'Yeniden oyna',
+    title: 'Vampir Köylü', emoji: '🧛', theme: 'pk-night', chat: 'inline', bots: false, party: true, minSize: 6, maxSize: 12,
+    minHumans: (v) => (v.opts?.bots === 'off' ? 5 : 1),
+    note: (v) => (v.opts?.bots === 'off' ? 'Botsuz oyun için en az 5 kişi gerekli. Arkadaşlarını davet et.' : 'Tek başına da başlayabilirsin: eksik yerlere 6 kişiye kadar bot oturur.'),
+    startLabel: (v, people) => (v.opts?.bots !== 'off' && people < 6 ? 'Botlarla başlat' : 'Oyunu başlat'), roundWord: 'oyun', againLabel: 'Yeniden oyna',
     rules: `<p><b>Roller:</b> 🧛 Vampirler gece birini avlar. 🩺 Doktor her gece birini korur. 🔮 Gözcü her gece birinin vampir olup olmadığını öğrenir. 🧑‍🌾 Köylülerin özel gücü yoktur.</p>
       <p><b>Gece:</b> Herkes uyur, sohbet kapanır. Güçlü roller kararını verir.</p>
       <p><b>Gündüz:</b> Gecenin sonucu açıklanır. Konuşun, sonra oylayın: en çok oyu alan köyden gider ve rolü açıklanır. Eşitlikte kimse gitmez.</p>
       <p><b>Kazanmak:</b> Bütün vampirler giderse köylüler, vampirler köylülerle eşit sayıya ulaşırsa vampirler kazanır.</p>
-      <p><b>Botlar:</b> 6 kişiden azsanız boş yerlere bot eklenir. Botsuz oyun için en az 5 kişi gerekir.</p>`,
+      <p><b>Botlar:</b> 6 kişiden azsanız boş yerlere bot eklenir; tek başına da oynayabilirsin. Botsuz oyun için en az 5 kişi gerekir.</p>`,
     waitingHtml: (v) => `<div class="qz-cats ${v.host ? '' : 'ro'}"><small>Botlar</small><div class="pk-opt"><button class="${v.opts?.bots !== 'off' ? 'on' : ''}" data-k="bots" data-v="on" ${v.host ? '' : 'disabled'}>6 kişiye botla tamamla</button><button class="${v.opts?.bots === 'off' ? 'on' : ''}" data-k="bots" data-v="off" ${v.host ? '' : 'disabled'}>Sadece insanlar</button></div></div>`,
     endHtml: (v) => (v.vp ? `<div class="vp-end">${v.seats.map((s, i) => (s && v.vp.known[i] ? `<span class="${v.vp.alive.includes(i) ? '' : 'dead'}"><img src="${esc(s.avatar)}" alt=""><b>${esc(i === v.me ? 'Sen' : s.name)}</b><em>${ROLE[v.vp.known[i]].emoji} ${ROLE[v.vp.known[i]].name}</em></span>` : '')).join('')}</div>` : ''),
     render(ctx) {

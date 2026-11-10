@@ -1,5 +1,6 @@
 // Çiz Bil: sırayla biri çizer, diğerleri tahmin eder
 import { icon } from '../icons.js';
+import { leaveTo } from '../nav.js';
 import { api, esc, toast, state, on, sheet, pickPerson } from '../core.js';
 
 const COLORS = ['#111111', '#ffffff', '#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899', '#92400e', '#9ca3af'];
@@ -9,7 +10,7 @@ export default async function cizbil(view, id) {
   view.innerHTML = '<div class="cb-wrap"><div class="spinner" style="margin-top:40vh"></div></div>';
   let v;
   try { v = await api(`/games/cizbil/${id}`); } catch (e) { view.innerHTML = `<div class="empty"><div class="big">🎨</div><h2>Oda bulunamadı</h2>${esc(e.message)}<p><a class="btn primary" href="#/oyunlar">Oyunlara dön</a></p></div>`; return null; }
-  if (!v.joined) { try { v = await api(`/games/cizbil/${id}/join`, { body: {} }); } catch (e) { toast(e.message); location.hash = '#/oyunlar'; return null; } }
+  if (!v.joined) { try { v = await api(`/games/cizbil/${id}/join`, { body: {} }); } catch (e) { toast(e.message); leaveTo('#/oyunlar'); return null; } }
   let strokes = v.strokes || []; let color = '#111111'; let size = 7; let eraser = false; let tick = 0;
   const s = state.socket; s?.emit('cb:join', { id });
   const isDrawer = () => v.status === 'playing' && v.drawer === v.me && v.phase === 'draw';
@@ -123,7 +124,7 @@ export default async function cizbil(view, id) {
     const pk = e.target.closest('.cb-pick'); if (pk) api(`/games/cizbil/${id}/pick`, { body: { word: pk.dataset.w } }).catch((er) => toast(er.message));
     if (e.target.closest('.cb-again')) api(`/games/cizbil/${id}/again`, { body: {} }).catch((er) => toast(er.message));
     if (e.target.closest('.cb-inv, .cb-inv2')) invite();
-    if (e.target.closest('.cb-x')) { await api(`/games/cizbil/${id}/leave`, { body: {} }).catch(() => {}); location.hash = '#/oyunlar'; }
+    if (e.target.closest('.cb-x')) { await api(`/games/cizbil/${id}/leave`, { body: {} }).catch(() => {}); leaveTo('#/oyunlar'); }
   });
   const invite = () => {
     const url = `${location.origin}/#/oyun/cizbil/${id}`;

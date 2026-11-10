@@ -967,7 +967,7 @@ const storyVisible = (s, me) => {
   return s.audience !== 'close' || (o.closeFriends || []).includes(me);
 };
 const storyItem = (s, me) => ({
-  id: s.id, media: s.media, mediaType: s.mediaType, bg: s.bg || null, filter: s.filter || null, at: s.at, card: s.card || null, audience: s.audience || 'all', reshareOf: s.reshareOf ? brief(store.get('users', s.reshareOf)) : null, seen: s.viewers.includes(me), myReaction: (s.reactions || {})[me]?.emoji || null, viewerCount: s.userId === me ? s.viewers.length : undefined,
+  id: s.id, media: s.media, mediaType: s.mediaType, bg: s.bg || null, filter: s.filter || null, at: s.at, card: s.card || null, audience: s.audience || 'all', reshareOf: s.reshareOf ? brief(store.get('users', s.reshareOf)) : null, seen: s.userId === me ? !!s.selfSeen : s.viewers.includes(me), myReaction: (s.reactions || {})[me]?.emoji || null, viewerCount: s.userId === me ? s.viewers.length : undefined,
   stickers: stickersOut(s, me),
 });
 app.get('/api/stories', auth, (req, res) => {
@@ -1016,7 +1016,8 @@ app.post('/api/stories', auth, (req, res) => {
 app.post('/api/stories/:id/view', auth, (req, res) => {
   const s = store.get('stories', req.params.id);
   if (!s || !storyVisible(s, req.user.id)) return res.status(404).json({ error: 'Hikaye bulunamadı.' });
-  if (s.userId !== req.user.id && !s.viewers.includes(req.user.id)) { s.viewers.push(req.user.id); store.update('stories', s.id, {}); }
+  if (s.userId === req.user.id) { if (!s.selfSeen) store.update('stories', s.id, { selfSeen: true }); }
+  else if (!s.viewers.includes(req.user.id)) { s.viewers.push(req.user.id); store.update('stories', s.id, {}); }
   res.json({ ok: true });
 });
 app.get('/api/stories/:id/viewers', auth, (req, res) => {
@@ -1118,7 +1119,10 @@ app.get('/api/users/:username', auth, (req, res) => {
     matched: !!store.get('matches', mid),
     checkin: blockedByMe ? null : featureCtx.checkinOf?.(u, req.user.id) || null,
     blockedByMe,
-    hasStory: !locked && store.filter('stories', (s) => s.userId === u.id && storyAlive(s) && storyVisible(s, req.user.id)).length > 0,
+    ...(() => { // hikaye halkası: var mı, hepsi izlendi mi
+      const st = locked ? [] : store.filter('stories', (s) => s.userId === u.id && storyAlive(s) && storyVisible(s, req.user.id));
+      return { hasStory: st.length > 0, storySeen: st.length > 0 && st.every((s) => (s.userId === req.user.id ? !!s.selfSeen : s.viewers.includes(req.user.id))) };
+    })(),
     highlights: locked || blockedByMe ? [] : featureCtx.highlightsOf?.(u.id) || [],
     posts: posts.map((p) => postOut(p, req.user.id)),
     reposts: blockedByMe || locked ? [] : store.filter('reposts', (r) => r.userId === u.id).sort((a, b) => b.at - a.at).map((r) => store.get('posts', r.postId))

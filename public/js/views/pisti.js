@@ -23,17 +23,17 @@ export default function pisti(view, id) {
       const lastTxt = last ? `${esc(last.seat === me ? 'Sen' : v.seats[last.seat]?.name || '')} ${SUIT[last.card.s]}${NAMES[last.card.r] || last.card.r} ${last.pisti ? 'ile PİŞTİ yaptı! 🎉' : last.took ? `ile ${last.took} kart aldı` : 'attı'}` : 'Oyun başladı';
       const key = last ? `${last.seat}-${last.card.id}-${ps.deck}-${ps.counts.join('')}` : '';
       const flash = last?.pisti && key !== flashKey; if (flash) flashKey = key;
-      ctx.board.innerHTML = `<div class="ct ct-n${n}">
-        ${others.map((i) => `<div class="ct-op ${posOf(n, (i - me + n) % n)}">${seatChip(v, i, { extra: `<small>${ps.taken[i]} kart · ${ps.pisti[i] ? `${ps.pisti[i]} pişti · ` : ''}${ps.live[i]} puan</small>` })}<div class="ct-back">${'<span class="pc back mini"></span>'.repeat(Math.min(4, ps.counts[i]))}</div></div>`).join('')}
-        <div class="ct-mid">
-          <div class="ps-deck">${ps.deck ? `<span class="pc back"></span><small>${ps.deck}</small>` : ''}</div>
-          <div class="ps-pile ${flash ? 'flash' : ''}">${ps.top ? `${ps.under ? cardHtml(ps.under, { cls: 'under' }) : ps.pile > 1 ? '<span class="pc back under"></span>' : ''}${cardHtml(ps.top)}<small class="ps-n">${ps.pile}</small>` : '<span class="ps-empty">Yer boş</span>'}</div>
+      ctx.board.innerHTML = `<div class="ctb ctb-n${n}">
+        ${others.map((i) => `<div class="ctb-op ${posOf(n, (i - me + n) % n)}">${seatChip(v, i, { extra: `<small>${ps.taken[i]} kart · ${ps.pisti[i] ? `${ps.pisti[i]} pişti · ` : ''}${ps.live[i]} puan</small>` })}<div class="ctb-back">${'<span class="pcd back mini"></span>'.repeat(Math.min(4, ps.counts[i]))}</div></div>`).join('')}
+        <div class="ctb-mid">
+          <div class="ps-deck">${ps.deck ? `<span class="pcd back"></span><small>${ps.deck}</small>` : ''}</div>
+          <div class="ps-pile ${flash ? 'flash' : ''}">${ps.top ? `${ps.under ? cardHtml(ps.under, { cls: 'under' }) : ps.pile > 1 ? '<span class="pcd back under"></span>' : ''}${cardHtml(ps.top)}<small class="ps-n">${ps.pile}</small>` : '<span class="ps-empty">Yer boş</span>'}</div>
           ${flash ? '<div class="ps-boom">PİŞTİ!</div>' : ''}
         </div>
-        <div class="ct-last">${lastTxt}</div>
-        <div class="ct-me">${seatChip(v, me, { extra: `<small>${ps.taken[me]} kart · ${ps.pisti[me] ? `${ps.pisti[me]} pişti · ` : ''}${ps.live[me]} puan</small>` })}
-          <div class="ct-st">${v.status === 'playing' ? (myTurn ? 'Sıra sende: bir kart at' : `${esc(v.seats[v.turn]?.name || '')} düşünüyor…`) : ''}</div></div>
-        <div class="ct-hand ${myTurn ? 'on' : ''}">${ps.hand.map((c) => cardHtml(c, { cls: 'big', attrs: `data-play="${esc(c.id)}"` })).join('')}</div></div>`;
+        <div class="ctb-last">${lastTxt}</div>
+        <div class="ctb-me">${seatChip(v, me, { extra: `<small>${ps.taken[me]} kart · ${ps.pisti[me] ? `${ps.pisti[me]} pişti · ` : ''}${ps.live[me]} puan</small>` })}
+          <div class="ctb-st">${v.status === 'playing' ? (myTurn ? 'Sıra sende: bir kart at' : `${esc(v.seats[v.turn]?.name || '')} düşünüyor…`) : ''}</div></div>
+        <div class="ctb-hand ${myTurn ? 'on' : ''}">${ps.hand.map((c) => cardHtml(c, { cls: 'big', attrs: `data-play="${esc(c.id)}"` })).join('')}</div></div>`;
     },
     endHtml: (v) => (v.ps?.final ? `<p class="muted">${v.seats.map((s, i) => (s ? `${esc(i === v.me ? 'Sen' : s.name)}: ${v.ps.final[i]} puan (${v.ps.taken[i]} kart${v.ps.pisti[i] ? `, ${v.ps.pisti[i]} pişti` : ''})` : '')).filter(Boolean).join(' · ')}</p>` : ''),
     after(ctx) {

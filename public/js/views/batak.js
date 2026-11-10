@@ -34,15 +34,15 @@ export default function batak(view, id) {
       }
       const status = v.status !== 'playing' ? '' : bt.phase === 'bid' ? (myTurn ? 'İhale sırası sende' : `${esc(v.seats[v.turn]?.name || '')} ihale düşünüyor…`)
         : bt.phase === 'trump' ? (myTurn ? 'Kozu seç' : `${esc(v.seats[v.turn]?.name || '')} koz seçiyor…`) : myTurn ? 'Sıra sende: parlayan kartlardan birini at' : `${esc(v.seats[v.turn]?.name || '')} oynuyor…`;
-      ctx.board.innerHTML = `<div class="ct ct-n4 bt">
-        ${[1, 2, 3].map((k) => { const i = (me + k) % 4; return `<div class="ct-op ${POS[k]}">${seatChip(v, i, { extra: info(i) })}${bt.bidder === i ? '<span class="bt-crown">👑</span>' : ''}</div>`; }).join('')}
-        <div class="ct-mid bt-mid">
+      ctx.board.innerHTML = `<div class="ctb ctb-n4 bt">
+        ${[1, 2, 3].map((k) => { const i = (me + k) % 4; return `<div class="ctb-op ${POS[k]}">${seatChip(v, i, { extra: info(i) })}${bt.bidder === i ? '<span class="bt-crown">👑</span>' : ''}</div>`; }).join('')}
+        <div class="ctb-mid bt-mid">
           <div class="bt-info">${bt.trump ? `<span class="bt-tr ${bt.trump === 'H' || bt.trump === 'D' ? 'red' : ''}">Koz ${SUIT[bt.trump][0]}</span>` : ''}${bt.bidder != null && bt.phase !== 'bid' ? `<span>${esc(bt.bidder === me ? 'Sen' : v.seats[bt.bidder]?.name || '')}: ${bt.high}</span>` : bt.high ? `<span>En yüksek: ${bt.high}</span>` : ''}</div>
           <div class="bt-trick">${trickCards.map((x) => `<div class="bt-c ${POS[rel(x.seat)]} ${winner === x.seat ? 'win' : ''}">${cardHtml(x.c)}</div>`).join('')}</div>
         </div>
         ${panel}
-        <div class="ct-me">${seatChip(v, me, { extra: info(me) })}${bt.bidder === me ? '<span class="bt-crown">👑</span>' : ''}<div class="ct-st">${status}</div></div>
-        <div class="ct-hand bt-hand ${myTurn && bt.phase === 'play' ? 'on' : ''}">${bt.hand.map((c) => cardHtml(c, { cls: `${bt.phase === 'play' && myTurn && !legal.has(c.id) ? 'dim' : ''} ${bt.trump && c.s === bt.trump ? 'trump' : ''}`, attrs: `data-play="${esc(c.id)}"` })).join('')}</div></div>`;
+        <div class="ctb-me">${seatChip(v, me, { extra: info(me) })}${bt.bidder === me ? '<span class="bt-crown">👑</span>' : ''}<div class="ctb-st">${status}</div></div>
+        <div class="ctb-hand bt-hand ${myTurn && bt.phase === 'play' ? 'on' : ''}">${bt.hand.map((c) => cardHtml(c, { cls: `${bt.phase === 'play' && myTurn && !legal.has(c.id) ? 'dim' : ''} ${bt.trump && c.s === bt.trump ? 'trump' : ''}`, attrs: `data-play="${esc(c.id)}"` })).join('')}</div></div>`;
     },
     endHtml: (v) => (v.bt?.result ? `<p class="muted">${v.seats.map((s, i) => (s ? `${esc(i === v.me ? 'Sen' : s.name)}: ${v.bt.tricks[i]} el, ${v.bt.result[i] > 0 ? '+' : ''}${v.bt.result[i]}` : '')).filter(Boolean).join(' · ')}</p>` : ''),
     after(ctx) {

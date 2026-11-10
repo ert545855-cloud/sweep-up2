@@ -13,8 +13,9 @@ const BOT_LINES = ['Ben köylüyüm, emin olun 😅', 'Dün gece hiçbir şey du
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
 module.exports = (kit) => {
+  const fast = (t) => (t.g?.alive && ![...t.g.alive].some((s) => t.seats[s] && !t.seats[s].bot) ? 0.3 : 1);
   const phase = (t, name, ms, next) => {
-    const g = t.g; clearTimeout(g.ph); ms = kit.ms(ms); g.phase = name; g.deadline = Date.now() + ms; g.phaseMs = ms;
+    const g = t.g; clearTimeout(g.ph); ms = kit.ms(ms * fast(t)); g.phase = name; g.deadline = Date.now() + ms; g.phaseMs = ms;
     g.ph = kit.after(t, ms, () => { if (t.status === 'playing' && t.g === g) next(); });
     kit.settle(t);
   };
@@ -22,7 +23,7 @@ module.exports = (kit) => {
   const roleOf = (t, s) => t.g.role[s];
   const isBot = (t, s) => !!t.seats[s]?.bot;
   const nm = (t, s) => kit.nameOf(t, s);
-  const later = (t, ms, fn) => { const g = t.g; const ph = g.phase; const day = g.day; kit.after(t, kit.ms(ms), () => { if (t.status === 'playing' && t.g === g && g.phase === ph && g.day === day) fn(); }); };
+  const later = (t, ms, fn) => { const g = t.g; const ph = g.phase; const day = g.day; kit.after(t, kit.ms(ms * fast(t)), () => { if (t.status === 'playing' && t.g === g && g.phase === ph && g.day === day) fn(); }); };
 
   function kill(t, s, how) {
     const g = t.g; if (!g.alive.has(s)) return;
@@ -144,12 +145,12 @@ module.exports = (kit) => {
   }
 
   kit.register({
-    key: 'vampir', name: 'Vampir Köylü', icon: 'vampir', emoji: '🧛', min: 3, max: 12, size: 8, bots: false, party: true, minHumans: 3, minPlay: 3, lateJoin: false,
+    key: 'vampir', name: 'Vampir Köylü', icon: 'vampir', emoji: '🧛', min: 1, max: 12, size: 8, bots: false, party: true, minHumans: 1, minPlay: 3, lateJoin: false,
     opts: (o) => ({ bots: o?.bots === 'off' || o?.bots === false ? 'off' : 'on' }),
     canStart(t) {
       const h = t.seats.filter((s) => s && !s.bot).length;
+      // Botlar açıkken tek kişi de başlatabilir (eksik yerler 6'ya kadar botla dolar)
       if (t.opts?.bots === 'off' && h < 5) return 'Botsuz oyun için en az 5 kişi gerekli. Botları açabilir ya da arkadaşlarını çağırabilirsin.';
-      if (h < 3) return 'Başlamak için en az 3 kişi gerekli.';
       return null;
     },
     setup(t) {

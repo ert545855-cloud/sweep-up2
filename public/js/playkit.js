@@ -1,8 +1,10 @@
 // Oyun masası kabuğu: başlık, bekleme ekranı, sonuç ekranı, süre çubuğu, masa sohbeti, davet, kurallar.
 // Her oyun kendi tahtasını render(ctx) ile çizer.
 import { icon } from './icons.js';
+import { leaveTo } from './nav.js';
 import { api, esc, toast, on, sheet, pickPerson, state } from './core.js';
 import { enterLandscape, ask } from './land.js';
+import { egi, hasEg } from './eg-icons.js';
 
 export const GAME_INFO = {};
 export function seatChip(v, i, { cls = '', extra = '' } = {}) {
@@ -18,7 +20,7 @@ export async function playTable(view, game, id, opt) {
   view.innerHTML = `<div class="pk-wrap ${theme}"><div class="spinner" style="margin:40vh auto"></div></div>`;
   let v;
   try { v = await api(`/play/${game}/${id}`); } catch (e) { view.innerHTML = `<div class="empty"><div class="big">🎮</div><h2>Masa bulunamadı</h2>${esc(e.message)}<p><a class="btn primary" href="#/oyunlar">Oyunlara dön</a></p></div>`; return null; }
-  if (v.me < 0) { try { v = await api(`/play/${game}/${id}/join`, { body: {} }); } catch (e) { toast(e.message); location.hash = '#/oyunlar'; return null; } }
+  if (v.me < 0) { try { v = await api(`/play/${game}/${id}/join`, { body: {} }); } catch (e) { toast(e.message); leaveTo('#/oyunlar'); return null; } }
   const offLand = opt.land ? enterLandscape() : null;
   view.innerHTML = `<div class="pk-wrap ${theme} ${opt.land ? 'pk-land' : ''}">
     <header class="pk-h"><button class="ib pk-x" aria-label="Çık">${icon('back')}</button><b class="pk-title"></b><span class="grow"></span>
@@ -72,15 +74,16 @@ export async function playTable(view, game, id, opt) {
     // Bekleme ekranı
     if (v.status === 'waiting') {
       const people = v.seats.filter(Boolean).length;
+      const need = typeof opt.minHumans === 'function' ? opt.minHumans(v) : (opt.minHumans || 2);
       over.hidden = false;
-      over.innerHTML = `<div class="pk-card"><div class="big">${opt.emoji || '🎮'}</div><h2>${esc(title)}</h2>
+      over.innerHTML = `<div class="pk-card wait"><div class="big">${hasEg(game) ? egi(game, 68) : (opt.emoji || '🎮')}</div><h2>${esc(title)}</h2><p class="pk-cnt">${people}/${v.size} oyuncu</p>
         <div class="pk-wseats">${v.seats.map((s, i) => seatChip(v, i)).join('')}</div>
         ${v.host && minSize && maxSize && minSize !== maxSize ? (maxSize - minSize > 3
     ? `<div class="pk-sizes"><small>Oyuncu sayısı</small><div class="seg pk-size many">${Array.from({ length: maxSize - minSize + 1 }, (_, k) => minSize + k).map((n) => `<button data-n="${n}" class="${n === v.size ? 'on' : ''}">${n}</button>`).join('')}</div></div>`
     : `<div class="seg pk-size">${Array.from({ length: maxSize - minSize + 1 }, (_, k) => minSize + k).map((n) => `<button data-n="${n}" class="${n === v.size ? 'on' : ''}">${n} ${sizeLabel || 'kişi'}</button>`).join('')}</div>`) : ''}
         ${waitingHtml ? waitingHtml(v) : ''}
-        <p class="muted pk-note">${opt.bots === false ? `En az ${opt.minHumans || 2} kişi gerekli. Arkadaşlarını davet et.` : 'Arkadaşlarını davet et ya da boş yerlere bot oturtarak hemen başla.'}</p>
-        <div class="pk-acts">${v.host ? `<button class="btn primary pk-start" ${opt.bots === false && people < (opt.minHumans || 2) ? 'disabled' : ''}>${opt.bots === false ? 'Oyunu başlat' : people < v.size ? 'Botlarla başlat' : 'Başlat'}</button>` : '<span class="muted">Masayı açan kişi başlatacak.</span>'}
+        <p class="muted pk-note">${typeof opt.note === 'function' ? opt.note(v) : opt.bots === false ? `En az ${need} kişi gerekli. Arkadaşlarını davet et.` : 'Arkadaşlarını davet et ya da boş yerlere bot oturtarak hemen başla.'}</p>
+        <div class="pk-btns">${v.host ? `<button class="btn primary pk-start" ${opt.bots === false && people < need ? 'disabled' : ''}>${typeof opt.startLabel === 'function' ? opt.startLabel(v, people) : opt.bots === false ? 'Oyunu başlat' : people < v.size ? 'Botlarla başlat' : 'Başlat'}</button>` : '<span class="muted">Masayı açan kişi başlatacak.</span>'}
         <button class="btn pk-inv2">${icon('userPlus')} Davet et</button></div></div>`;
     } else if (v.status === 'ended') {
       over.hidden = false;
@@ -89,7 +92,7 @@ export async function playTable(view, game, id, opt) {
       over.innerHTML = `<div class="pk-card"><div class="big">${iWon ? '🏆' : win.length ? (opt.emoji || '🎮') : '🤝'}</div><h2>${esc(v.result?.text || 'Oyun bitti')}</h2>
         ${endHtml ? endHtml(v) : ''}
         <div class="pk-score">${ranked.map(({ s, i }) => `<span class="${win.includes(i) ? 'w' : ''}"><img src="${esc(s.avatar)}" alt="">${esc(i === v.me ? 'Sen' : s.name)}<b>${s.score || 0}</b></span>`).join('')}</div>
-        <div class="pk-acts">${opt.party && !v.host ? '<span class="muted">Odayı açan yeni oyunu başlatabilir.</span>' : `<button class="btn primary pk-again">${opt.againLabel || 'Yeni el'}</button>`}<button class="btn pk-x">Çık</button></div></div>`;
+        <div class="pk-btns">${opt.party && !v.host ? '<span class="muted">Odayı açan yeni oyunu başlatabilir.</span>' : `<button class="btn primary pk-again">${opt.againLabel || 'Yeni el'}</button>`}<button class="btn pk-x">Çık</button></div></div>`;
     } else { over.hidden = true; over.innerHTML = ''; }
     timer(); paintChat();
     after?.(ctx);
@@ -117,7 +120,7 @@ export async function playTable(view, game, id, opt) {
   wrap.addEventListener('click', async (e) => {
     if (e.target.closest('.pk-x')) {
       if (v.status === 'playing' && !(await ask(opt.party ? 'Oyundan çık' : 'Masadan kalk', opt.party ? 'Oyundan çıkmak istiyor musun?' : 'Masadan kalkarsan yerine bot oynar. Emin misin?', 'Çık', { danger: true }))) return;
-      await api(`/play/${game}/${id}/leave`, { body: {} }).catch(() => {}); location.hash = '#/oyunlar'; return;
+      await api(`/play/${game}/${id}/leave`, { body: {} }).catch(() => {}); leaveTo('#/oyunlar'); return;
     }
     if (e.target.closest('.pk-inv, .pk-inv2')) return invite();
     if (e.target.closest('.pk-help')) return sheet(`${title} nasıl oynanır?`, `<div class="pk-rules">${rules}</div>`);
@@ -143,8 +146,8 @@ export async function playTable(view, game, id, opt) {
 // Kart görünümü (Pişti, Batak, Renk Eşle için ortak)
 export const SUITS = { S: ['♠', 'blk'], H: ['♥', 'red'], D: ['♦', 'red'], C: ['♣', 'blk'] };
 export function cardHtml(c, { cls = '', attrs = '' } = {}) {
-  if (!c) return `<span class="pc back ${cls}" ${attrs}></span>`;
+  if (!c) return `<span class="pcd back ${cls}" ${attrs}></span>`;
   const [sym, col] = SUITS[c.s] || ['?', 'blk'];
   const r = { 1: 'A', 11: 'J', 12: 'Q', 13: 'K' }[c.r] || c.r;
-  return `<span class="pc ${col} ${cls}" data-id="${esc(c.id)}" ${attrs}><b>${r}</b><i>${sym}</i><em>${sym}</em></span>`;
+  return `<span class="pcd ${col} ${cls}" data-id="${esc(c.id)}" ${attrs}><b>${r}</b><i>${sym}</i><em>${sym}</em></span>`;
 }

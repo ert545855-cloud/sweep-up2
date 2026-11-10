@@ -1,5 +1,6 @@
 // Okey masası: ıstaka (sürükle-bırak / dokun-taşı), ortadan ya da soldan taş çekme, taş atma, eli bitirme
 import { icon } from '../icons.js';
+import { leaveTo } from '../nav.js';
 import { api, esc, toast, on, sheet, pickPerson } from '../core.js';
 import { enterLandscape, toLocal, ask } from '../land.js';
 
@@ -15,7 +16,7 @@ export default async function okey(view, id) {
   view.innerHTML = '<div class="ok-wrap"><div class="spinner" style="margin-top:40vh"></div></div>';
   let v;
   try { v = await api(`/games/okey/${id}`); } catch (e) { view.innerHTML = `<div class="empty"><div class="big">🀄</div><h2>Masa bulunamadı</h2>${esc(e.message)}<p><a class="btn primary" href="#/oyunlar">Oyunlara dön</a></p></div>`; return null; }
-  if (v.seat < 0) { try { v = await api(`/games/okey/${id}/join`, { body: {} }); } catch (e) { toast(e.message); location.hash = '#/oyunlar'; return null; } }
+  if (v.seat < 0) { try { v = await api(`/games/okey/${id}/join`, { body: {} }); } catch (e) { toast(e.message); leaveTo('#/oyunlar'); return null; } }
   const offLand = enterLandscape();
   const key = `su_okey_${id}`;
   let order = []; let selected = null; let tick = 0; let lastRound = 0;
@@ -156,7 +157,7 @@ export default async function okey(view, id) {
     if (e.target.closest('.ok-again')) { try { v = await api(`/games/okey/${id}/again`, { body: {} }); paint(); } catch (er) { toast(er.message); } return; }
     if (e.target.closest('.ok-x')) {
       if (v.status === 'playing' && !(await ask('Masadan kalk', 'Masadan kalkarsan yerine bot oynar. Emin misin?', 'Kalk', { danger: true }))) return;
-      await api(`/games/okey/${id}/leave`, { body: {} }).catch(() => {}); location.hash = '#/oyunlar'; return;
+      await api(`/games/okey/${id}/leave`, { body: {} }).catch(() => {}); leaveTo('#/oyunlar'); return;
     }
     if (e.target.closest('.ok-inv')) return invite();
     if (e.target.closest('.ok-help')) return rules();
