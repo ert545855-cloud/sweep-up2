@@ -2,7 +2,7 @@ import { icon } from '../icons.js';
 import { api, esc, ago, avatar, nm, plusSheet } from '../core.js';
 
 export default async function viewers(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button><div class="center">Profilini kimler gördü</div><span class="ib"></span></header><div class="viewers"><div class="spinner"></div></div>`;
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/me" aria-label="Geri">${icon('back')}</button><div class="center">Profilini kimler gördü</div><span class="ib"></span></header><div class="viewers"><div class="spinner"></div></div>`;
   const box = view.querySelector('.viewers');
   const r = await api('/me/viewers?seen=1');
   if (!r.count) {

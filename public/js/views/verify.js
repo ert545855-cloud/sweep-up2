@@ -30,7 +30,7 @@ async function captureSelfie() {
 }
 
 export default async function verify(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button><div class="center">Profil doğrulama</div><span class="ib"></span></header>
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/me" aria-label="Geri">${icon('back')}</button><div class="center">Profil doğrulama</div><span class="ib"></span></header>
     <div class="verify"><div class="spinner"></div></div>`;
   const box = view.querySelector('.verify');
   const v = await api('/verify');

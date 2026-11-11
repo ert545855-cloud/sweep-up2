@@ -2,7 +2,7 @@
 import { icon } from '../icons.js';
 import { api, esc, toast, sheet, avatar, nm, openChatWith, on, ago } from '../core.js';
 
-const back = `<button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button>`;
+const back = `<button class="ib" data-back="#/" aria-label="Geri">${icon('back')}</button>`;
 const CAT_OPTS = [['cafe', '☕ Kafe'], ['restaurant', '🍽️ Restoran'], ['bar', '🍸 Bar'], ['nightclub', '🪩 Gece kulübü'], ['park', '🌳 Park'], ['mall', '🛍️ AVM'], ['university', '🎓 Okul / üniversite'], ['gym', '🏋️ Spor salonu'], ['cinema', '🎬 Sinema'], ['beach_resort', '🏖️ Plaj'], ['other', '📍 Diğer']];
 const fmtM = (m) => (m < 1000 ? `${Math.max(10, Math.round(m / 10) * 10)} m` : `${(m / 1000).toFixed(1)} km`);
 const leftTxt = (t) => { const ms = Math.max(0, t - Date.now()); const h = Math.floor(ms / 3600000); const m = Math.floor((ms % 3600000) / 60000); return h ? `${h} sa ${m} dk` : `${m} dk`; };

@@ -1,6 +1,8 @@
 // SwipeUp Yönetim paneli
 import { icon } from '/js/icons.js';
 
+// Panel gizli bir adreste açılır (ör. /y-xxxx/); istekler aynı adresin altındaki /api'ye gider
+export const BASE = location.pathname.split('/').slice(0, 2).join('/');
 const S = { token: localStorage.getItem('su_admin'), me: null, counts: {} };
 const can = (p) => S.me?.role === 'owner' || (S.me?.perms || []).includes(p);
 const SEC_PERM = { growth: 'growth', users: 'users', support: 'support', reports: 'reports', appeals: 'appeals', flags: 'flags', verify: 'verify', orders: 'orders', payouts: 'payouts', market: 'market', ledger: 'erp', erp: 'erp', promos: 'promos', quests: 'quests', songs: 'songs', contests: 'contests', fal: 'fal', content: 'content', media: 'content', announce: 'announce', notes: 'notes', audit: 'audit', database: 'database', maintenance: 'maintenance', settings: 'settings', tags: 'tags', engage: 'engage', karaoke: 'engage', photomod: 'reports' };
@@ -20,7 +22,7 @@ function toast(t) {
   setTimeout(() => x.remove(), 3500);
 }
 async function api(path, opts = {}) {
-  const r = await fetch('/api/admin' + path, {
+  const r = await fetch(BASE + '/api' + path, {
     method: opts.method || (opts.body ? 'POST' : 'GET'),
     headers: { ...(opts.body ? { 'Content-Type': 'application/json' } : {}), ...(S.token ? { Authorization: 'Bearer ' + S.token } : {}) },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
@@ -72,20 +74,127 @@ const SECTIONS = [
 ];
 
 // ================= Giriş =================
-function login() {
-  root.innerHTML = `<div class="login"><form>
-    <div class="brand"><img class="mark" src="/icons/mark.png" alt="">swipeup <small>yönetim</small></div>
+// 1) şifre ya da Google / Apple  2) doğrulama uygulamasındaki 6 haneli kod. İlk girişte doğrulama uygulaması kurulur.
+let CFG = null;
+const getCfg = async () => (CFG ||= await fetch('/api/config').then((r) => r.json()).catch(() => ({})));
+const loaded = {};
+function loadScript(src) {
+  loaded[src] ||= new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = src; sc.async = true; sc.onload = ok; sc.onerror = () => { delete loaded[src]; no(new Error('Giriş penceresi yüklenemedi. İnternet bağlantını kontrol et.')); }; document.head.append(sc); });
+  return loaded[src];
+}
+// Google düğmesi (Google'ın kendi düğmesi, açılır pencereyle)
+export async function googleButton(box, onCred, text = 'signin_with') {
+  const id = (await getCfg()).oauth?.google; if (!id || !box) return false;
+  await loadScript('https://accounts.google.com/gsi/client');
+  window.google.accounts.id.initialize({ client_id: id, callback: (r) => onCred(r.credential), ux_mode: 'popup', auto_select: false, itp_support: true });
+  window.google.accounts.id.renderButton(box, { theme: 'outline', size: 'large', text, shape: 'pill', locale: 'tr', width: Math.min(320, box.clientWidth || 300) });
+  return true;
+}
+export async function appleCredential() {
+  const a = (await getCfg()).oauth?.apple; if (!a) throw new Error('Apple ile giriş açık değil.');
+  await loadScript('https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/tr_TR/appleid.auth.js');
+  window.AppleID.auth.init({ clientId: a.clientId, scope: 'name email', redirectURI: a.redirectURI, usePopup: true });
+  const r = await window.AppleID.auth.signIn();
+  return r?.authorization?.id_token;
+}
+const brandHtml = '<div class="brand"><img class="mark" src="/icons/mark.png" alt="">swipeup <small>yönetim</small></div>';
+function finishLogin(r) {
+  S.token = r.token; S.me = r.admin; localStorage.setItem('su_admin', r.token);
+  if (r.recovery) return showRecovery(r.recovery, () => render());
+  if (r.recoveryLeft != null && r.recoveryLeft <= 2) toast(`Kurtarma kodlarından ${r.recoveryLeft} tane kaldı. Yöneticiler → Hesabım'dan yenile.`);
+  render();
+}
+function afterFirst(r) {
+  if (r.token) return finishLogin(r);
+  if (r.need === 'totp') return twoFactor(r);
+  if (r.need === 'setup') return setup2fa(r);
+}
+async function login(msg = '') {
+  const cfg = await getCfg();
+  root.innerHTML = `<div class="login"><form class="lg-f" autocomplete="on">${brandHtml}
     <p>Yönetici hesabınla giriş yap.</p>
     <input class="field" name="u" placeholder="Kullanıcı adı" autocomplete="username" autocapitalize="none" required>
     <input class="field" name="p" type="password" placeholder="Şifre" autocomplete="current-password" required>
-    <button class="btn primary" style="height:42px">Giriş yap</button><div class="err"></div></form></div>`;
-  const f = root.querySelector('form');
+    <button class="btn primary" style="height:42px">Devam</button><div class="err">${esc(msg)}</div>
+    ${cfg.oauth?.google || cfg.oauth?.apple ? '<div class="lg-or"><span>ya da</span></div>' : ''}
+    ${cfg.oauth?.google ? '<div class="lg-g"></div>' : ''}${cfg.oauth?.apple ? `<button type="button" class="btn lg-a">${''} Apple ile giriş yap</button>` : ''}
+    <button type="button" class="link lg-fp">Şifremi unuttum</button>
+    <p class="lg-note">Girişten sonra telefonundaki doğrulama uygulamasının kodu istenir.</p></form></div>`;
+  const f = root.querySelector('form'); const err = f.querySelector('.err');
   f.onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const r = await api('/login', { body: { username: f.u.value, password: f.p.value } });
-      S.token = r.token; S.me = r.admin; localStorage.setItem('su_admin', r.token); render();
-    } catch (er) { f.querySelector('.err').textContent = er.message; }
+    e.preventDefault(); err.textContent = '';
+    try { afterFirst(await api('/login', { body: { username: f.u.value, password: f.p.value } })); } catch (er) { err.textContent = er.message; }
+  };
+  const oauth = async (provider, credential) => { err.textContent = ''; try { afterFirst(await api('/login/oauth', { body: { provider, credential } })); } catch (er) { err.textContent = er.message; } };
+  googleButton(f.querySelector('.lg-g'), (c) => oauth('google', c)).catch((er) => { err.textContent = er.message; });
+  f.querySelector('.lg-a')?.addEventListener('click', async () => { try { const c = await appleCredential(); if (c) oauth('apple', c); } catch (er) { if (er?.error !== 'popup_closed_by_user') err.textContent = er.message || 'Apple ile giriş tamamlanmadı.'; } });
+  f.querySelector('.lg-fp').onclick = forgot;
+}
+function twoFactor(r) {
+  root.innerHTML = `<div class="login"><form class="lg-f">${brandHtml}
+    <p><b>${esc(r.name || '')}</b>, doğrulama uygulamandaki 6 haneli kodu yaz.</p>
+    <input class="field lg-code" name="c" inputmode="numeric" autocomplete="one-time-code" maxlength="14" placeholder="123 456" required>
+    <button class="btn primary" style="height:42px">Giriş yap</button><div class="err"></div>
+    <button type="button" class="link lg-rc">Telefonum yanımda değil, kurtarma kodu kullan</button>
+    <button type="button" class="link lg-back">Geri</button></form></div>`;
+  const f = root.querySelector('form'); const err = f.querySelector('.err');
+  f.c.focus();
+  f.querySelector('.lg-rc').onclick = () => { f.c.placeholder = 'XXXX-XXXX-XXXX'; f.c.removeAttribute('inputmode'); f.c.value = ''; f.c.focus(); f.querySelector('p').textContent = 'Kurtarma kodlarından birini yaz. Her kod bir kez kullanılır.'; };
+  f.querySelector('.lg-back').onclick = () => login();
+  f.onsubmit = async (e) => {
+    e.preventDefault(); err.textContent = '';
+    try { finishLogin(await api('/login/2fa', { body: { ticket: r.ticket, code: f.c.value } })); } catch (er) { err.textContent = er.message; if (/Baştan/.test(er.message)) setTimeout(() => login(er.message), 1200); }
+  };
+}
+function setup2fa(r) {
+  root.innerHTML = `<div class="login"><form class="lg-f lg-setup">${brandHtml}
+    <h3>İki adımlı doğrulamayı kur</h3>
+    <ol class="lg-steps"><li>Telefonuna <b>Google Authenticator</b> ya da <b>Microsoft Authenticator</b> uygulamasını kur.</li>
+    <li>Uygulamada <b>+</b> → <b>QR kodu tara</b> ile aşağıdaki kodu okut.</li><li>Uygulamanın gösterdiği 6 haneli kodu yaz.</li></ol>
+    <div class="lg-qr">${r.qr}</div>
+    <details class="lg-man"><summary>QR okutamıyorum</summary><p>Uygulamada “Kurulum anahtarı gir”i seç ve şunu yaz:</p><code class="lg-key">${esc(r.secret)}</code></details>
+    <input class="field lg-code" name="c" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" required>
+    <button class="btn primary" style="height:42px">Doğrula ve aç</button><div class="err"></div>
+    <button type="button" class="link lg-back">Vazgeç</button></form></div>`;
+  const f = root.querySelector('form'); const err = f.querySelector('.err');
+  f.querySelector('.lg-back').onclick = () => login();
+  f.onsubmit = async (e) => {
+    e.preventDefault(); err.textContent = '';
+    try { finishLogin(await api('/login/setup', { body: { ticket: r.ticket, code: f.c.value } })); } catch (er) { err.textContent = er.message; if (/Baştan/.test(er.message)) setTimeout(() => login(er.message), 1200); }
+  };
+}
+function showRecovery(codes, done) {
+  root.innerHTML = `<div class="login"><div class="lg-f lg-rcs">${brandHtml}
+    <h3>Kurtarma kodların</h3>
+    <p>Telefonunu kaybedersen ya da şifreni unutursan bu kodlarla girersin. Her kod bir kez çalışır. <b>Şimdi güvenli bir yere kaydet</b>; bir daha gösterilmez.</p>
+    <div class="lg-codes">${codes.map((c) => `<code>${esc(c)}</code>`).join('')}</div>
+    <div class="row" style="gap:8px;justify-content:center"><button type="button" class="btn sm cp">Kopyala</button><button type="button" class="btn sm dl">İndir (.txt)</button></div>
+    <label class="lg-ok"><input type="checkbox" class="ok"> Kodları kaydettim</label>
+    <button type="button" class="btn primary go" style="height:42px" disabled>Panele geç</button></div></div>`;
+  const txt = `SwipeUp yönetim paneli kurtarma kodları (${new Date().toLocaleString('tr-TR')})\n\n${codes.join('\n')}\n`;
+  root.querySelector('.cp').onclick = async () => { try { await navigator.clipboard.writeText(txt); toast('Kopyalandı.'); } catch { toast('Kopyalanamadı; kodları elle yaz.'); } };
+  root.querySelector('.dl').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain' })); a.download = 'swipeup-kurtarma-kodlari.txt'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); };
+  root.querySelector('.ok').onchange = (e) => { root.querySelector('.go').disabled = !e.target.checked; };
+  root.querySelector('.go').onclick = done;
+}
+function forgot() {
+  root.innerHTML = `<div class="login"><form class="lg-f">${brandHtml}
+    <h3>Şifremi unuttum</h3>
+    <p>Yeni şifre için doğrulama uygulamandaki kod <b>ve</b> kurtarma kodlarından biri gerekir.</p>
+    <input class="field" name="u" placeholder="Kullanıcı adı" autocomplete="username" autocapitalize="none" required>
+    <input class="field" name="c" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="Uygulamadaki 6 haneli kod" required>
+    <input class="field" name="r" placeholder="Kurtarma kodu (XXXX-XXXX-XXXX)" autocapitalize="characters" required>
+    <input class="field" name="p" type="password" autocomplete="new-password" placeholder="Yeni şifre (en az 10 karakter)" required>
+    <input class="field" name="p2" type="password" autocomplete="new-password" placeholder="Yeni şifre (tekrar)" required>
+    <button class="btn primary" style="height:42px">Şifreyi yenile</button><div class="err"></div>
+    <p class="lg-note">Telefonunu da kaybettiysen sahip yöneticiden doğrulamayı sıfırlamasını iste.</p>
+    <button type="button" class="link lg-back">Girişe dön</button></form></div>`;
+  const f = root.querySelector('form'); const err = f.querySelector('.err');
+  f.querySelector('.lg-back').onclick = () => login();
+  f.onsubmit = async (e) => {
+    e.preventDefault(); err.textContent = '';
+    if (f.p.value !== f.p2.value) { err.textContent = 'Yeni şifreler aynı değil.'; return; }
+    try { const r = await api('/forgot', { body: { username: f.u.value, code: f.c.value, recovery: f.r.value, password: f.p.value } }); login(`Şifren yenilendi. Yeni şifrenle giriş yap.${r.recoveryLeft <= 2 ? ` (Kurtarma kodlarından ${r.recoveryLeft} tane kaldı.)` : ''}`); } catch (er) { err.textContent = er.message; }
   };
 }
 
@@ -647,6 +756,7 @@ VIEWS.announce = async (main) => {
           <div class="muted aud-s" style="font-size:12.5px"></div>
         </fieldset>
         <label class="fl">Dokununca açılacak yer<select class="field" name="url">${LINKS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></label>
+        <label class="row" style="gap:8px;cursor:pointer"><input type="checkbox" name="marketing" style="width:18px;height:18px;accent-color:var(--brand)"><span><b>Kampanya / tanıtım bildirimi</b> <span class="muted">— yalnızca kampanya bildirimlerine izin veren üyelere gider</span></span></label>
         <label class="row" style="gap:8px;cursor:pointer"><input type="checkbox" name="popup" style="width:18px;height:18px;accent-color:var(--brand)"><span><b>Açılış duyurusu</b> <span class="muted">— uygulamayı açan herkese pencere olarak da gösterilir (7 gün)</span></span></label>
         <div class="row"><span class="muted grow reach">Alıcı sayısı hesaplanıyor…</span><button class="btn primary send">${icon('bell')} Gönder</button></div>
       </form></div>
@@ -660,7 +770,7 @@ VIEWS.announce = async (main) => {
   const f = main.querySelector('form');
   const num = (v) => (v === '' ? undefined : +v);
   const filters = () => ({ city: f.fcity.value.trim() || undefined, ageMin: num(f.fmin.value), ageMax: num(f.fmax.value), gender: f.fgen.value || undefined, inactiveDays: num(f.fina.value), activeDays: num(f.fact.value), newDays: num(f.fnew.value), plan: f.fplan.value || undefined, verified: f.fver.value || undefined, zodiac: f.fzod.value || undefined, interest: f.fint.value.trim() || undefined, minCoins: num(f.fcoin.value), push: f.fpush.value || undefined });
-  const body = () => ({ title: f.title.value, text: f.t.value, url: f.url.value, audience: f.aud.value, city: f.city.value, username: f.username.value, popup: f.popup.checked, filters: f.aud.value === 'custom' ? filters() : undefined });
+  const body = () => ({ title: f.title.value, text: f.t.value, url: f.url.value, audience: f.aud.value, city: f.city.value, username: f.username.value, popup: f.popup.checked, marketing: f.marketing.checked, filters: f.aud.value === 'custom' ? filters() : undefined });
   const setF = (o) => { const map = { city: 'fcity', ageMin: 'fmin', ageMax: 'fmax', gender: 'fgen', inactiveDays: 'fina', activeDays: 'fact', newDays: 'fnew', plan: 'fplan', verified: 'fver', zodiac: 'fzod', interest: 'fint', minCoins: 'fcoin', push: 'fpush' }; Object.values(map).forEach((n) => { f[n].value = ''; }); Object.entries(o).forEach(([k, v]) => { if (map[k]) f[map[k]].value = v; }); };
   main.querySelector('.aud-pre').onclick = (e) => { const b = e.target.closest('[data-pre]'); if (!b) return; setF(PRESETS[+b.dataset.pre][1]); pv(); reach(); };
   const pv = () => {
@@ -733,7 +843,7 @@ VIEWS.admins = async (main) => {
     <div class="adm-list">${r.items.map((a) => `<div class="panel adm" data-id="${esc(a.id)}"><div class="ph"><div class="row" style="gap:10px"><span class="adm-av">${esc((a.name || a.username)[0].toUpperCase())}</span><div><b>${esc(a.name)}</b> <span class="muted">@${esc(a.username)}</span><div class="muted" style="font-size:12px">Son giriş: ${dt(a.lastLogin)}${a.disabled ? ' · <b style="color:var(--bad)">Kapalı</b>' : ''}</div></div></div>
         <div class="row" style="gap:6px">${owner ? `<select class="field rl" style="width:auto" ${a.id === S.me.id ? 'disabled' : ''}><option value="owner" ${a.role === 'owner' ? 'selected' : ''}>👑 Sahip</option><option value="moderator" ${a.role !== 'owner' ? 'selected' : ''}>🛡️ Moderatör</option></select>` : `<span class="chip ${a.role === 'owner' ? 'info' : ''}">${a.role === 'owner' ? '👑 Sahip' : '🛡️ Moderatör'}</span>`}</div></div>
       ${a.role === 'owner' ? '<div class="pb muted" style="font-size:13px">Sahip tüm yetkilere sahip.</div>' : `<div class="pb"><div class="perms">${permBoxes(a.perms, !owner)}</div></div>`}
-      ${owner ? `<div class="pb row adm-acts" style="gap:8px;flex-wrap:wrap;border-top:1px solid var(--line)">${a.role !== 'owner' ? '<button class="btn primary sm sv">Yetkileri kaydet</button><button class="btn sm allp">Tümünü seç</button><button class="btn sm nonep">Temizle</button>' : ''}<button class="btn sm pwr">${icon('key')} Şifre sıfırla</button>${a.id !== S.me.id ? `<button class="btn sm ${a.disabled ? '' : 'danger'} dis">${a.disabled ? 'Hesabı aç' : 'Hesabı kapat'}</button><button class="btn sm danger rm">${icon('trash')} Sil</button>` : ''}</div>` : ''}
+      ${owner ? `<div class="pb row adm-acts" style="gap:8px;flex-wrap:wrap;border-top:1px solid var(--line)">${a.role !== 'owner' ? '<button class="btn primary sm sv">Yetkileri kaydet</button><button class="btn sm allp">Tümünü seç</button><button class="btn sm nonep">Temizle</button>' : ''}<button class="btn sm pwr">${icon('key')} Şifre sıfırla</button>${a.totp && a.id !== S.me.id ? '<button class="btn sm r2f">Doğrulamayı sıfırla</button>' : ''}${a.id !== S.me.id ? `<button class="btn sm ${a.disabled ? '' : 'danger'} dis">${a.disabled ? 'Hesabı aç' : 'Hesabı kapat'}</button><button class="btn sm danger rm">${icon('trash')} Sil</button>` : ''}</div>` : ''}
     </div>`).join('')}</div>
     <div class="grid g2" style="margin-top:14px">
       ${owner ? `<form class="panel add"><div class="ph"><h3>Yönetici ekle</h3></div><div class="pb" style="display:grid;gap:8px">
@@ -741,6 +851,12 @@ VIEWS.admins = async (main) => {
         <select class="field" name="r"><option value="moderator">🛡️ Moderatör (seçtiğin yetkiler)</option><option value="owner">👑 Sahip (tam yetki)</option></select>
         <div class="perms add-perms">${permBoxes(r.modDefault, false)}</div>
         <button class="btn primary">Ekle</button></div></form>` : ''}
+      <div class="panel me-sec"><div class="ph"><h3>Hesabım · giriş güvenliği</h3></div><div class="pb" style="display:grid;gap:10px">
+        <div class="row" style="gap:8px"><span class="chip ${S.me.totp ? 'ok' : 'warn'}">${S.me.totp ? 'İki adımlı doğrulama açık' : 'İki adımlı doğrulama kurulmadı'}</span><span class="muted">Kurtarma kodu: ${S.me.recoveryLeft ?? 0} tane</span></div>
+        <form class="row rcf" style="gap:8px"><input class="field" name="c" inputmode="numeric" maxlength="7" placeholder="Uygulamadaki kod" style="max-width:170px"><button class="btn sm">Kurtarma kodlarını yenile</button></form>
+        <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><b>Google:</b> ${S.me.google ? `<span>${esc(S.me.google)}</span><button type="button" class="btn sm ung">Bağlantıyı kaldır</button>` : '<div class="lkg" style="min-width:240px"></div>'}</div>
+        ${CFG?.oauth?.apple ? `<div class="row" style="gap:8px;align-items:center"><b>Apple:</b> ${S.me.apple ? `<span>${esc(S.me.apple)}</span><button type="button" class="btn sm una">Bağlantıyı kaldır</button>` : '<button type="button" class="btn sm lka">Apple hesabını bağla</button>'}</div>` : ''}
+        <p class="muted" style="margin:0;font-size:12.5px">Bağlanan Google / Apple hesabıyla şifresiz girersin; doğrulama kodu yine istenir.</p></div></div>
       <div class="panel"><div class="ph"><h3>Şifremi değiştir</h3></div><form class="pb pw" style="display:grid;gap:8px"><input class="field" name="c" type="password" placeholder="Mevcut şifre"><input class="field" name="p" type="password" placeholder="Yeni şifre (en az 8 karakter)"><button class="btn primary">Değiştir</button></form></div>
     </div>`;
   const checked = (box) => [...box.querySelectorAll('.perms input:checked')].map((x) => x.value);
@@ -753,6 +869,18 @@ VIEWS.admins = async (main) => {
     e.preventDefault(); const f = e.target;
     try { const r = await api('/me/password', { body: { current: f.c.value, password: f.p.value } }); if (r?.token) { S.token = r.token; localStorage.setItem('su_admin', r.token); } toast('Şifren değişti. Diğer cihazlardaki panel oturumların kapandı.'); f.reset(); } catch (er) { toast(er.message); }
   };
+  // Hesabım: Google / Apple bağla, kurtarma kodları
+  await getCfg();
+  const meSec = main.querySelector('.me-sec');
+  const relink = (a) => { S.me = { ...S.me, ...a }; VIEWS.admins(main); };
+  if (!S.me.google) googleButton(meSec.querySelector('.lkg'), async (c) => { try { relink(await api('/me/oauth', { body: { provider: 'google', credential: c } })); toast('Google hesabın bağlandı.'); } catch (er) { toast(er.message); } }, 'continue_with').then((ok) => { if (!ok) meSec.querySelector('.lkg').textContent = 'Google ile giriş açık değil (GOOGLE_CLIENT_ID).'; }).catch((er) => toast(er.message));
+  meSec.querySelector('.ung')?.addEventListener('click', async () => { if (confirm('Google bağlantısı kaldırılsın mı?')) relink(await api('/me/oauth/google', { method: 'DELETE' })); });
+  meSec.querySelector('.una')?.addEventListener('click', async () => { if (confirm('Apple bağlantısı kaldırılsın mı?')) relink(await api('/me/oauth/apple', { method: 'DELETE' })); });
+  meSec.querySelector('.lka')?.addEventListener('click', async () => { try { const c = await appleCredential(); if (c) { relink(await api('/me/oauth', { body: { provider: 'apple', credential: c } })); toast('Apple hesabın bağlandı.'); } } catch (er) { toast(er.message || 'Apple bağlanamadı.'); } });
+  meSec.querySelector('.rcf').onsubmit = async (e) => {
+    e.preventDefault();
+    try { const r2 = await api('/me/recovery', { body: { code: e.target.c.value } }); S.me.recoveryLeft = r2.recovery.length; showRecovery(r2.recovery, () => render()); } catch (er) { toast(er.message); }
+  };
   main.querySelector('.adm-list').onclick = async (e) => {
     const card = e.target.closest('.adm'); if (!card) return; const id = card.dataset.id;
     const put = (body, msg) => api(`/admins/${id}`, { method: 'PUT', body }).then(() => { toast(msg); VIEWS.admins(main); }).catch((er) => toast(er.message));
@@ -764,6 +892,7 @@ VIEWS.admins = async (main) => {
       const pw = prompt('Yeni şifre (en az 8 karakter):'); if (!pw) return;
       try { await api(`/admins/${id}/password`, { body: { password: pw } }); toast('Şifre değiştirildi. Yeni şifreyi kendisine ilet.'); } catch (er) { toast(er.message); }
     }
+    if (e.target.closest('.r2f')) { if (!confirm('Bu yöneticinin doğrulama uygulaması sıfırlansın mı? Panelden çıkarılır; bir sonraki girişte yeniden kurar.')) return; try { await api(`/admins/${id}/reset2fa`, { body: {} }); toast('Doğrulama sıfırlandı.'); VIEWS.admins(main); } catch (er) { toast(er.message); } }
     if (e.target.closest('.rm')) { if (!confirm('Bu yönetici silinsin mi?')) return; try { await api(`/admins/${id}`, { method: 'DELETE' }); VIEWS.admins(main); } catch (er) { toast(er.message); } }
   };
   main.querySelectorAll('.rl').forEach((s) => { s.onchange = () => {
@@ -1117,7 +1246,7 @@ VIEWS.database = async (main) => {
   main.querySelector('[data-bk]')?.addEventListener('click', async (e) => {
     e.preventDefault();
     try {
-      const r = await fetch('/api/admin/database/backup', { headers: { Authorization: 'Bearer ' + S.token } });
+      const r = await fetch(BASE + '/api/database/backup', { headers: { Authorization: 'Bearer ' + S.token } });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'İndirilemedi.');
       const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = `swipeup-yedek-${today()}.json`; a.click();
       toast('Yedek indirildi.');
@@ -1448,7 +1577,7 @@ function ding() { try { const a = new AudioContext(); const o = a.createOscillat
 const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 async function adminPushState() {
   if (!pushOk()) return 'unsupported';
-  const reg = await navigator.serviceWorker.getRegistration('/admin/');
+  const reg = await navigator.serviceWorker.getRegistration(BASE + '/');
   const sub = await reg?.pushManager.getSubscription();
   return sub && Notification.permission === 'granted' ? 'on' : Notification.permission === 'denied' ? 'denied' : 'off';
 }
@@ -1457,14 +1586,14 @@ async function enableAdminPush() {
   if (!cfg.vapidPublicKey) throw new Error('Sunucuda bildirim anahtarı yok.');
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('Tarayıcı bildirim iznini vermedi.');
-  const reg = await navigator.serviceWorker.register('/admin/sw.js', { scope: '/admin/' });
+  const reg = await navigator.serviceWorker.register(BASE + '/sw.js', { scope: BASE + '/' });
   await navigator.serviceWorker.ready;
   const key = Uint8Array.from(atob(cfg.vapidPublicKey.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (cfg.vapidPublicKey.length % 4)) % 4)), (c) => c.charCodeAt(0));
   const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
   await api('/push', { body: { sub: sub.toJSON() } });
 }
 async function disableAdminPush() {
-  const reg = await navigator.serviceWorker.getRegistration('/admin/');
+  const reg = await navigator.serviceWorker.getRegistration(BASE + '/');
   const sub = await reg?.pushManager.getSubscription();
   if (sub) { await api('/push', { method: 'DELETE', body: { endpoint: sub.endpoint } }).catch(() => {}); await sub.unsubscribe(); }
 }

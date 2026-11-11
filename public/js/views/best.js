@@ -6,7 +6,7 @@ import { egi } from '../eg-icons.js';
 
 const MEDAL = ['🥇', '🥈', '🥉'];
 export default async function best(view) {
-  view.innerHTML = `<header class="topbar bordered"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button><div class="center">Haftanın en beğenilenleri</div><span class="ib"></span></header><div class="wb-page"><div class="spinner"></div></div>`;
+  view.innerHTML = `<header class="topbar bordered"><button class="ib" data-back="#/" aria-label="Geri">${icon('back')}</button><div class="center">Haftanın en beğenilenleri</div><span class="ib"></span></header><div class="wb-page"><div class="spinner"></div></div>`;
   const box = view.querySelector('.wb-page');
   let d;
   try { d = await api('/weekly-best'); } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return null; }

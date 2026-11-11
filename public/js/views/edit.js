@@ -13,7 +13,7 @@ export default function edit(view) {
   const first = !me.bio && !me.age && !photos.length;
 
   view.innerHTML = `<header class="topbar bordered">
-      <button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button>
+      <button class="ib" data-back="#/me" aria-label="Geri">${icon('back')}</button>
       <div class="center">${first ? 'Profilini oluştur' : 'Profili düzenle'}</div>
       <button class="link save" style="padding:0 6px">Kaydet</button>
     </header>

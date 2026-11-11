@@ -21,7 +21,7 @@ export default async function songsAdmin(main, H) {
   };
   const upload = (file, onProgress) => new Promise((resolve, reject) => {
     const fd = new FormData(); fd.append('file', file);
-    const x = new XMLHttpRequest(); x.open('POST', '/api/admin/songs/upload'); x.setRequestHeader('Authorization', 'Bearer ' + token());
+    const x = new XMLHttpRequest(); x.open('POST', `${location.pathname.split('/').slice(0, 2).join('/')}/api/songs/upload`); x.setRequestHeader('Authorization', 'Bearer ' + token());
     x.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
     x.onload = () => { let r = {}; try { r = JSON.parse(x.responseText); } catch {} x.status < 300 ? resolve(r) : reject(new Error(r.error || 'Yükleme başarısız.')); };
     x.onerror = () => reject(new Error('Bağlantı hatası.')); x.send(fd);

@@ -46,7 +46,7 @@ export function paySheet(order, onDone) {
 }
 
 export default async function store(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button><div class="center">Mağaza</div><a class="ib soft" href="#/wallet" aria-label="Kazançlarım">${icon('gift')}</a></header>
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/me" aria-label="Geri">${icon('back')}</button><div class="center">Mağaza</div><a class="ib soft" href="#/wallet" aria-label="Kazançlarım">${icon('gift')}</a></header>
     <div class="shop"><div class="spinner"></div></div>`;
   const box = view.querySelector('.shop');
   const load = async () => {

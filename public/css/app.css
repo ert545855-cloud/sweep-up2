@@ -4097,3 +4097,24 @@ html.land-game #fx-layer { display: none; }
 .picker video.fit { width: 100%; height: 100%; object-fit: contain; background: #000; }
 .thumbs .th .th-v { position: absolute; left: 4px; bottom: 4px; display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px 1px 3px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 16px; }
 .thumbs .th .th-v svg { width: 10px; height: 10px; fill: currentColor; stroke: none; }
+
+/* Yasal metin: hizmet sağlayıcı tablosu */
+.legal-tbl { overflow-x: auto; margin: 8px 0 12px; border: 1px solid var(--line); border-radius: 14px; }
+.legal-tbl table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 13px; line-height: 1.4; }
+.legal-tbl th, .legal-tbl td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.legal-tbl th { font-weight: 650; color: var(--muted); background: color-mix(in srgb, var(--text) 4%, transparent); }
+.legal-tbl tr:last-child td { border-bottom: 0; }
+/* Kayıt: bilgilendirme ve isteğe bağlı izinler */
+.consent-info { font-size: 12.5px; margin: -2px 4px 0; line-height: 1.45; }
+.opt-cons { border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px 10px; margin: 2px 0 0; display: grid; gap: 6px; }
+.opt-cons legend { font-size: 12.5px; font-weight: 650; color: var(--muted); padding: 0 4px; }
+.opt-cons p { font-size: 12px; margin: 0; }
+/* Google / Apple ile giriş */
+.auth .oauth { display: grid; gap: 10px; margin: 14px 0 4px; }
+.auth .oauth .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+.auth .oauth .or::before, .auth .oauth .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.auth .g-btn { display: flex; justify-content: center; min-height: 44px; }
+.ai-cons { font-size: 12.5px; }
+.lg-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+.lg-row > span { color: var(--muted); font-size: 13.5px; }
+.cns-list .it { align-items: center; }

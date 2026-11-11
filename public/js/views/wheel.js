@@ -36,7 +36,7 @@ function rimSvg() {
 const PIN = `<svg class="wh-pin" viewBox="0 0 40 52"><defs><linearGradient id="whp" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6c2"/><stop offset=".5" stop-color="#ffc926"/><stop offset="1" stop-color="#c97a00"/></linearGradient></defs><path d="M20 50 L4 18 A17 17 0 1 1 36 18 Z" fill="url(#whp)" stroke="#8a4f00" stroke-width="2.5" stroke-linejoin="round"/><circle cx="20" cy="17" r="6" fill="#ff4f8b" stroke="#8a4f00" stroke-width="2"/><circle cx="18" cy="15" r="2" fill="#fff" opacity=".8"/></svg>`;
 
 export default async function wheel(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button><div class="center">Hediye çarkı</div><span class="ib"></span></header><div class="wh"><div class="spinner"></div></div>`;
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/" aria-label="Geri">${icon('back')}</button><div class="center">Hediye çarkı</div><span class="ib"></span></header><div class="wh"><div class="spinner"></div></div>`;
   const box = view.querySelector('.wh');
   let w = await api('/wheel');
   let rot = 0;

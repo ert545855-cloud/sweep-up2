@@ -9,7 +9,7 @@ const sysIcon = (t) => ({ announce: 'bell', warning: 'flag', report: 'check', or
 
 export default async function notifications(view) {
   view.innerHTML = `<header class="topbar bordered">
-      <button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button>
+      <button class="ib" data-back="#/" aria-label="Geri">${icon('back')}</button>
       <div class="center">Bildirimler</div>
       <button class="ib st" aria-label="Bildirim ayarları">${icon('bell')}</button>
     </header><div class="nl"><div class="spinner"></div></div>`;

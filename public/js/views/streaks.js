@@ -4,7 +4,7 @@ import { api, esc, toast, state, avatar, nm, emit, on, needCoins } from '../core
 import { egi } from '../eg-icons.js';
 
 export default async function streaks(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button><div class="center">Seriler</div><a class="ib soft" href="#/gorevler" aria-label="Görevler">${icon('check')}</a></header><div class="srs"><div class="spinner"></div></div>`;
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/" aria-label="Geri">${icon('back')}</button><div class="center">Seriler</div><a class="ib soft" href="#/gorevler" aria-label="Görevler">${icon('check')}</a></header><div class="srs"><div class="spinner"></div></div>`;
   const box = view.querySelector('.srs');
   let d;
   const msList = (ms, cur) => Object.entries(ms).map(([k, v]) => [+k, v]).sort((a, b) => a[0] - b[0]).map(([k, v]) => `<span class="stk-ms ${cur >= k ? 'done' : ''}"><b>${k}. gün</b><small>${icon('coin')} ${v}</small></span>`).join('');

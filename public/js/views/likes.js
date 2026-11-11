@@ -4,7 +4,7 @@ import { showMatch } from '../app.js';
 
 export default async function likes(view) {
   view.innerHTML = `<header class="topbar">
-      <button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/swipe')" aria-label="Geri">${icon('back')}</button>
+      <button class="ib" data-back="#/swipe" aria-label="Geri">${icon('back')}</button>
       <div class="center">Seni beğenenler</div><span class="ib"></span>
     </header><div class="lb"><div class="spinner"></div></div>`;
   const box = view.querySelector('.lb');

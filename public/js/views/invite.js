@@ -19,7 +19,7 @@ function linkSheet(link) {
 }
 
 export default async function invite(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button><div class="center">Davet et, kazan</div><span class="ib"></span></header><div class="invite"><div class="spinner"></div></div>`;
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/me" aria-label="Geri">${icon('back')}</button><div class="center">Davet et, kazan</div><span class="ib"></span></header><div class="invite"><div class="spinner"></div></div>`;
   const box = view.querySelector('.invite');
   const load = async () => {
     let r;

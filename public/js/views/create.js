@@ -86,7 +86,7 @@ export default function create(view, kind) {
   let audioEl = null;
 
   view.innerHTML = `<header class="topbar bordered">
-      <button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Kapat">${icon('close')}</button>
+      <button class="ib" data-back="#/" aria-label="Kapat">${icon('close')}</button>
       <div class="center">${TITLES[mode]}</div>
       <button class="link go" style="padding:0 6px" disabled>Paylaş</button>
     </header>

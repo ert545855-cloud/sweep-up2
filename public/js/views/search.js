@@ -6,7 +6,7 @@ import { gridTile } from '../components.js';
 
 export default async function search(view) {
   view.innerHTML = `<div class="search-bar">
-      <button onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button>
+      <button data-back="#/" aria-label="Geri">${icon('back')}</button>
       <label class="sw">${icon('search')}<input class="field q" placeholder="Kişi ya da #etiket ara" autocomplete="off" autocapitalize="none" aria-label="Kişi ara"></label>
     </div>
     <div class="results" hidden></div>

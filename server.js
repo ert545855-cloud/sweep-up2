@@ -7,6 +7,7 @@ const compression = require('compression');
 const helmet = require('helmet');
 const multer = require('multer');
 const imagefix = require('./server/imagefix');
+const oidc = require('./server/oidc');
 const socialMod = require('./server/social');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -87,7 +88,7 @@ const tagsOf = (u) => { const ids = u?.tags || []; if (!ids.length) return []; c
 const shownAge = (u) => (priv(u).hideAge ? null : u.age ?? null);
 function pub(u, viewerId) {
   if (!u) return null;
-  const { passHash, recoveryHash, tokenVer, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, regIp, regDevice, falPacks, closeFriends, xp, level, ...rest } = u;
+  const { passHash, recoveryHash, tokenVer, googleSub, appleSub, noPass, emailVerified, consents, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, regIp, regDevice, falPacks, closeFriends, xp, level, ...rest } = u;
   const self = viewerId === u.id;
   // Yalnızca hesabın sahibinin görebileceği alanlar (başkasının profiline bakan bunları almaz)
   if (!self) ['paid', 'plusUntil', 'boostUntil', 'lastFreeBoost', 'lastSwipe', 'viewersSeenAt', 'verifyPose', 'banReason', 'bannedUntil', 'bannedAt', 'status', 'warned',
@@ -105,7 +106,7 @@ function pub(u, viewerId) {
     age: self ? u.age ?? null : shownAge(u), ageHidden: !!priv(u).hideAge, tags: tagsOf(u),
     prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
     badges: (u.badges || []).filter((b) => self || !b.hidden).map(({ no, ...b }) => b),
-    ...(self ? { email: email || '', hasLocation: lat != null, birthdate: birthdate || null, coins: coins || 0, earnings: earnings || 0, needsBirthdate: !birthdate, refCode: refCode || null, falSub: falSub || null, frames: frames || [] } : {}),
+    ...(self ? { consents: consents || {}, noPass: !!noPass, logins: { google: !!googleSub, apple: !!appleSub }, email: email || '', hasLocation: lat != null, birthdate: birthdate || null, coins: coins || 0, earnings: earnings || 0, needsBirthdate: !birthdate, refCode: refCode || null, falSub: falSub || null, frames: frames || [] } : {}),
     ...(viewerId && !self ? { isFollowing: !!fdoc && fdoc.status !== 'pending', requested: fdoc?.status === 'pending', distanceKm: distance(store.get('users', viewerId), u) } : {}),
   };
 }
@@ -260,10 +261,38 @@ function chatOut(c, me) {
 }
 
 let gameOut = (g) => g; // social modülü yüklenince gizli oyun bilgisini saklayan sürümle değişir
+// ---- Özel medya: sohbet fotoğrafı / videosu / sesli mesajı bağlantıyı bilen herkese açık değil ----
+// Sunucu bu dosyaları yalnızca sohbetin üyelerine giden yanıtlarda süreli imzalı adresle verir; imzasız istek 404 alır.
+const MEDIA_RE = /^\/media\/([\w-]{6,40})$/;
+const mediaKey = () => crypto.createHash('sha256').update('media|' + JWT_SECRET).digest();
+const mediaSig = (id, exp) => crypto.createHmac('sha256', mediaKey()).update(`${id}.${exp}`).digest('base64url').slice(0, 24);
+function signMedia(url) {
+  const mm = typeof url === 'string' && MEDIA_RE.exec(url); if (!mm) return url;
+  const meta = store.get('media_meta', mm[1]); if (!meta?.private) return url;
+  // Gün içinde aynı adres (tarayıcı önbelleği çalışsın), en az 2 gün geçerli; tek seferlik fotoğraf 2 dakika
+  const exp = meta.once ? Math.ceil((now() + 120000) / 60000) * 60 : (Math.floor(now() / DAY) + 3) * (DAY / 1000);
+  return `${url}?t=${exp}.${mediaSig(mm[1], exp)}`;
+}
+function mediaTokenOk(id, t) {
+  const [e, s] = String(t || '').split('.'); const exp = +e;
+  if (!exp || !s || exp * 1000 < now()) return false;
+  const want = Buffer.from(mediaSig(id, exp)); const got = Buffer.from(s);
+  return want.length === got.length && crypto.timingSafeEqual(want, got);
+}
+// Sohbete gönderilen dosyayı özel işaretle (yalnız gönderenin kendi yüklemesi; herkese açık gönderi dosyası özel olmaz)
+function markPrivate(url, fromId, once = false) {
+  const mm = MEDIA_RE.exec(String(url || '')); if (!mm) return;
+  const meta = store.get('media_meta', mm[1]);
+  if (!meta) store.put('media_meta', { id: mm[1], userId: fromId, private: true, ...(once ? { once: true } : {}), at: now() });
+  else if ((!meta.private || (once && !meta.once)) && (!meta.userId || meta.userId === fromId)) store.update('media_meta', mm[1], { private: true, ...(once ? { once: true } : {}) });
+}
+
 function msgOut(m) {
   if (!m) return m;
   if (m.deleted) return { ...m, text: '', media: null, game: null, plan: null, quote: null };
   let o = m;
+  if (m.media && !m.viewOnce) o = { ...o, media: signMedia(m.media) };
+  if (m.fal?.images?.length) o = { ...o, fal: { ...m.fal, images: m.fal.images.map(signMedia) } };
   // Tek seferlik fotoğraf: dosya adresi listede görünmez, sadece açma isteğiyle bir kez verilir
   if (m.viewOnce) o = { ...o, media: null, viewOnceState: m.mediaGone || (m.openedBy || []).length ? 'opened' : 'new' };
   if (m.game) o = { ...o, game: gameOut(m.game) };
@@ -285,6 +314,7 @@ function falLock(chat, fromId) {
 function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, system, story, fal, location, quote, game, plan, superMsg, viewOnce, share, compat, gift }) {
   text = String(text || '').slice(0, 4000).trim();
   // Medya sadece kendi yüklemelerimizden; GIF ise GIPHY/Tenor bağlantısı olabilir
+  if (mediaType !== 'gif' && typeof media === 'string') media = media.split('?')[0]; // imzalı adres geri gelirse yalın hâli
   if (mediaType === 'gif') { if (!GIF_HOSTS.test(String(media || ''))) media = null; } else if (media && !isMedia(media)) media = null;
   let loc = null;
   if (location && Number.isFinite(+location.lat) && Number.isFinite(+location.lng)) {
@@ -313,6 +343,8 @@ function sendMessage(chat, fromId, { text, media, mediaType, replyTo, duration, 
     at: now(), readBy: [fromId], deliveredTo: [fromId],
     expiresAt: chat.ttl && !system ? now() + chat.ttl : null,
   });
+  if (msg.media && msg.mediaType !== 'gif') markPrivate(msg.media, fromId, msg.viewOnce);
+  (msg.fal?.images || []).forEach((u) => markPrivate(u, fromId)); // fal fotoğrafları: yalnız sohbetteki kişiler
   store.update('chats', chat.id, { lastAt: msg.at });
   for (const m of chat.members) if (m !== fromId && isOnline(m)) msg.deliveredTo.push(m);
   store.update('messages', msg.id, {});
@@ -353,6 +385,8 @@ function removeChat(chatId) {
 
 // ================= Express =================
 app.set('trust proxy', 1);
+// Her JSON yanıtında özel (sohbet) dosya adresleri süreli imzalı hâle getirilir; yanıtı alan zaten o mesajı görmeye yetkili
+app.set('json replacer', (k, v) => (typeof v === 'string' && v.startsWith('/media/') ? signMedia(v) : v));
 // Eski adresten gelenleri tek adrese yönlendir
 if (process.env.CANONICAL_URL) {
   const canon = new URL(process.env.CANONICAL_URL);
@@ -361,15 +395,18 @@ if (process.env.CANONICAL_URL) {
     res.redirect(301, canon.origin + req.originalUrl);
   });
 }
-// İçerik güvenlik politikası: betikler yalnızca bu sunucudan yüklenir, eklenti (object) kapalı, sayfa başka sitelerde çerçeveye alınamaz.
+// İçerik güvenlik politikası: betikler yalnızca bu sunucudan (ve Google / Apple giriş betiğinden) yüklenir, sayfa içi betik ve
+// onclick gibi öznitelikler çalışmaz, eklenti (object) kapalı, sayfa başka sitelerde çerçeveye alınamaz.
 // Resim / ses / video için https kaynaklarına izin var (GIPHY, Spotify önizlemeleri, harita karoları).
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: false,
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      // Sayfa içi betik yok: yalnız bu sunucudaki dosyalar + Google / Apple ile giriş betikleri
+      scriptSrc: ["'self'", 'https://accounts.google.com/gsi/client', 'https://appleid.cdn-apple.com'],
+      scriptSrcAttr: ["'none'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://accounts.google.com/gsi/style'],
       fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
       mediaSrc: ["'self'", 'data:', 'blob:', 'https:'],
@@ -384,11 +421,40 @@ app.use(helmet({
     },
   },
   crossOriginResourcePolicy: false, crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, // Google / Apple giriş penceresi açılabilsin
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }, // Google girişi kaynağı (origin) doğrulayabilsin; dışarıya yalnız alan adı gider
   strictTransportSecurity: process.env.RENDER ? { maxAge: 31536000, includeSubDomains: false } : false,
 }));
 app.disable('x-powered-by');
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
+
+// ---------- Yönetim paneli gizli adreste ----------
+// Panel /admin'de değil, tahmin edilemeyen bir adreste açılır (ADMIN_PATH). Eski /admin ve /api/admin adresleri dışarıdan 404 verir;
+// panelin istekleri <gizli adres>/api/... üzerinden gelir ve içeride /api/admin/... yollarına yönlendirilir.
+let ADMIN_BASE = null;
+const adminBase = () => ADMIN_BASE;
+const adminStatic = express.static(path.join(__dirname, 'public', 'admin'), {
+  index: 'index.html',
+  setHeaders(res) { res.setHeader('Cache-Control', 'no-cache'); res.setHeader('X-Robots-Tag', 'noindex, nofollow'); res.setHeader('Referrer-Policy', 'no-referrer'); },
+});
+app.use((req, res, next) => {
+  const p = req.path; const base = adminBase();
+  if (base && (p === base || p.startsWith(base + '/'))) {
+    if (p === base) return res.redirect(302, base + '/');
+    if (p.startsWith(base + '/api/')) {
+      req.url = '/api/admin/' + req.url.slice(base.length + 5); req.originalUrl = req.url; req.adminGate = true;
+      res.setHeader('X-Robots-Tag', 'noindex'); res.setHeader('Cache-Control', 'no-store');
+      return next();
+    }
+    req.url = '/' + req.url.slice(base.length + 1);
+    return adminStatic(req, res, () => res.status(404).type('text/plain').send('Bulunamadı'));
+  }
+  if (p === '/admin' || p.startsWith('/admin/') || p === '/api/admin' || p.startsWith('/api/admin/')) return res.status(404).type('text/plain').send('Bulunamadı');
+  next();
+});
+// Panel içinde kullanılan bağlantılar (bildirimler vb.) eski /admin/ adresiyle yazıldıysa gizli adrese çevir
+const adminUrl = (u) => (typeof u === 'string' && u.startsWith('/admin/') && adminBase() ? adminBase() + u.slice(6) : u);
 
 // ---------- Bakım modu: uygulama kapalı, yönetim paneli çalışır ----------
 const maintenance = () => { const m = store.get('settings', 'maintenance'); return m?.on ? { on: true, message: m.message || '', until: m.until || null, at: m.at || null } : null; };
@@ -403,9 +469,8 @@ app.get('/api/maintenance', (req, res) => res.json({ maintenance: maintenance() 
 
 const adminApi = require('./server/admin')(app, {
   store, io, emitTo, notify, brief, isOnline, online, lives, removeChat, limited, ipOf,
-  secret: () => JWT_SECRET, endLive: (id) => endLive(id), eco, revokeSessions: (id) => { bumpTokens(id); disconnectUser(id); }, purgeUser: (id) => purgeUser(id), dropMediaCache: (id) => dropMediaCache(id),
+  secret: () => JWT_SECRET, endLive: (id) => endLive(id), eco, msgOut: (m) => msgOut(m), revokeSessions: (id) => { bumpTokens(id); disconnectUser(id); }, purgeUser: (id) => purgeUser(id), dropMediaCache: (id) => dropMediaCache(id),
 });
-app.get('/admin', (req, res, next) => (req.originalUrl.split('?')[0].endsWith('/') ? next() : res.redirect('/admin/')));
 
 app.get('/healthz', (req, res) => res.json({ ok: true })); // ayrıntı yönetim panelinde; herkese açık sayfada sayı verilmez
 
@@ -441,7 +506,7 @@ app.get('/api/config', (req, res) => {
   let uid = null;
   try { const p = jwt.verify((req.headers.authorization || '').slice(7), JWT_SECRET, { algorithms: ['HS256'] }); if (tokenOk(p, store.get('users', p.id))) uid = p.id; } catch {}
   const { id, ...legal } = store.get('settings', 'legal') || {};
-  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now(), maintenance: maintenance(), maintPlan: (() => { const p = store.get('settings', 'maint_plan'); return p && !p.started ? { start: p.start, end: p.end || null, message: p.message || '' } : null; })(), features: { market: !!store.get('settings', 'market')?.enabled }, superMsgCoins: eco.get().superMsgCoins, falAi: featureCtx.falAiMode?.() || 'off' });
+  res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now(), maintenance: maintenance(), maintPlan: (() => { const p = store.get('settings', 'maint_plan'); return p && !p.started ? { start: p.start, end: p.end || null, message: p.message || '' } : null; })(), features: { market: !!store.get('settings', 'market')?.enabled }, superMsgCoins: eco.get().superMsgCoins, falAi: featureCtx.falAiMode?.() || 'off', oauth: oidc.publicConfig() });
 });
 
 // ---------- Kimlik ----------
@@ -469,12 +534,110 @@ app.post('/api/auth/register', wrap(async (req, res) => {
     photos: [], passHash: await bcrypt.hash(password, 10), recoveryHash: await bcrypt.hash(code, 8),
     isBot: false, createdAt: now(), lastSeen: now(),
   });
+  setConsents(u.id, req.body?.consents, req, 'kayıt');
   // Diğer gerçek üyelere yeni üyeyi duyur (uygulama açıksa listeleri yenilenir)
   io.emit('people:new', brief(u));
   featureCtx.attachInvite?.(u, req.body?.ref, ipOf(req));
   featureCtx.onRegister?.(u, req);
   res.json({ token: sign(u), user: pub(store.get('users', u.id), u.id), recoveryCode: code.match(/.{4}/g).join('-') });
 }));
+
+// ---------- İsteğe bağlı açık rızalar (KVKK m.5/1) ----------
+// Zorunlu olmayan işlemeler ayrı ayrı, önceden işaretlenmemiş kutularla sorulur; her değişiklik kanıt olarak kayda geçer, geri alınabilir.
+const CONSENTS = {
+  marketing: 'Kampanya, etkinlik ve yeniliklerle ilgili bildirim ve e-posta almak',
+  location: 'Yakınımdaki kişileri gösterebilmek için yaklaşık konumumun işlenmesi',
+  ai: 'Fal isteklerimdeki fotoğraf ve notların yorum taslağı için yurt dışındaki yapay zeka hizmetine (Google Gemini) aktarılması',
+};
+const CONSENT_VER = '2026-11-11';
+function setConsents(uid, input, req, via) {
+  const u = store.get('users', uid); if (!u || !input || typeof input !== 'object') return u;
+  const cur = { ...(u.consents || {}) };
+  for (const k of Object.keys(CONSENTS)) {
+    if (input[k] === undefined) continue;
+    const on = input[k] === true;
+    if (!!cur[k]?.on === on && cur[k]) continue;
+    cur[k] = { on, at: now(), v: CONSENT_VER };
+    store.put('consent_log', { id: nanoid(12), userId: uid, kind: k, on, text: CONSENTS[k], v: CONSENT_VER, via, ip: req ? ipOf(req) : null, at: now() });
+  }
+  const patch = { consents: cur };
+  if (cur.location && !cur.location.on) { patch.lat = null; patch.lng = null; } // rıza geri alınınca konum silinir
+  return store.update('users', uid, patch);
+}
+const hasConsent = (u, k) => !!u?.consents?.[k]?.on;
+app.get('/api/me/consents', auth, (req, res) => res.json({ items: Object.entries(CONSENTS).map(([k, text]) => ({ kind: k, text, on: hasConsent(req.user, k), at: req.user.consents?.[k]?.at || null })) }));
+app.put('/api/me/consents', auth, (req, res) => {
+  if (limited('consent:' + req.user.id, 60, 3600000)) return res.status(429).json({ error: 'Biraz sonra tekrar dene.' });
+  const u = setConsents(req.user.id, req.body || {}, req, 'ayarlar');
+  res.json({ consents: u.consents || {}, ...pub(u, u.id) });
+});
+
+// ---------- Google / Apple ile giriş (kullanıcılar) ----------
+// Hesap yalnızca o Google / Apple kimliğine bağlıysa açılır. Aynı e-postayla şifreli bir hesap varsa kendiliğinden birleştirilmez
+// (e-posta adreslerini doğrulamadığımız için başkasının hesabına girilmesin): önce şifreyle girip Ayarlar'dan bağlanır.
+const usernameFrom = (id) => {
+  const base = String((id.email || '').split('@')[0] || id.name || 'uye').toLocaleLowerCase('tr-TR')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i').replace(/[^a-z0-9._]/g, '').replace(/^[._]+|[._]+$/g, '').slice(0, 18) || 'uye';
+  let un = base.length >= 3 ? base : `${base}uye`;
+  for (let i = 0; store.find('users', (u) => u.username === un) && i < 50; i++) un = `${base.slice(0, 18)}${Math.floor(100 + Math.random() * 9900)}`;
+  return un;
+};
+app.post('/api/auth/oauth', wrap(async (req, res) => {
+  if (limited('oauth:' + ipOf(req), 30, 900000)) return res.status(429).json({ error: 'Çok fazla deneme. 15 dakika sonra tekrar dene.' });
+  const provider = req.body?.provider === 'apple' ? 'apple' : 'google';
+  const P = provider === 'google' ? 'Google' : 'Apple';
+  let id;
+  try { id = await oidc.verify(provider, req.body?.credential); } catch (e) { return res.status(401).json({ error: e.message }); }
+  const key = `${provider}Sub`;
+  const u = store.find('users', (x) => x[key] === id.sub);
+  if (u) return res.json({ token: sign(u), user: pub(u, u.id) });
+  if (id.email && store.find('users', (x) => x.email === id.email)) {
+    return res.status(409).json({ error: `Bu e-posta adresiyle kayıtlı bir SwipeUp hesabı var. Önce kullanıcı adın ve şifrenle giriş yap, sonra Ayarlar → Giriş yöntemleri'nden ${P} hesabını bağla.`, linkNeeded: true });
+  }
+  // Yeni hesap: doğum tarihi (18+) ve kullanım koşulları gerekir; ilk istekte form istenir
+  const { birthdate, accept } = req.body || {};
+  if (!birthdate || !accept) return res.json({ needSignup: true, provider, name: id.name || '', email: id.email || '', username: usernameFrom(id) });
+  if (limited('reg:' + ipOf(req), 8, 3600000)) return res.status(429).json({ error: 'Çok fazla kayıt denemesi. Bir saat sonra tekrar dene.' });
+  const age = ageOf(birthdate);
+  if (age == null) return res.status(400).json({ error: 'Doğum tarihini gir.' });
+  if (age < 18) return res.status(403).json({ error: 'SwipeUp’ı kullanmak için 18 yaşından büyük olmalısın.' });
+  let username = String(req.body?.username || '').toLowerCase().trim() || usernameFrom(id);
+  if (!/^[a-z0-9._]{3,24}$/.test(username)) return res.status(400).json({ error: 'Kullanıcı adı 3–24 karakter olmalı; harf, rakam, nokta ve alt çizgi kullanılabilir.' });
+  if (store.find('users', (x) => x.username === username)) return res.status(409).json({ error: 'Bu kullanıcı adı alınmış.' });
+  const name = String(req.body?.name || id.name || username).trim().slice(0, 40);
+  const code = recoveryCode();
+  const nu = store.put('users', {
+    id: nanoid(10), username, name, email: id.email || null, emailVerified: !!id.email,
+    bio: '', age, birthdate, consentAt: now(), gender: null, lookingFor: 'all', city: '', interests: [],
+    prefs: { ageMin: 18, ageMax: 99, maxKm: null },
+    avatar: `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(username)}&backgroundColor=ffe3dc`,
+    photos: [], passHash: await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10), noPass: true, recoveryHash: await bcrypt.hash(code, 8),
+    [key]: id.sub, isBot: false, createdAt: now(), lastSeen: now(),
+  });
+  setConsents(nu.id, req.body?.consents, req, `kayıt (${P})`);
+  io.emit('people:new', brief(nu));
+  featureCtx.attachInvite?.(nu, req.body?.ref, ipOf(req));
+  featureCtx.onRegister?.(nu, req);
+  res.json({ token: sign(nu), user: pub(store.get('users', nu.id), nu.id), recoveryCode: code.match(/.{4}/g).join('-'), created: true });
+}));
+// Ayarlar → Giriş yöntemleri: Google / Apple bağla, kaldır
+app.get('/api/me/logins', auth, (req, res) => res.json({ password: !req.user.noPass, google: !!req.user.googleSub, apple: !!req.user.appleSub, oauth: oidc.publicConfig() }));
+app.post('/api/me/logins', auth, wrap(async (req, res) => {
+  const provider = req.body?.provider === 'apple' ? 'apple' : 'google';
+  let id;
+  try { id = await oidc.verify(provider, req.body?.credential); } catch (e) { return res.status(400).json({ error: e.message }); }
+  const other = store.find('users', (x) => x.id !== req.user.id && x[`${provider}Sub`] === id.sub);
+  if (other) return res.status(409).json({ error: `Bu ${provider === 'google' ? 'Google' : 'Apple'} hesabı başka bir SwipeUp hesabına bağlı.` });
+  store.update('users', req.user.id, { [`${provider}Sub`]: id.sub });
+  res.json({ ok: true });
+}));
+app.delete('/api/me/logins/:provider', auth, (req, res) => {
+  const provider = req.params.provider === 'apple' ? 'apple' : 'google';
+  const u = req.user; const left = (!u.noPass ? 1 : 0) + (u.googleSub && provider !== 'google' ? 1 : 0) + (u.appleSub && provider !== 'apple' ? 1 : 0);
+  if (!left) return res.status(400).json({ error: 'Hesabına girebileceğin başka bir yol kalmıyor. Önce Ayarlar → Şifre belirle.' });
+  store.update('users', u.id, { [`${provider}Sub`]: null });
+  res.json({ ok: true });
+});
 
 app.post('/api/auth/login', wrap(async (req, res) => {
   const login = String(req.body?.username || '').toLowerCase().trim();
@@ -539,9 +702,9 @@ app.post('/api/me/recovery', auth, wrap(async (req, res) => {
 
 app.post('/api/me/password', auth, wrap(async (req, res) => {
   const { current, password } = req.body || {};
-  if (!(await bcrypt.compare(String(current || ''), req.user.passHash))) return res.status(400).json({ error: 'Mevcut şifre hatalı.' });
+  if (!req.user.noPass && !(await bcrypt.compare(String(current || ''), req.user.passHash))) return res.status(400).json({ error: 'Mevcut şifre hatalı.' });
   if (String(password || '').length < 6) return res.status(400).json({ error: 'Yeni şifre en az 6 karakter olmalı.' });
-  store.update('users', req.user.id, { passHash: await bcrypt.hash(password, 10), tokenVer: (req.user.tokenVer || 0) + 1, ...(['falci', 'official'].includes(req.user.role) ? { passChangedByUser: true } : {}) });
+  store.update('users', req.user.id, { noPass: false, passHash: await bcrypt.hash(password, 10), tokenVer: (req.user.tokenVer || 0) + 1, ...(['falci', 'official'].includes(req.user.role) ? { passChangedByUser: true } : {}) });
   disconnectUser(req.user.id); // eski oturumlar kapanır; bu cihaz yeni anahtarla devam eder
   res.json({ ok: true, token: sign(store.get('users', req.user.id)) });
 }));
@@ -615,6 +778,8 @@ app.patch('/api/me', auth, (req, res) => {
   }
   featureCtx.readProfileExtras?.(b, patch);
   if (b.location === null) { patch.lat = null; patch.lng = null; }
+  if (b.location && b.consentLocation === true && !hasConsent(req.user, 'location')) setConsents(req.user.id, { location: true }, req, 'konum izni');
+  if (b.location && !hasConsent(store.get('users', req.user.id), 'location')) return res.status(412).json({ error: 'Konumunu kullanabilmemiz için önce açık rıza vermelisin.', needConsent: 'location' });
   if (b.location && Number.isFinite(+b.location.lat) && Number.isFinite(+b.location.lng)) {
     // ~1 km hassasiyete yuvarla (gizlilik)
     patch.lat = Math.round(+b.location.lat * 100) / 100;
@@ -707,6 +872,8 @@ async function getMedia(id) {
 }
 app.get('/media/:id', wrap(async (req, res) => {
   if (!/^[\w-]{6,40}$/.test(req.params.id)) return res.status(404).end();
+  const pm = store.get('media_meta', req.params.id);
+  if (pm?.private && !mediaTokenOk(req.params.id, req.query.t)) return res.status(404).end(); // özel dosya: imzasız / süresi geçmiş adres
   const m = await getMedia(req.params.id);
   if (!m) return res.status(404).end();
   const total = m.data.length;
@@ -717,7 +884,8 @@ app.get('/media/:id', wrap(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox");
   res.setHeader('Accept-Ranges', 'bytes');
-  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.setHeader('Cache-Control', pm?.once ? 'no-store' : pm?.private ? 'private, max-age=86400' : 'public, max-age=31536000, immutable');
+  if (pm?.private) res.setHeader('Referrer-Policy', 'no-referrer');
   const range = req.headers.range;
   if (range) {
     const mt = /^bytes=(\d*)-(\d*)$/.exec(String(range).trim());
@@ -1764,7 +1932,7 @@ app.post('/api/share', auth, (req, res) => {
 async function pushAdmins(p) {
   if (!VAPID) return;
   const subs = store.all('adm_push');
-  await Promise.all(subs.map((s) => webpush.sendNotification(s.sub, JSON.stringify({ icon: '/icons/icon-192.png', ...p }), { TTL: 86400, urgency: 'high' })
+  await Promise.all(subs.map((s) => webpush.sendNotification(s.sub, JSON.stringify({ icon: '/icons/icon-192.png', ...p, url: adminUrl(p.url || '/admin/') }), { TTL: 86400, urgency: 'high' })
     .catch((e) => { if (e.statusCode === 404 || e.statusCode === 410) store.del('adm_push', s.id); })));
 }
 app.post('/api/admin/push', adminApi.adminAuth, (req, res) => {
@@ -1788,7 +1956,7 @@ app.post('/api/admin/push/test', adminApi.adminAuth, wrap(async (req, res) => {
 const photomod = require('./server/photomod');
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
-  isBlocked, limited, ipOf, isMedia, isGif: (u) => GIF_HOSTS.test(String(u || '')), extractTags, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
+  isBlocked, limited, ipOf, markPrivate, signMedia, isMedia, isGif: (u) => GIF_HOSTS.test(String(u || '')), extractTags, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
   online, appEvent, falci, msgOut, falLock, shownAge, tagsOf, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id), pushAdmins,
   storyItem, storyVisible, storyAlive, createPost: (u, b) => createPost(u, b), cleanSticker, systemMsg: (c, t) => systemMsg(c, t), groupAvatar,
 };
@@ -1800,6 +1968,9 @@ require('./server/falai')(app, featureCtx);
 require('./server/support')(app, featureCtx);
 // Mağaza uygulamaları için alan adı doğrulaması: Android (Trusted Web Activity) ve iOS evrensel bağlantıları.
 // ANDROID_SHA256: Play Console > Uygulama imzalama sayfasındaki SHA-256 parmak izi (birden fazlaysa virgülle).
+// Mağaza sayfaları ve dış bağlantılar için kısa yasal metin adresleri
+const LEGAL_SHORT = { '/gizlilik': 'gizlilik', '/privacy': 'gizlilik', '/kvkk': 'kvkk', '/kosullar': 'kosullar', '/terms': 'kosullar', '/acik-riza': 'riza', '/topluluk-kurallari': 'kurallar' };
+app.get(Object.keys(LEGAL_SHORT), (req, res) => res.redirect(302, `/#/legal/${LEGAL_SHORT[req.path]}`));
 app.get(['/hesap-silme', '/delete-account'], (req, res) => res.sendFile(path.join(__dirname, 'public', 'hesap-silme.html')));
 app.get('/.well-known/assetlinks.json', (req, res) => {
   const fps = String(process.env.ANDROID_SHA256 || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
@@ -1864,7 +2035,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
     if (p.endsWith('sw.js') || p.endsWith('.html') || p.endsWith('.js') || p.endsWith('.css')) res.setHeader('Cache-Control', 'no-cache');
   },
 }));
-app.get(/^\/(?!api|media|admin|socket\.io).*/, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get(/^\/(?!api\/|media\/|socket\.io).*/, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -2166,6 +2337,15 @@ function purgeUser(id) {
   store.filter('pushSubs', (s) => s.userId === id).forEach((s) => store.del('pushSubs', s.id));
   store.filter('verifications', (v) => v.userId === id).forEach((v) => store.del('verifications', v.id));
   store.del('resets', id);
+  // Diğer kişisel kayıtlar (yasal saklama gerektirenler hariç: sipariş, jeton / kazanç hareketleri, ödemeler, rıza kaydı, şikayet ve destek kayıtları)
+  const KEEP = new Set(['users', 'orders', 'mk_orders', 'coin_tx', 'earn_tx', 'payouts', 'deleted_accounts', 'consent_log', 'reports', 'support', 'appeals', 'flags', 'photo_flags', 'media_meta', 'settings', 'meta']);
+  for (const [c, m] of store.cols) {
+    if (KEEP.has(c) || c.startsWith('adm_') || c.startsWith('erp_')) continue;
+    for (const d of [...m.values()]) if (d && (d.userId === id || d.uid === id || d.ownerId === id || d.sellerId === id)) store.del(c, d.id);
+  }
+  // Yüklediği dosyalar (fotoğraf, video, ses) de silinir
+  const files = store.filter('media_meta', (x) => x.userId === id);
+  (async () => { for (const f of files) { try { await store.deleteMedia(f.id); dropMediaCache(f.id); store.del('media_meta', f.id); } catch (e) { console.error('[hesap silme] dosya', e.message); } } })();
   store.del('users', id);
   io.emit('people:gone', { id });
 }
@@ -2233,12 +2413,24 @@ async function ensureOfficial() {
   await store.init();
   await store.initStorage();
   const coinMoved = require('./server/coinrate')(store); // 1 jeton = 1 TL geçişi (bir kez)
+  // Eski sohbet dosyalarını da özel yap (bir kez; sonraki açılışlarda yalnız eksikler)
+  { let n = 0; store.filter('messages', (m) => m.media && m.mediaType !== 'gif' && MEDIA_RE.test(m.media)).forEach((m) => { const id = MEDIA_RE.exec(m.media)[1]; const meta = store.get('media_meta', id); if (!meta?.private || (m.viewOnce && !meta.once)) { markPrivate(m.media, m.from, !!m.viewOnce); n++; } });
+    store.filter('messages', (m) => m.fal?.images?.length).forEach((m) => m.fal.images.forEach((u) => { const mm = MEDIA_RE.exec(String(u)); if (mm && !store.get('media_meta', mm[1])?.private) { markPrivate(u, m.from); n++; } }));
+    store.all('verifications').forEach((v) => { const mm = MEDIA_RE.exec(String(v.selfie || '')); if (mm && !store.get('media_meta', mm[1])?.private) { markPrivate(v.selfie, v.userId); n++; } }); // doğrulama selfiesi: yalnız yönetim
+    if (n) console.log(`[medya] ${n} sohbet / doğrulama dosyası özel yapıldı (imzalı bağlantı)`); }
   const meta = store.get('meta', 'secrets') || store.put('meta', {
     id: 'secrets',
     jwt: crypto.randomBytes(32).toString('hex'),
     vapid: webpush.generateVAPIDKeys(),
   });
   JWT_SECRET = JWT_SECRET || meta.jwt;
+  // Yönetim paneli adresi: ADMIN_PATH (Render ortam değişkeni) ya da ilk açılışta üretilip saklanan rastgele adres
+  {
+    let ap = String(process.env.ADMIN_PATH || meta.adminPath || '').replace(/[^\w-]/g, '');
+    if (ap.length < 12) { ap = `y-${crypto.randomBytes(12).toString('base64url').replace(/[^\w]/g, '').slice(0, 16)}`; store.update('meta', 'secrets', { adminPath: ap }); }
+    ADMIN_BASE = '/' + ap;
+    if (!process.env.ADMIN_PATH) console.log(`[admin] Yönetim paneli adresi: ${ADMIN_BASE}/ (Render'da ADMIN_PATH ile değiştirebilirsin)`);
+  }
   VAPID = process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
     ? { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY }
     : meta.vapid;

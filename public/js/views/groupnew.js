@@ -30,7 +30,7 @@ export function pickPeople(title, exclude, onDone) {
 
 export default async function groupnew(view) {
   const picked = new Map();
-  view.innerHTML = `<header class="topbar bordered"><button class="ib" onclick="history.back()" aria-label="Geri">${icon('back')}</button><div class="center">Yeni grup</div><button class="link mk" style="padding:0 6px" disabled>Oluştur</button></header>
+  view.innerHTML = `<header class="topbar bordered"><button class="ib" data-back="#/chats" aria-label="Geri">${icon('back')}</button><div class="center">Yeni grup</div><button class="link mk" style="padding:0 6px" disabled>Oluştur</button></header>
     <div class="form"><label>Grup adı<input class="field nm" maxlength="50" placeholder="Ör. Cumartesi kahvaltısı"></label></div>
     <div class="section-t"><span>Kişiler</span><span class="muted cnt" style="font-family:var(--font);font-size:14px;font-weight:500"></span></div>
     <div class="search-bar" style="position:static;padding-top:0"><label class="sw">${icon('search')}<input class="field q" placeholder="Kişi ara"></label></div>

@@ -4,7 +4,7 @@ import { api, esc, toast, state, avatar, nm, ago } from '../core.js';
 import { egi } from '../eg-icons.js';
 
 export default async function dq(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button><div class="center">Günün sorusu</div><span class="ib"></span></header><div class="dq"><div class="spinner"></div></div>`;
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/" aria-label="Geri">${icon('back')}</button><div class="center">Günün sorusu</div><span class="ib"></span></header><div class="dq"><div class="spinner"></div></div>`;
   const box = view.querySelector('.dq');
   let d; let sort = 'top'; let day = null; let editing = false;
   const open = new Set();

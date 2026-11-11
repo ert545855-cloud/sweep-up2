@@ -4,7 +4,7 @@ import { api, esc, toast, avatar, nm, ago, pickFile, compressImage, uploadFile }
 import { modCheck } from '../engage.js';
 import { clubIcon } from '../eg-icons.js';
 
-const back = (to) => `<button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '${to}')" aria-label="Geri">${icon('back')}</button>`;
+const back = (to) => `<button class="ib" data-back="${to}" aria-label="Geri">${icon('back')}</button>`;
 
 async function list(view) {
   view.innerHTML = `<header class="topbar">${back('#/')}<div class="center">Kulüpler</div><span class="ib"></span></header>

@@ -6,7 +6,7 @@ import {
 import { egi } from '../eg-icons.js';
 
 const CATS = { kahve: '☕ Kahve', yuruyus: '🥾 Yürüyüş', spor: '⚽ Spor', muzik: '🎶 Müzik', oyun: '🎲 Oyun', sanat: '🎨 Sanat', yemek: '🍕 Yemek', parti: '🎉 Parti', sohbet: '💬 Sohbet', diger: '📍 Diğer' };
-const head = (t, right = '<span class="ib"></span>') => `<header class="topbar bordered"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/etkinlikler')" aria-label="Geri">${icon('back')}</button><div class="center">${t}</div>${right}</header>`;
+const head = (t, right = '<span class="ib"></span>') => `<header class="topbar bordered"><button class="ib" data-back="#/etkinlikler" aria-label="Geri">${icon('back')}</button><div class="center">${t}</div>${right}</header>`;
 const when = (t) => new Date(t).toLocaleString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const dayBox = (t) => { const d = new Date(t); return `<span class="ev-day"><b>${d.getDate()}</b><small>${d.toLocaleDateString('tr-TR', { month: 'short' })}</small></span>`; };
 const pad = (n) => String(n).padStart(2, '0');

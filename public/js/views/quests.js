@@ -3,7 +3,7 @@ import { icon } from '../icons.js';
 import { api, esc, toast, state, on, emit } from '../core.js';
 
 export default async function quests(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button><div class="center">Günlük görevler</div><a class="ib soft" href="#/store" aria-label="Jeton">${icon('coin')}</a></header><div class="qs"><div class="spinner"></div></div>`;
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/" aria-label="Geri">${icon('back')}</button><div class="center">Günlük görevler</div><a class="ib soft" href="#/store" aria-label="Jeton">${icon('coin')}</a></header><div class="qs"><div class="spinner"></div></div>`;
   const box = view.querySelector('.qs');
   let q; let tmr;
   const left = () => { const ms = Math.max(0, q.resetAt - Date.now()); const h = Math.floor(ms / 3600000); const m = Math.floor((ms % 3600000) / 60000); return `${h} sa ${m} dk`; };

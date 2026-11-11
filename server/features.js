@@ -140,6 +140,7 @@ module.exports = function features(app, ctx) {
     if (store.find('verifications', (x) => x.userId === req.user.id && x.status === 'pending')) return res.status(409).json({ error: 'Doğrulaman zaten inceleniyor.' });
     if (limited('verify:' + req.user.id, 4, DAY)) return res.status(429).json({ error: 'Bugün çok fazla deneme yaptın.' });
     const v = store.put('verifications', { id: nanoid(10), userId: req.user.id, selfie: req.body.selfie, pose: req.user.verifyPose || 'zafer', status: 'pending', at: now() });
+    ctx.markPrivate?.(v.selfie, req.user.id); // selfie yalnız yönetimde, imzalı bağlantıyla görünür
     Promise.resolve(ctx.onVerify?.(v)).catch(() => {}); // yapay zeka ön kontrolü (engage.js)
     res.json({ ok: true, status: v.status });
   });
@@ -228,7 +229,8 @@ module.exports = function features(app, ctx) {
   // ---------- Hesap silme ve veri indirme ----------
   app.delete('/api/me', auth, wrap(async (req, res) => {
     if (['falci', 'official'].includes(req.user.role)) return res.status(400).json({ error: 'Bu hesap silinemez.' });
-    if (!(await bcrypt.compare(String(req.body?.password || ''), req.user.passHash))) return res.status(400).json({ error: 'Şifre hatalı.' });
+    // Google / Apple ile açılmış şifresiz hesapta kullanıcı adını yazarak onaylanır
+    if (req.user.noPass ? String(req.body?.confirm || '').trim().toLowerCase().replace(/^@/, '') !== req.user.username : !(await bcrypt.compare(String(req.body?.password || ''), req.user.passHash))) return res.status(400).json({ error: req.user.noPass ? 'Onay için kullanıcı adını doğru yaz.' : 'Şifre hatalı.' });
     store.put('deleted_accounts', { id: req.user.id, username: req.user.username, reason: String(req.body?.reason || '').slice(0, 300), at: now() });
     purgeUser(req.user.id);
     res.json({ ok: true });
@@ -242,6 +244,7 @@ module.exports = function features(app, ctx) {
       exportedAt: new Date().toISOString(),
       note: 'SwipeUp hesabına ait kişisel verilerin (KVKK md. 11 kapsamında).',
       profile: pub(req.user, id),
+      consentLog: store.filter('consent_log', (x) => x.userId === id).map(({ ip, ...x }) => x), // verdiğin / geri aldığın açık rızalar
       posts: store.filter('posts', (p) => p.userId === id).map((p) => ({ id: p.id, type: p.type, caption: p.caption, items: p.items || [{ media: p.media }], likes: p.likes.length, createdAt: new Date(p.createdAt).toISOString() })),
       comments: store.all('posts').flatMap((p) => p.comments.filter((c) => c.userId === id).map((c) => ({ post: p.id, text: c.text, at: new Date(c.at).toISOString() }))),
       stories: store.filter('stories', (s) => s.userId === id).map((s) => ({ media: s.media, at: new Date(s.at).toISOString() })),

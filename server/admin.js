@@ -5,6 +5,9 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { nanoid } = require('nanoid');
+const QRCode = require('qrcode');
+const totp = require('./totp');
+const oidc = require('./oidc');
 
 const DAY = 86400000;
 const CATS = {
@@ -22,7 +25,8 @@ module.exports = function mountAdmin(app, ctx) {
     id: nanoid(12), adminId: admin.id, admin: admin.username, action, target: target || null, detail: detail || '', at: now(),
   });
   const PERM = require('./perms');
-  const adminOut = (a) => ({ id: a.id, username: a.username, name: a.name, role: a.role === 'owner' ? 'owner' : 'moderator', perms: PERM.permsOf(a), disabled: !!a.disabled, createdAt: a.createdAt, lastLogin: a.lastLogin || null });
+  const adminOut = (a) => ({ id: a.id, username: a.username, name: a.name, role: a.role === 'owner' ? 'owner' : 'moderator', perms: PERM.permsOf(a), disabled: !!a.disabled, createdAt: a.createdAt, lastLogin: a.lastLogin || null,
+    totp: !!a.totpSecret, recoveryLeft: (a.totpRc || []).length, google: a.googleEmail || (a.googleSub ? 'bağlı' : null), apple: a.appleSub ? (a.appleEmail || 'bağlı') : null });
   const userRow = (u) => ({
     ...brief(u), tags: u.tags || [], email: u.email || null, age: u.age, city: u.city, status: statusOf(u), coins: u.coins || 0, earnings: u.earnings || 0, plusUntil: u.plusUntil || null, birthdate: u.birthdate || null, banReason: u.banReason || null, bannedUntil: u.bannedUntil || null,
     posts: store.filter('posts', (p) => p.userId === u.id).length,
@@ -73,7 +77,7 @@ module.exports = function mountAdmin(app, ctx) {
       const m = store.get('messages', ref);
       Object.assign(m, { deleted: true, text: '', media: null, reactions: {} });
       store.update('messages', m.id, {});
-      store.get('chats', m.chatId)?.members.forEach((x) => emitTo(x, 'message:update', m));
+      store.get('chats', m.chatId)?.members.forEach((x) => emitTo(x, 'message:update', ctx.msgOut ? ctx.msgOut(m) : m));
     }
     return c.kind;
   };
@@ -82,7 +86,7 @@ module.exports = function mountAdmin(app, ctx) {
     try {
       const p = jwt.verify((req.headers.authorization || '').slice(7), SECRET(), { algorithms: ['HS256'] });
       const a = store.get('adm_admins', p.aid);
-      if (!a || a.disabled || (p.pv || 0) !== (a.tokenVer || 0)) throw new Error('x'); // şifre değişince eski oturumlar kapanır
+      if (!a || a.disabled || (p.pv || 0) !== (a.tokenVer || 0) || p.m !== 1) throw new Error('x'); // şifre değişince eski oturumlar kapanır; m: iki adımlı girişten geçti
       req.admin = a;
     } catch { return res.status(401).json({ error: 'Oturum süresi doldu, tekrar giriş yap.' }); }
     // Yetki kontrolü
@@ -98,6 +102,16 @@ module.exports = function mountAdmin(app, ctx) {
   // ---------- İlk yönetici ----------
   ctx.ensureAdmin = async () => {
     const pass = process.env.ADMIN_PASSWORD;
+    // Acil durum: sahip hem şifresini hem doğrulama uygulamasını kaybettiyse Render'da ADMIN_RESET=1 ve ADMIN_PASSWORD verilir;
+    // açılışta "admin" hesabının şifresi bu olur ve iki adımlı doğrulama sıfırlanır (sonra ADMIN_RESET kaldırılmalı)
+    if (process.env.ADMIN_RESET === '1' && pass && pass.length >= 8) {
+      const own = store.find('adm_admins', (a) => a.username === 'admin');
+      if (own && !(own.resetAt && own.resetPass && (await bcrypt.compare(pass, own.resetPass)))) {
+        const h = await bcrypt.hash(pass, 10);
+        store.update('adm_admins', own.id, { passHash: h, resetPass: h, resetAt: now(), disabled: false, totpSecret: null, totpPending: null, totpRc: [], tokenVer: (own.tokenVer || 0) + 1, role: 'owner' });
+        console.warn('[admin] ADMIN_RESET: "admin" hesabının şifresi ve iki adımlı doğrulaması sıfırlandı. Render\'dan ADMIN_RESET değişkenini kaldır.');
+      }
+    }
     if (store.all('adm_admins').length) {
       const own = store.find('adm_admins', (a) => a.username === 'admin');
       if (own && pass && !own.passChanged && !(await bcrypt.compare(pass, own.passHash))) store.update('adm_admins', own.id, { passHash: await bcrypt.hash(pass, 10) });
@@ -109,14 +123,123 @@ module.exports = function mountAdmin(app, ctx) {
   };
 
   // ---------- Giriş ----------
+  // Giriş iki adımlıdır: 1) şifre ya da Google / Apple, 2) doğrulama uygulamasındaki 6 haneli kod (ya da bir kurtarma kodu).
+  // İlk girişte doğrulama uygulaması kurulmadan panel açılmaz.
+  const panelToken = (a) => jwt.sign({ aid: a.id, pv: a.tokenVer || 0, m: 1 }, SECRET(), { expiresIn: '12h', algorithm: 'HS256' });
+  const ticket = (a, t) => jwt.sign({ t, aid: a.id, pv: a.tokenVer || 0 }, SECRET(), { expiresIn: '10m', algorithm: 'HS256' });
+  const readTicket = (tk, t) => {
+    try {
+      const p = jwt.verify(String(tk || ''), SECRET(), { algorithms: ['HS256'] });
+      const a = p.t === t && store.get('adm_admins', p.aid);
+      return a && !a.disabled && (p.pv || 0) === (a.tokenVer || 0) ? a : null;
+    } catch { return null; }
+  };
+  async function firstFactorOk(a, req, res, via) {
+    if (a.totpSecret) return res.json({ need: 'totp', ticket: ticket(a, '2fa'), name: a.name, via });
+    const secret = totp.newSecret();
+    store.update('adm_admins', a.id, { totpPending: secret });
+    const uri = totp.uri(secret, a.username);
+    const qr = await QRCode.toString(uri, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#1a1027', light: '#ffffff' } });
+    res.json({ need: 'setup', ticket: ticket(a, 'setup'), secret: secret.match(/.{1,4}/g).join(' '), uri, qr, name: a.name, via });
+  }
+  function signedIn(a, req, res, extra = {}) {
+    store.update('adm_admins', a.id, { lastLogin: now() });
+    audit(a, 'giriş', null, `${ipOf(req)}${extra.via ? ` · ${extra.via}` : ''}`);
+    const fresh = store.get('adm_admins', a.id);
+    res.json({ token: panelToken(fresh), admin: adminOut(fresh), ...extra });
+  }
   app.post('/api/admin/login', async (req, res) => {
     const username = String(req.body?.username || '').toLowerCase().trim();
-    if (limited('alogin:' + ipOf(req), 10, 900000)) return res.status(429).json({ error: 'Çok fazla deneme. 15 dakika sonra tekrar dene.' });
+    if (limited('alogin:' + ipOf(req), 10, 900000) || limited('alogin-u:' + username, 10, 900000)) return res.status(429).json({ error: 'Çok fazla deneme. 15 dakika sonra tekrar dene.' });
     const a = store.find('adm_admins', (x) => x.username === username && !x.disabled);
     if (!a || !(await bcrypt.compare(String(req.body?.password || ''), a.passHash))) return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı.' });
-    store.update('adm_admins', a.id, { lastLogin: now() });
-    audit(a, 'giriş', null, ipOf(req));
-    res.json({ token: jwt.sign({ aid: a.id, pv: a.tokenVer || 0 }, SECRET(), { expiresIn: '12h' }), admin: adminOut(a) });
+    await firstFactorOk(a, req, res, 'şifre');
+  });
+  // Google / Apple ile giriş: yalnızca daha önce panelde bağlanmış hesaplar (sonra yine doğrulama kodu istenir)
+  app.post('/api/admin/login/oauth', async (req, res) => {
+    if (limited('alogin:' + ipOf(req), 10, 900000)) return res.status(429).json({ error: 'Çok fazla deneme. 15 dakika sonra tekrar dene.' });
+    const provider = req.body?.provider === 'apple' ? 'apple' : 'google';
+    let id;
+    try { id = await oidc.verify(provider, req.body?.credential); } catch (e) { return res.status(401).json({ error: e.message }); }
+    const a = store.find('adm_admins', (x) => !x.disabled && x[`${provider}Sub`] === id.sub);
+    if (!a) return res.status(401).json({ error: `Bu ${provider === 'google' ? 'Google' : 'Apple'} hesabı bir yönetici hesabına bağlı değil. Önce şifrenle gir, sonra Yöneticiler → Hesabım bölümünden bağla.` });
+    await firstFactorOk(a, req, res, provider === 'google' ? 'Google' : 'Apple');
+  });
+  // 2. adım: doğrulama kodu ya da kurtarma kodu
+  app.post('/api/admin/login/2fa', (req, res) => {
+    const a = readTicket(req.body?.ticket, '2fa');
+    if (!a) return res.status(401).json({ error: 'Giriş süresi doldu. Baştan giriş yap.', restart: true });
+    if (limited('a2fa:' + a.id, 8, 900000) || limited('a2fa-ip:' + ipOf(req), 20, 900000)) return res.status(429).json({ error: 'Çok fazla hatalı kod. 15 dakika sonra tekrar dene.' });
+    const code = String(req.body?.code || '');
+    const step = totp.verify(a.totpSecret, code, a.totpLast ?? -1);
+    if (step != null) { store.update('adm_admins', a.id, { totpLast: step }); return signedIn(a, req, res, { via: 'doğrulama kodu' }); }
+    const h = totp.hashRc(a.id, code); const rc = a.totpRc || [];
+    if (totp.normRc(code).length === 12 && rc.includes(h)) {
+      store.update('adm_admins', a.id, { totpRc: rc.filter((x) => x !== h) });
+      return signedIn(a, req, res, { via: 'kurtarma kodu', recoveryLeft: rc.length - 1 });
+    }
+    res.status(400).json({ error: 'Kod hatalı. Uygulamadaki güncel 6 haneli kodu yaz.' });
+  });
+  // İlk kurulum: QR kodu tarandıktan sonra uygulamadaki kod onaylanır, kurtarma kodları bir kez gösterilir
+  app.post('/api/admin/login/setup', (req, res) => {
+    const a = readTicket(req.body?.ticket, 'setup');
+    if (!a || !a.totpPending) return res.status(401).json({ error: 'Kurulum süresi doldu. Baştan giriş yap.', restart: true });
+    if (limited('a2fa:' + a.id, 8, 900000)) return res.status(429).json({ error: 'Çok fazla hatalı kod. 15 dakika sonra tekrar dene.' });
+    const step = totp.verify(a.totpPending, req.body?.code, -1);
+    if (step == null) return res.status(400).json({ error: 'Kod tutmadı. Telefonun saatinin doğru olduğundan emin ol ve uygulamadaki güncel kodu yaz.' });
+    const codes = totp.recoveryCodes(8);
+    store.update('adm_admins', a.id, { totpSecret: a.totpPending, totpPending: null, totpLast: step, totpRc: codes.map((c) => totp.hashRc(a.id, c)), totpAt: now() });
+    audit(a, 'iki adımlı doğrulamayı açtı');
+    signedIn(store.get('adm_admins', a.id), req, res, { via: 'kurulum', recovery: codes });
+  });
+  // Şifremi unuttum: doğrulama uygulamasındaki kod + bir kurtarma kodu ile yeni şifre (ikisi birden gerekir)
+  app.post('/api/admin/forgot', async (req, res) => {
+    const username = String(req.body?.username || '').toLowerCase().trim();
+    if (limited('aforgot:' + ipOf(req), 6, 3600000) || limited('aforgot-u:' + username, 6, 3600000)) return res.status(429).json({ error: 'Çok fazla deneme. Bir saat sonra tekrar dene.' });
+    const password = String(req.body?.password || '');
+    if (password.length < 10) return res.status(400).json({ error: 'Yeni şifre en az 10 karakter olmalı.' });
+    const a = store.find('adm_admins', (x) => x.username === username && !x.disabled);
+    const fail = () => res.status(400).json({ error: 'Bilgiler tutmadı. Kullanıcı adını, uygulamadaki güncel kodu ve kurtarma kodlarından birini kontrol et.' });
+    if (!a || !a.totpSecret) return fail();
+    const step = totp.verify(a.totpSecret, req.body?.code, a.totpLast ?? -1);
+    const h = totp.hashRc(a.id, req.body?.recovery); const rc = a.totpRc || [];
+    if (step == null || totp.normRc(req.body?.recovery).length !== 12 || !rc.includes(h)) return fail();
+    store.update('adm_admins', a.id, { passHash: await bcrypt.hash(password, 10), passChanged: true, totpLast: step, totpRc: rc.filter((x) => x !== h), tokenVer: (a.tokenVer || 0) + 1 });
+    audit(a, 'şifresini kurtarma koduyla yeniledi', null, ipOf(req));
+    res.json({ ok: true, recoveryLeft: rc.length - 1 });
+  });
+  // Hesabım: Google / Apple bağla, kaldır; kurtarma kodlarını yenile
+  app.post('/api/admin/me/oauth', adminAuth, async (req, res) => {
+    const provider = req.body?.provider === 'apple' ? 'apple' : 'google';
+    let id;
+    try { id = await oidc.verify(provider, req.body?.credential); } catch (e) { return res.status(400).json({ error: e.message }); }
+    if (store.find('adm_admins', (x) => x.id !== req.admin.id && x[`${provider}Sub`] === id.sub)) return res.status(409).json({ error: 'Bu hesap başka bir yöneticiye bağlı.' });
+    store.update('adm_admins', req.admin.id, { [`${provider}Sub`]: id.sub, [`${provider}Email`]: id.email || null });
+    audit(req.admin, `${provider === 'google' ? 'Google' : 'Apple'} hesabını bağladı`, null, id.email || '');
+    res.json(adminOut(store.get('adm_admins', req.admin.id)));
+  });
+  app.delete('/api/admin/me/oauth/:provider', adminAuth, (req, res) => {
+    const provider = req.params.provider === 'apple' ? 'apple' : 'google';
+    store.update('adm_admins', req.admin.id, { [`${provider}Sub`]: null, [`${provider}Email`]: null });
+    audit(req.admin, `${provider === 'google' ? 'Google' : 'Apple'} bağlantısını kaldırdı`);
+    res.json(adminOut(store.get('adm_admins', req.admin.id)));
+  });
+  app.post('/api/admin/me/recovery', adminAuth, (req, res) => {
+    const a = req.admin;
+    const step = totp.verify(a.totpSecret, req.body?.code, a.totpLast ?? -1);
+    if (step == null) return res.status(400).json({ error: 'Doğrulama kodu hatalı.' });
+    const codes = totp.recoveryCodes(8);
+    store.update('adm_admins', a.id, { totpLast: step, totpRc: codes.map((c) => totp.hashRc(a.id, c)) });
+    audit(a, 'kurtarma kodlarını yeniledi');
+    res.json({ recovery: codes });
+  });
+  // Sahip: bir yöneticinin doğrulama uygulamasını sıfırla (telefonunu kaybettiyse); bir sonraki girişte yeniden kurar
+  app.post('/api/admin/admins/:id/reset2fa', adminAuth, (req, res) => {
+    const a = store.get('adm_admins', req.params.id);
+    if (!a) return res.status(404).json({ error: 'Yönetici bulunamadı.' });
+    store.update('adm_admins', a.id, { totpSecret: null, totpPending: null, totpRc: [], tokenVer: (a.tokenVer || 0) + 1 });
+    audit(req.admin, 'iki adımlı doğrulamayı sıfırladı', null, a.username);
+    res.json({ ok: true });
   });
   app.get('/api/admin/me', adminAuth, (req, res) => res.json(adminOut(req.admin)));
   app.post('/api/admin/me/password', adminAuth, async (req, res) => {
@@ -126,7 +249,7 @@ module.exports = function mountAdmin(app, ctx) {
     const tv = (req.admin.tokenVer || 0) + 1;
     store.update('adm_admins', req.admin.id, { passHash: await bcrypt.hash(password, 10), passChanged: true, tokenVer: tv });
     audit(req.admin, 'şifre değiştirdi');
-    res.json({ ok: true, token: jwt.sign({ aid: req.admin.id, pv: tv }, SECRET(), { expiresIn: '12h' }) });
+    res.json({ ok: true, token: jwt.sign({ aid: req.admin.id, pv: tv, m: 1 }, SECRET(), { expiresIn: '12h', algorithm: 'HS256' }) });
   });
 
   // ---------- Genel bakış ----------
@@ -437,7 +560,8 @@ module.exports = function mountAdmin(app, ctx) {
   }
   const LINKS = ['/#/', '/#/notifications', '/#/store', '/#/genel', '/#/fal', '/#/vitrin', '/#/dalga', '/#/swipe', '/#/create', '/#/verify', '/#/live', '/#/secki', '/#/soru', '/#/kulupler', '/#/seriler', '/#/karaoke', '/#/gorevler'];
   app.post('/api/admin/announcements/preview', adminAuth, (req, res) => {
-    const { list } = audienceOf(req.body || {});
+    const { list: all } = audienceOf(req.body || {});
+    const list = req.body?.marketing ? all.filter((u) => u.consents?.marketing?.on) : all;
     res.json({ count: list.length, push: list.filter((u) => store.find('pushSubs', (x) => x.userId === u.id)).length, online: list.filter((u) => isOnline(u.id)).length, sample: list.slice(0, 5).map((u) => u.username) });
   });
   app.post('/api/admin/announcements', adminAuth, (req, res) => {
@@ -447,7 +571,9 @@ module.exports = function mountAdmin(app, ctx) {
     if (!text) return res.status(400).json({ error: 'Bildirim metni boş olamaz.' });
     const url = LINKS.includes(b.url) ? b.url : '/#/notifications';
     const popup = !!b.popup;
-    const { aud, list, label } = audienceOf(b);
+    const { aud, list: all, label } = audienceOf(b);
+    // Kampanya / tanıtım bildirimi yalnızca buna açık rıza verenlere gider (KVKK, ticari ileti)
+    const list = b.marketing ? all.filter((u) => u.consents?.marketing?.on) : all;
     if (!list.length) return res.status(400).json({ error: 'Bu hedef kitlede kimse yok.' });
     if (list.length > 1 && limited('ann:' + req.admin.id, 10, DAY)) return res.status(429).json({ error: 'Bugün çok fazla toplu bildirim gönderildi.' });
     const id = nanoid(10);
@@ -915,7 +1041,8 @@ module.exports = function mountAdmin(app, ctx) {
 
   // Seçilen medyaları kaldır: içeriği uygulamadan çıkar, dosyayı sil
   app.post('/api/admin/media/delete', adminAuth, async (req, res) => {
-    const items = (Array.isArray(req.body?.items) ? req.body.items : []).slice(0, 200);
+    // Panel imzalı adres gönderebilir (özel sohbet dosyası): karşılaştırma yalın adresle yapılır
+    const items = (Array.isArray(req.body?.items) ? req.body.items : []).slice(0, 200).map((it) => ({ ...it, url: String(it?.url || '').split('?')[0] }));
     const reason = String(req.body?.reason || '').slice(0, 200);
     const tell = !!req.body?.notify;
     if (!items.length) return res.status(400).json({ error: 'Kaldırılacak medya seç.' });
@@ -942,7 +1069,7 @@ module.exports = function mountAdmin(app, ctx) {
           if (it.kind === 'fal' && m.fal) m.fal.images = (m.fal.images || []).filter((u) => u !== it.url);
           else Object.assign(m, { deleted: true, text: '', media: null, reactions: {} });
           store.update('messages', m.id, {});
-          store.get('chats', m.chatId)?.members.forEach((x) => emitTo(x, 'message:update', m));
+          store.get('chats', m.chatId)?.members.forEach((x) => emitTo(x, 'message:update', ctx.msgOut ? ctx.msgOut(m) : m));
         }
       } else if (it.kind === 'genel') {
         const m = store.get('pub_msgs', it.refId);

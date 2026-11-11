@@ -10,7 +10,10 @@ Hazır olanlar:
 | iOS kabuk ayarları (Capacitor) | `store/ios/capacitor.config.json` |
 | Alan adı doğrulaması | Sunucu `/.well-known/assetlinks.json` ve `/.well-known/apple-app-site-association` adreslerini ortam değişkenlerinden üretir |
 | Uygulamaya girmeden hesap silme sayfası | `https://swipeup-hh1f.onrender.com/hesap-silme` (Google Play bunu ister) |
-| Gizlilik politikası | `https://swipeup-hh1f.onrender.com/#/legal/gizlilik` |
+| Gizlilik politikası | `https://swipeup-hh1f.onrender.com/gizlilik` |
+| KVKK aydınlatma metni | `https://swipeup-hh1f.onrender.com/kvkk` |
+| Açık rıza metni | `https://swipeup-hh1f.onrender.com/acik-riza` |
+| Kullanım koşulları | `https://swipeup-hh1f.onrender.com/kosullar` |
 | Mağaza metinleri | `store/listing.md` |
 
 Uygulama içinde hesap silme (Ayarlar → Hesabımı sil), fotoğraf denetimi, şikayet ve engelleme zaten var; tanışma uygulamaları için mağazalar bunları arar.
@@ -70,7 +73,17 @@ Uygulamanın topladıkları (formu doldururken kodla ve gizlilik politikasıyla 
 - Yaklaşık konum (yalnızca izin verilirse, ~1 km yuvarlanmış)
 - Satın alma geçmişi (jeton), uygulama içi etkileşimler
 - Kamera ve mikrofon: canlı yayın, karaoke, aramalar, oyun sesli sohbeti (kayıt yalnızca kullanıcı paylaşırsa saklanır)
-- Üçüncü taraflarla paylaşım olarak belirtilmesi gerekenler: yüklenen fotoğraflar denetim için Sightengine’e, fal için gönderilen fincan fotoğrafları Google Gemini’ye, GIF aramaları GIPHY’ye, müzik aramaları Spotify’a gider
+- Üçüncü taraflarla paylaşım olarak belirtilmesi gerekenler: yüklenen fotoğraflar denetim için Sightengine’e, fal için gönderilen fincan fotoğrafları (yalnızca açık rızayla) Google Gemini’ye, GIF aramaları GIPHY’ye, müzik aramaları Spotify’a gider; Google / Apple ile giriş seçilirse kimlik numarası ve e-posta o sağlayıcıdan alınır
+- İsteğe bağlı (açık rızalı) olanlar: kampanya bildirimleri, konum, fal fotoğraflarının yapay zekayla yorumlanması; hepsi Ayarlar → İzinlerim’den geri alınabilir
+- Hesap silme: uygulama içinde Ayarlar → Hesabımı sil; web’de `https://swipeup-hh1f.onrender.com/hesap-silme`. Silinince profil, paylaşımlar, mesajlar ve yüklenen dosyalar silinir; ödeme kayıtları yasal süre (10 yıl) saklanır
+- Veriler aktarım sırasında şifrelenir (HTTPS); sohbet dosyaları süreli imzalı bağlantılarla yalnızca sohbetteki kişilere açılır
+
+## 4.1 KVKK: uygulama dışında yapılması gerekenler
+
+- **Yurt dışına aktarım (KVKK m.9):** Sunucular Almanya’da (Render, Supabase / AWS Frankfurt); fotoğraf denetimi Fransa’da (Sightengine); yapay zeka, giriş ve bildirim hizmetleri ABD’de (Google, Apple). Her sağlayıcıyla Kurul’un yayımladığı **standart sözleşme** imzalanmalı ve imzadan sonra **5 iş günü içinde** Kurul’a (standartsozlesme.kvkk.gov.tr) bildirilmelidir. Sözleşme metni değiştirilemez.
+- **VERBİS:** Kayıt yükümlülüğü çalışan sayısı ve ciroya göre değişir; muhasebeci / hukukçuyla kontrol et.
+- **Veri sorumlusu bilgileri:** Yönetim paneli → Ayarlar → Yasal bilgiler’e şirket unvanı, adres ve başvuru e-postasını gir; metinlerde otomatik görünür.
+- **Ticari ileti onayı:** Kampanya bildirimleri yalnızca izin verenlere gider (yönetim → Bildirim gönder → “Kampanya / tanıtım bildirimi”). E-posta / SMS ile kampanya gönderilecekse İYS kaydı gerekir.
 
 ## 5. Sürüm güncelleme
 

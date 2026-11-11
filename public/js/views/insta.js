@@ -5,7 +5,7 @@ import {
 } from '../core.js';
 import { storyThumb, newHighlight } from '../insta.js';
 
-const head = (t, right = '<span class="ib"></span>') => `<header class="topbar bordered"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/settings')" aria-label="Geri">${icon('back')}</button><div class="center">${t}</div>${right}</header>`;
+const head = (t, right = '<span class="ib"></span>') => `<header class="topbar bordered"><button class="ib" data-back="#/settings" aria-label="Geri">${icon('back')}</button><div class="center">${t}</div>${right}</header>`;
 const fmtWhen = (t) => new Date(t).toLocaleString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long', hour: '2-digit', minute: '2-digit' });
 
 // ================= Yakın arkadaşlar =================

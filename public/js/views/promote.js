@@ -32,7 +32,7 @@ export default async function promote(view, postId) {
 }
 
 async function create(view, postId) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/reklam')" aria-label="Geri">${icon('back')}</button><div class="center">Öne çıkar</div><span class="ib"></span></header><div class="pro"><div class="spinner"></div></div>`;
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/reklam" aria-label="Geri">${icon('back')}</button><div class="center">Öne çıkar</div><span class="ib"></span></header><div class="pro"><div class="spinner"></div></div>`;
   const box = view.querySelector('.pro');
   let post; let c;
   try { [post, c] = await Promise.all([api(`/posts/${postId}`), api('/promos/config')]); } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return null; }

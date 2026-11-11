@@ -8,7 +8,7 @@ const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${M
 const stars = (n, mine) => [1, 2, 3, 4, 5].map((i) => `<button class="kr-st ${mine && i <= mine ? 'on' : ''}" data-s="${i}" aria-label="${i} yıldız">★</button>`).join('');
 
 export default async function karaoke(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button><div class="center">Karaoke odası</div><a class="ib soft" href="#/sarki" aria-label="Şarkı yarışması">${egi('odul', 30)}</a></header>
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/" aria-label="Geri">${icon('back')}</button><div class="center">Karaoke odası</div><a class="ib soft" href="#/sarki" aria-label="Şarkı yarışması">${egi('odul', 30)}</a></header>
     <div class="kr"><div class="spinner"></div></div>`;
   const box = view.querySelector('.kr');
   let d; let timer = null;

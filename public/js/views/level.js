@@ -4,7 +4,7 @@ import { api, esc, num, avatar, nm, state } from '../core.js';
 import { egi } from '../eg-icons.js';
 
 export default async function level(view) {
-  view.innerHTML = `<header class="topbar bordered"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button><div class="center">Seviyen</div><span class="ib"></span></header><div class="lv-page"><div class="spinner"></div></div>`;
+  view.innerHTML = `<header class="topbar bordered"><button class="ib" data-back="#/me" aria-label="Geri">${icon('back')}</button><div class="center">Seviyen</div><span class="ib"></span></header><div class="lv-page"><div class="spinner"></div></div>`;
   const box = view.querySelector('.lv-page');
   let d; let top = [];
   try { [d, top] = await Promise.all([api('/level'), api('/level/top').catch(() => [])]); } catch (e) { box.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return null; }

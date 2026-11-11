@@ -207,8 +207,14 @@ export function openFilters(onSave) {
         sh.querySelector('.dv').textContent = +f.km.value > 500 ? 'Sınırsız' : `${f.km.value} km`;
       };
       f.oninput = sync;
+      let consentLocation = false;
       sh.querySelector('.gl').onclick = () => {
         if (!navigator.geolocation) return toast('Bu cihaz konum paylaşmayı desteklemiyor.');
+        // Konum isteğe bağlıdır: açık rıza bir kez, ayrı olarak sorulur (Ayarlar → İzinlerim'den geri alınabilir)
+        if (!state.me?.consents?.location?.on && !consentLocation) {
+          if (!confirm('Yakınındaki kişileri gösterebilmemiz için yaklaşık konumunun (1 km hassasiyet) işlenmesine açık rıza veriyor musun? İstediğin zaman Ayarlar → İzinlerim’den geri alabilirsin.')) return;
+          consentLocation = true;
+        }
         navigator.geolocation.getCurrentPosition((pos) => {
           location = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           sh.querySelector('.loc').firstChild.textContent = 'Konum alındı, kaydetmeyi unutma. ';
@@ -218,7 +224,7 @@ export function openFilters(onSave) {
         e.preventDefault();
         let a = +f.a1.value; let b = +f.a2.value; if (a > b) [a, b] = [b, a];
         try {
-          const u = await api('/me', { method: 'PATCH', body: { lookingFor: f.lf.value, prefs: { ageMin: a, ageMax: b, maxKm: +f.km.value > 500 ? null : +f.km.value, verifiedOnly: f.vo.checked }, ...(location ? { location } : {}) } });
+          const u = await api('/me', { method: 'PATCH', body: { lookingFor: f.lf.value, prefs: { ageMin: a, ageMax: b, maxKm: +f.km.value > 500 ? null : +f.km.value, verifiedOnly: f.vo.checked }, ...(location ? { location, ...(consentLocation ? { consentLocation: true } : {}) } : {}) } });
           Object.assign(state.me, u); close(); onSave?.();
         } catch (er) { toast(er.message); }
       };

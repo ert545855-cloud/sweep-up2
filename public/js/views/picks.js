@@ -11,7 +11,7 @@ const left = (t) => {
 };
 
 export default async function picks(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/swipe')" aria-label="Geri">${icon('back')}</button><div class="center">Günlük seçki</div><a class="ib soft" href="#/swipe" aria-label="Kaydır">${icon('flame')}</a></header>
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/swipe" aria-label="Geri">${icon('back')}</button><div class="center">Günlük seçki</div><a class="ib soft" href="#/swipe" aria-label="Kaydır">${icon('flame')}</a></header>
     <div class="pk"><div class="spinner"></div></div>`;
   const box = view.querySelector('.pk');
   let d;

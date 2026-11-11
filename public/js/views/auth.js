@@ -2,6 +2,63 @@ import { api, setSession, esc, logo, state, toast } from '../core.js';
 import { icon } from '../icons.js';
 import { legalSheet } from './legal.js';
 import { pendingRef } from '../extras.js';
+import { googleButton, appleCredential, oauthCfg } from '../oauth.js';
+
+// Kayıtta onay ve bilgilendirme (KVKK): koşullar kabul edilir; aydınlatma metni yalnızca bilgilendirir (onay istenmez);
+// zorunlu olmayan işlemeler ayrı, önceden işaretlenmemiş kutularla sorulur.
+const consentHtml = () => `<label class="consent"><input type="checkbox" name="accept"><span><a class="link" data-doc="kosullar">Kullanım Koşulları</a>’nı okudum ve kabul ediyorum.</span></label>
+  <p class="muted consent-info">Kişisel verilerinin nasıl işlendiğini <a class="link" data-doc="kvkk">KVKK Aydınlatma Metni</a>’nde ve <a class="link" data-doc="gizlilik">Gizlilik Politikası</a>’nda bulabilirsin.</p>
+  <fieldset class="opt-cons"><legend>İsteğe bağlı izinler · <a class="link" data-doc="riza">açık rıza metni</a></legend>
+    <label class="consent"><input type="checkbox" name="c_marketing"><span>Kampanya, etkinlik ve yeniliklerle ilgili bildirim ve e-posta almak istiyorum.</span></label>
+    <label class="consent"><input type="checkbox" name="c_location"><span>Yakınımdaki kişileri gösterebilmek için yaklaşık konumumun işlenmesine açık rıza veriyorum.</span></label>
+    <p class="muted">Bunları vermesen de SwipeUp’ı kullanabilirsin; istediğin zaman Ayarlar → İzinlerim’den değiştirebilirsin.</p></fieldset>`;
+const readConsents = (f) => ({ marketing: !!f.c_marketing?.checked, location: !!f.c_location?.checked });
+const wireDocs = (root) => root.querySelectorAll('[data-doc]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); legalSheet(a.dataset.doc); }; });
+const goHome = (created) => { if (location.search) history.replaceState(null, '', '/' + (created ? '#/edit' : '#/')); location.hash = created ? '#/edit' : '#/'; location.reload(); };
+
+// Google / Apple ile giriş: hesap varsa açılır; yoksa kısa bir formla (doğum tarihi, koşullar, izinler) yeni hesap açılır
+async function oauthSignIn(view, provider, credential, err) {
+  err.textContent = '';
+  try {
+    const r = await api('/auth/oauth', { body: { provider, credential, ref: pendingRef() } });
+    if (r.needSignup) return oauthSignup(view, provider, credential, r);
+    setSession(r.token, r.user);
+    goHome(false);
+  } catch (er) { err.textContent = er.message; }
+}
+function oauthSignup(view, provider, credential, info) {
+  const P = provider === 'apple' ? 'Apple' : 'Google';
+  view.innerHTML = `<section class="auth">
+    <div class="wordmark">${logo()}</div>
+    <h2 class="acc-add-h">${P} ile hesap aç</h2>
+    <p class="tagline">${info.email ? `${esc(info.email)} · ` : ''}son birkaç bilgi</p>
+    <form novalidate>
+      <label class="ic-field">${icon('person')}<input class="field" name="name" placeholder="Adın" autocomplete="name" maxlength="40" value="${esc(info.name || '')}"></label>
+      <label class="ic-field">${icon('at')}<input class="field" name="username" placeholder="Kullanıcı adı" autocapitalize="none" spellcheck="false" maxlength="24" value="${esc(info.username || '')}"></label>
+      <label class="bd-field"><span>Doğum tarihin</span><input class="field" name="birthdate" type="date" max="${maxBirth()}" min="1920-01-01" required></label>
+      <p class="muted" style="font-size:12.5px;margin:-4px 4px 0">SwipeUp 18 yaş ve üzeri içindir. Doğum tarihin profilinde gösterilmez, sadece yaşın görünür.</p>
+      ${consentHtml()}
+      <button class="btn primary block" style="margin-top:6px">Hesap oluştur</button>
+      <div class="err" role="alert"></div>
+    </form>
+    <div class="switch"><a class="link" href="#/login">Vazgeç</a></div>
+  </section>`;
+  const f = view.querySelector('form'); const err = f.querySelector('.err');
+  wireDocs(f);
+  f.username.addEventListener('input', () => { f.username.value = f.username.value.toLowerCase().replace(/\s/g, ''); });
+  f.onsubmit = async (e) => {
+    e.preventDefault(); err.textContent = '';
+    const btn = f.querySelector('button'); btn.disabled = true;
+    try {
+      if (!f.birthdate.value) throw new Error('Doğum tarihini gir.');
+      if (!f.accept.checked) throw new Error('Devam etmek için Kullanım Koşulları’nı kabul etmelisin.');
+      const r = await api('/auth/oauth', { body: { provider, credential, birthdate: f.birthdate.value, accept: true, name: f.name.value, username: f.username.value, consents: readConsents(f), ref: pendingRef() } });
+      setSession(r.token, r.user);
+      try { localStorage.removeItem('su_ref'); } catch { /* yok */ }
+      if (r.recoveryCode) codeScreen(view, r.recoveryCode, () => goHome(true)); else goHome(true);
+    } catch (er) { err.textContent = er.message; btn.disabled = false; if (/süresi dolmuş|geçersiz/i.test(er.message)) setTimeout(() => { location.hash = '#/login'; }, 1600); }
+  };
+}
 
 // En geç bugünden 18 yıl önce doğmuş olmalı
 export const maxBirth = () => { const d = new Date(); d.setFullYear(d.getFullYear() - 18); return d.toISOString().slice(0, 10); };
@@ -67,10 +124,11 @@ export default function auth(view, mode) {
       ${reg ? `<label class="ic-field">${icon('gift')}<input class="field" name="ref" placeholder="Davet kodu (varsa)" value="${esc(pendingRef())}" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="6"></label>` : ''}
       ${reg ? `<label class="bd-field"><span>Doğum tarihin</span><input class="field" name="birthdate" type="date" max="${maxBirth()}" min="1920-01-01" required></label>
       <p class="muted" style="font-size:12.5px;margin:-4px 4px 0">SwipeUp 18 yaş ve üzeri içindir. Doğum tarihin profilinde gösterilmez, sadece yaşın görünür.</p>
-      <label class="consent"><input type="checkbox" name="accept"><span><a class="link" data-doc="kosullar">Kullanım Koşulları</a>’nı ve <a class="link" data-doc="gizlilik">Gizlilik Politikası</a>’nı okudum, kabul ediyorum. <a class="link" data-doc="kvkk">KVKK aydınlatma metni</a>ni okudum.</span></label>` : ''}
+      ${consentHtml()}` : ''}
       <button class="btn primary block" style="margin-top:6px">${reg ? 'Hesap oluştur' : 'Giriş yap'}</button>
       <div class="err" role="alert"></div>
     </form>
+    ${oauthCfg().google || oauthCfg().apple ? `<div class="oauth"><div class="or"><span>ya da</span></div>${oauthCfg().google ? '<div class="g-btn"></div>' : ''}${oauthCfg().apple ? '<button type="button" class="btn block ap-btn">Apple ile devam et</button>' : ''}</div>` : ''}
     ${reg ? '' : '<div class="forgot"><a class="muted" href="#/forgot">Şifreni mi unuttun?</a></div>'}
     ${reg ? '' : `<a class="ins-cta" href="#/install"><img src="/icons/icon-192.png" alt=""><span><b>Uygulamayı telefona yükle</b><small>iPhone ve Android · ücretsiz</small></span>${icon('download')}</a>`}
     ${reg ? '' : `<div class="legal-links"><a href="#/legal/gizlilik">Gizlilik</a> · <a href="#/legal/kosullar">Koşullar</a> · <a href="#/legal/kvkk">KVKK</a></div>`}
@@ -85,8 +143,8 @@ export default function auth(view, mode) {
     btn.disabled = true; err.textContent = '';
     try {
       if (reg && !f.birthdate.value) throw new Error('Doğum tarihini gir.');
-      if (reg && !f.accept.checked) throw new Error('Devam etmek için koşulları kabul etmelisin.');
-      const body = { username: f.username.value, password: f.password.value, ...(reg ? { name: f.name.value, email: f.email.value, birthdate: f.birthdate.value, accept: f.accept.checked, ref: (f.ref?.value || pendingRef()).trim().toUpperCase() } : {}) };
+      if (reg && !f.accept.checked) throw new Error('Devam etmek için Kullanım Koşulları’nı kabul etmelisin.');
+      const body = { username: f.username.value, password: f.password.value, ...(reg ? { name: f.name.value, email: f.email.value, birthdate: f.birthdate.value, accept: f.accept.checked, consents: readConsents(f), ref: (f.ref?.value || pendingRef()).trim().toUpperCase() } : {}) };
       const r = await api(reg ? '/auth/register' : '/auth/login', { body });
       setSession(r.token, r.user);
       if (reg) { try { localStorage.removeItem('su_ref'); } catch {} }
@@ -98,7 +156,10 @@ export default function auth(view, mode) {
     }
   };
   view.querySelector('.acc-cancel')?.addEventListener('click', () => { try { sessionStorage.removeItem('su_add'); } catch { /* yok */ } });
-  f.querySelectorAll('[data-doc]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); legalSheet(a.dataset.doc); }; });
+  wireDocs(f);
+  const gb = view.querySelector('.g-btn');
+  if (gb) googleButton(gb, (c) => oauthSignIn(view, 'google', c, err), reg ? 'signup_with' : 'continue_with').catch((er) => { gb.textContent = er.message; gb.classList.add('muted'); });
+  view.querySelector('.ap-btn')?.addEventListener('click', async () => { try { const c = await appleCredential(); if (c) oauthSignIn(view, 'apple', c, err); } catch (er) { if (er?.error !== 'popup_closed_by_user') err.textContent = er.message || 'Apple ile giriş tamamlanmadı.'; } });
   f.username.addEventListener('input', () => { if (reg) f.username.value = f.username.value.toLowerCase().replace(/\s/g, ''); });
   return null;
 }

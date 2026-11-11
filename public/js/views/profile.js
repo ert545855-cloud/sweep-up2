@@ -172,7 +172,7 @@ export default async function profile(view, username) {
   const meta = [self && u.ageHidden && u.age ? `${u.age} · gizli` : u.age, u.city, !self && u.distanceKm ? `${u.distanceKm} km` : null].filter(Boolean);
 
   view.innerHTML = `<header class="topbar">
-      ${self ? `<a class="ib soft" href="#/create" aria-label="Oluştur">${icon('plus')}</a>` : `<button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button>`}
+      ${self ? `<a class="ib soft" href="#/create" aria-label="Oluştur">${icon('plus')}</a>` : `<button class="ib" data-back="#/" aria-label="Geri">${icon('back')}</button>`}
       ${self ? `<button class="center ig-un acc-sw" aria-label="Hesap değiştir">${u.privacy?.private ? `${icon('lock', '', 'style="width:15px;height:15px;vertical-align:-2px"')} ` : ''}${esc(u.username)}${icon('chevDown', 'acc-cv')}</button>` : `<div class="center ig-un">${u.privacy?.private ? `${icon('lock', '', 'style="width:15px;height:15px;vertical-align:-2px"')} ` : ''}${esc(u.username)}</div>`}
       ${self ? `<a class="ib soft" href="#/settings" aria-label="Ayarlar">${icon('menu')}</a>` : `<button class="ib soft menu-btn" aria-label="Seçenekler">${icon('more')}</button>`}
     </header>

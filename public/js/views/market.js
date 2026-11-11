@@ -11,7 +11,7 @@ const price = (n) => `${Number(n || 0).toLocaleString('tr-TR', { maximumFraction
 const catOf = (id) => META?.categories.find((c) => c.id === id);
 const condOf = (id) => META?.conditions.find((c) => c.id === id)?.name || '';
 const stars = (r) => (r == null ? '' : `<span class="mk-stars" aria-label="${r} yıldız">${'★'.repeat(Math.round(r))}${'☆'.repeat(5 - Math.round(r))}</span>`);
-const back = (fallback = '#/market') => `<button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '${fallback}')" aria-label="Geri">${icon('back')}</button>`;
+const back = (fallback = '#/market') => `<button class="ib" data-back="${fallback}" aria-label="Geri">${icon('back')}</button>`;
 const STATUS_TONE = {
   odeme_bekliyor: 'warn', odeme_kontrol: 'warn', odendi: 'info', kargoda: 'info', bulusma: 'info', teslim_onay: 'warn',
   sorunlu: 'bad', iade_bekliyor: 'bad', iade_edildi: 'mute', tamamlandi: 'ok', iptal: 'mute',

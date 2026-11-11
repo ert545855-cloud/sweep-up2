@@ -146,7 +146,8 @@ function showBirthGate() {
     <h2 style="text-align:center;margin:16px 0 6px;font-size:24px">Doğum tarihin</h2>
     <p class="tagline" style="margin-bottom:16px">SwipeUp 18 yaş ve üzeri içindir. Devam etmek için doğum tarihini gir. Profilinde sadece yaşın görünür.</p>
     <form style="display:grid;gap:12px"><input class="field" type="date" name="d" required min="1920-01-01" max="${max.toISOString().slice(0, 10)}">
-      <label class="consent"><input type="checkbox" name="a"><span><a class="link" href="#/legal/kosullar">Kullanım Koşulları</a>’nı ve <a class="link" href="#/legal/gizlilik">Gizlilik Politikası</a>’nı kabul ediyorum.</span></label>
+      <label class="consent"><input type="checkbox" name="a"><span><a class="link" href="#/legal/kosullar">Kullanım Koşulları</a>’nı okudum ve kabul ediyorum.</span></label>
+      <p class="muted consent-info">Kişisel verilerinin nasıl işlendiğini <a class="link" href="#/legal/kvkk">KVKK Aydınlatma Metni</a>’nde ve <a class="link" href="#/legal/gizlilik">Gizlilik Politikası</a>’nda bulabilirsin.</p>
       <button class="btn primary block">Devam et</button><div class="err" role="alert"></div></form></section>`;
   const f = view.querySelector('form');
   f.onsubmit = async (e) => {
@@ -344,6 +345,12 @@ async function boot() {
   setTimeout(maybeShowInstall, state.token ? 4000 : 1500);
   // Beklenmeyen modül hataları (eski sürüm kalıntısı) → güncelleme ekranı
   window.addEventListener('unhandledrejection', (e) => { recover(e.reason); });
+  // Geri düğmeleri (data-back="#/yedek"): sayfa içi betik kullanılmaz, tıklama burada yakalanır
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-back]'); if (!b) return;
+    e.preventDefault();
+    if (history.length > 1) history.back(); else location.hash = b.dataset.back || '#/';
+  });
   initNav(); // router'dan önce: geçmiş sırası güncel olsun
   window.addEventListener('hashchange', router);
   router();

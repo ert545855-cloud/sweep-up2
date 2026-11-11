@@ -1,7 +1,7 @@
 import { icon } from '../icons.js';
 import { api, esc, toast, state, needCoins, emit } from '../core.js';
 
-const back = `<button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button>`;
+const back = `<button class="ib" data-back="#/me" aria-label="Geri">${icon('back')}</button>`;
 
 export default async function look(view) {
   view.innerHTML = `<header class="topbar">${back}<div class="center">Çerçeve ve rozet</div><a class="ib soft" href="#/store" aria-label="Jeton al">${icon('coin')}</a></header><div class="look"><div class="spinner"></div></div>`;

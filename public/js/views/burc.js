@@ -6,7 +6,7 @@ import { shareCard } from '../engage.js';
 import { egi, zodiacIcon } from '../eg-icons.js';
 
 export default async function burc(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/fal')" aria-label="Geri">${icon('back')}</button><div class="center">Burç yorumun</div><a class="ib soft" href="#/fal" aria-label="Fal">${egi('fal-burc', 30)}</a></header>
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/fal" aria-label="Geri">${icon('back')}</button><div class="center">Burç yorumun</div><a class="ib soft" href="#/fal" aria-label="Fal">${egi('fal-burc', 30)}</a></header>
     <div class="bc"><div class="spinner"></div></div>`;
   const box = view.querySelector('.bc');
   let d; let z = null; let tab = /[?&]h=1/.test(location.hash) ? 'week' : 'day'; let w = null;

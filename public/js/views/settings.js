@@ -1,4 +1,5 @@
 import { accounts, accountSheet } from '../accounts.js';
+import { googleButton, appleCredential, oauthCfg } from '../oauth.js';
 import { icon } from '../icons.js';
 import {
   state, api, esc, toast, sheet, logout, avatar, refreshBadges, logoMenu, adoptToken,
@@ -20,7 +21,7 @@ import { LANGS, getLang, setLang } from '../i18n.js';
 
 export default function settings(view) {
   const me = state.me;
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button><div class="center">Ayarlar</div><span class="ib"></span></header>
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/me" aria-label="Geri">${icon('back')}</button><div class="center">Ayarlar</div><span class="ib"></span></header>
     <div class="group-t">Profil</div>
     <div class="group">
       ${state.config?.features?.market ? `<a class="it" href="#/market">${icon('bag')}<span class="grow">SwipeUp Store<div class="sub">İkinci el al-sat, siparişlerin ve satış bakiyen</div></span></a>` : ''}
@@ -60,7 +61,9 @@ export default function settings(view) {
     <div class="group">
       <button class="it acs">${icon('users')}<span class="grow">Hesaplar<div class="sub">${accounts().length > 1 ? `Bu cihazda ${accounts().length} hesap kayıtlı · geçiş yap ya da ekle` : 'Başka hesap ekle, şifresiz geçiş yap'}</div></span></button>
       <button class="it em">${icon('mail')}<span class="grow">E-posta<div class="sub">${esc(me.email || 'Eklenmedi — şifre sıfırlama için ekle')}</div></span></button>
-      <button class="it pw">${icon('lock')}<span class="grow">Şifreyi değiştir</span></button>
+      <button class="it pw">${icon('lock')}<span class="grow">${me.noPass ? 'Şifre belirle<div class="sub">Google / Apple yanında şifreyle de girebilmek için</div>' : 'Şifreyi değiştir'}</span></button>
+      ${oauthCfg().google || oauthCfg().apple ? `<button class="it lgm">${icon('key')}<span class="grow">Giriş yöntemleri<div class="sub">${[!me.noPass && 'Şifre', me.logins?.google && 'Google', me.logins?.apple && 'Apple'].filter(Boolean).join(' · ') || '—'}</div></span></button>` : ''}
+      <button class="it cns">${icon('check')}<span class="grow">İzinlerim (açık rıza)<div class="sub">Kampanya bildirimleri, konum, yapay zeka fal desteği</div></span></button>
       <button class="it rc">${icon('key')}<span class="grow">Yeni kurtarma kodu oluştur<div class="sub">Eski kod geçersiz olur</div></span></button>
       <button class="it lox">${icon('logout')}<span class="grow">Diğer cihazlardan çık<div class="sub">Bu telefon dışındaki bütün oturumların kapanır</div></span></button>
     </div>
@@ -113,14 +116,14 @@ export default function settings(view) {
   view.querySelector('.del')?.addEventListener('click', () => sheet('Hesabını sil', `<form class="form"><p style="margin:0">Hesabın, gönderilerin, hikayelerin, eşleşmelerin ve mesajların <b>kalıcı olarak</b> silinir. Bu işlem geri alınamaz.</p>
       <p class="muted" style="margin:0;font-size:13px">İstersen önce “Verilerimi indir” ile bir kopyasını al. Kalan jetonların ve SwipeUp+ üyeliğin de silinir.</p>
       <textarea class="field" name="r" rows="2" maxlength="300" placeholder="Neden ayrılıyorsun? (isteğe bağlı)"></textarea>
-      <input class="field" name="p" type="password" placeholder="Onaylamak için şifren" autocomplete="current-password">
+      ${me.noPass ? `<input class="field" name="p" placeholder="Onaylamak için kullanıcı adını yaz: ${esc(me.username)}" autocapitalize="none">` : '<input class="field" name="p" type="password" placeholder="Onaylamak için şifren" autocomplete="current-password">'}
       <button class="btn hot block">Hesabımı kalıcı olarak sil</button></form>`, {
     onMount(sh, close) {
       const f = sh.querySelector('form');
       f.onsubmit = async (e) => {
         e.preventDefault();
         if (!confirm('Son kez soruyoruz: hesabın kalıcı olarak silinsin mi?')) return;
-        try { await api('/me', { method: 'DELETE', body: { password: f.p.value, reason: f.r.value } }); close(); toast('Hesabın silindi. Hoşça kal 👋'); setTimeout(logout, 1200); } catch (er) { toast(er.message); }
+        try { await api('/me', { method: 'DELETE', body: { password: f.p.value, confirm: f.p.value, reason: f.r.value } }); close(); toast('Hesabın silindi. Hoşça kal 👋'); setTimeout(logout, 1200); } catch (er) { toast(er.message); }
       };
     },
   }));
@@ -146,12 +149,43 @@ export default function settings(view) {
       f.onsubmit = async (e) => { e.preventDefault(); try { Object.assign(state.me, await api('/me', { method: 'PATCH', body: { email: f.e.value } })); close(); toast('E-posta kaydedildi.'); settings(view); } catch (er) { toast(er.message); } };
     },
   });
-  view.querySelector('.pw').onclick = () => sheet('Şifreyi değiştir', `<form class="form"><input class="field" name="c" type="password" placeholder="Mevcut şifre" autocomplete="current-password">
+  view.querySelector('.pw').onclick = () => sheet(me.noPass ? 'Şifre belirle' : 'Şifreyi değiştir', `<form class="form">${me.noPass ? '<input type="hidden" name="c" value="">' : '<input class="field" name="c" type="password" placeholder="Mevcut şifre" autocomplete="current-password">'}
       <input class="field" name="n" type="password" placeholder="Yeni şifre (en az 6 karakter)" autocomplete="new-password"><button class="btn primary block">Değiştir</button></form>`, {
     onMount(sh, close) {
       const f = sh.querySelector('form');
-      f.onsubmit = async (e) => { e.preventDefault(); try { const r = await api('/me/password', { body: { current: f.c.value, password: f.n.value } }); adoptToken(r.token); close(); toast('Şifren değişti. Diğer cihazlardaki oturumların kapandı.'); } catch (er) { toast(er.message); } };
+      f.onsubmit = async (e) => { e.preventDefault(); try { const r = await api('/me/password', { body: { current: f.c.value, password: f.n.value } }); adoptToken(r.token); state.me.noPass = false; close(); toast('Şifren değişti. Diğer cihazlardaki oturumların kapandı.'); } catch (er) { toast(er.message); } };
     },
+  });
+  // İzinlerim: isteğe bağlı açık rızalar, istediğin an verilir ya da geri alınır (kayıt altına alınır)
+  view.querySelector('.cns').onclick = async () => {
+    const r = await api('/me/consents').catch((er) => { toast(er.message); return null; }); if (!r) return;
+    sheet('İzinlerim', `<div class="cns-list">${r.items.map((c) => `<label class="it"><span class="grow">${esc(c.text)}<div class="sub">${c.on ? `Açık rıza verildi · ${new Date(c.at).toLocaleDateString('tr-TR')}` : 'Verilmedi'}</div></span><input type="checkbox" class="sw" data-k="${esc(c.kind)}" ${c.on ? 'checked' : ''}></label>`).join('')}</div>
+      <p class="muted" style="margin:10px 16px 16px;font-size:13px">Bu izinler isteğe bağlıdır; vermesen de uygulamayı kullanabilirsin. Konum iznini geri alırsan kayıtlı konumun silinir. Ayrıntılar <a class="link" href="#/legal/riza">açık rıza metni</a>nde.</p>`, {
+      onMount(sh) {
+        sh.querySelectorAll('.sw').forEach((x) => { x.onchange = async () => {
+          try { const u = await api('/me/consents', { method: 'PUT', body: { [x.dataset.k]: x.checked } }); Object.assign(state.me, u); toast(x.checked ? 'İzin verildi.' : 'İzin geri alındı.'); x.closest('.it').querySelector('.sub').textContent = x.checked ? `Açık rıza verildi · ${new Date().toLocaleDateString('tr-TR')}` : 'Verilmedi'; } catch (er) { x.checked = !x.checked; toast(er.message); }
+        }; });
+      },
+    });
+  };
+  // Giriş yöntemleri: Google / Apple bağla, kaldır
+  view.querySelector('.lgm')?.addEventListener('click', async () => {
+    const r = await api('/me/logins').catch((er) => { toast(er.message); return null; }); if (!r) return;
+    sheet('Giriş yöntemleri', `<div class="form" style="gap:12px">
+      <div class="lg-row"><b>Şifre</b><span>${r.password ? 'Açık' : 'Yok · Ayarlar → Şifre belirle'}</span></div>
+      ${r.oauth?.google ? `<div class="lg-row"><b>Google</b>${r.google ? '<button type="button" class="btn sm ug">Bağlantıyı kaldır</button>' : '<div class="g-link"></div>'}</div>` : ''}
+      ${r.oauth?.apple ? `<div class="lg-row"><b>Apple</b>${r.apple ? '<button type="button" class="btn sm ua">Bağlantıyı kaldır</button>' : '<button type="button" class="btn sm la">Apple hesabını bağla</button>'}</div>` : ''}
+      <p class="muted" style="margin:0;font-size:13px">Bağladığın Google / Apple hesabıyla şifresiz girersin. Hesabına girebileceğin en az bir yol açık kalmalı.</p></div>`, {
+      onMount(sh, close) {
+        const done = async (msg) => { Object.assign(state.me, await api('/me')); close(); toast(msg); settings(view); };
+        const link = async (provider, credential) => { try { await api('/me/logins', { body: { provider, credential } }); done(`${provider === 'google' ? 'Google' : 'Apple'} hesabın bağlandı.`); } catch (er) { toast(er.message); } };
+        const gl = sh.querySelector('.g-link'); if (gl) googleButton(gl, (c) => link('google', c), 'continue_with').catch((er) => toast(er.message));
+        sh.querySelector('.la')?.addEventListener('click', async () => { try { const c = await appleCredential(); if (c) link('apple', c); } catch (er) { toast(er.message || 'Apple bağlanamadı.'); } });
+        const unlink = async (p) => { if (!confirm('Bağlantı kaldırılsın mı?')) return; try { await api(`/me/logins/${p}`, { method: 'DELETE' }); done('Bağlantı kaldırıldı.'); } catch (er) { toast(er.message); } };
+        sh.querySelector('.ug')?.addEventListener('click', () => unlink('google'));
+        sh.querySelector('.ua')?.addEventListener('click', () => unlink('apple'));
+      },
+    });
   });
   view.querySelector('.lox').onclick = async () => {
     if (!confirm('Bu cihaz dışındaki bütün oturumların kapatılsın mı? Diğer telefon ve tarayıcılarda yeniden giriş yapman gerekir.')) return;

@@ -198,7 +198,8 @@ Akış paylaşımı kuralları (bu metin tek bir kişiye değil, akışta herkes
     }
     busy = false;
   }
-  ctx.onFalRequest = (msg) => { if (mode() === 'off' || !msg?.fal) return; queue.push(msg.id); run().catch(() => { busy = false; }); };
+  // Yapay zeka (yurt dışı) yalnızca kullanıcı açık rıza verdiyse çalışır; vermediyse falı Falcı Teyze kendisi yorumlar
+  ctx.onFalRequest = (msg) => { if (mode() === 'off' || !msg?.fal || !store.get('users', msg.from)?.consents?.ai?.on) return; queue.push(msg.id); run().catch(() => { busy = false; }); };
   ctx.falAiMode = mode;
   ctx.falDraft = (msgId) => { const d = draftOf(msgId); return d ? { status: d.status, text: d.text || '', model: d.model || null, error: d.error || null, auto: !!d.auto, edited: d.edited ?? null, dueAt: d.dueAt || null } : null; };
   ctx.falHolds = (chatId) => store.filter('fal_hold', (h) => h.chatId === chatId).sort((a, b) => a.dueAt - b.dueAt).map(holdOut);

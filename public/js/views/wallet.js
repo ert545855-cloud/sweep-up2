@@ -9,7 +9,7 @@ const why = (t) => (t.reason === 'gift' && t.chat ? 'Sohbet hediyesi' : REASON[t
 const PST = { pending: 'Bekliyor', paid: 'Ödendi', rejected: 'Reddedildi' };
 
 export default async function wallet(view) {
-  view.innerHTML = `<header class="topbar"><button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/me')" aria-label="Geri">${icon('back')}</button><div class="center">Kazançlarım</div><a class="ib soft" href="#/store" aria-label="Mağaza">${icon('coin')}</a></header>
+  view.innerHTML = `<header class="topbar"><button class="ib" data-back="#/me" aria-label="Geri">${icon('back')}</button><div class="center">Kazançlarım</div><a class="ib soft" href="#/store" aria-label="Mağaza">${icon('coin')}</a></header>
     <div class="shop"><div class="spinner"></div></div>`;
   const box = view.querySelector('.shop');
   const load = async () => {
