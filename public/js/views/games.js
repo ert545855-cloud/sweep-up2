@@ -12,7 +12,7 @@ const GAMES = [
   { k: 'renk', cat: 'masa', name: 'Renk Eşle', sub: 'Rengi ya da sayıyı eşle, +2 ve +4’lerle rakibini zorla.', who: '2–6 kişi', time: '5–10 dk' },
   { k: 'kizma', cat: 'masa', name: 'Kızma Birader', sub: 'Zar at, 6 ile çık, rakibi eve gönder, kızma!', who: '2–4 kişi', time: '10–15 dk' },
   { k: 'kupa', cat: 'parti', legacy: true, api: '/kupa', icon: 'odul', wide: true, tag: '3D', name: 'Parti Kupası', sub: 'Üç turlu 3D eleme: saklambaç, sumo, lav kulesi, dev top futbolu ve dahası. Odada istersen tek bir oyunu da seçebilirsin.', who: '1–8 kişi', time: '3–5 dk',
-    modes: [['sakla', 'Saklambaç'], ['sumo', 'Sumo'], ['futbol', 'Dev Top Futbolu'], ['lav', 'Lav Yükseliyor'], ['bomba', 'Bomba Elden Ele'], ['kuyruk', 'Kuyruk Kapmaca'], ['renk', 'Renk Zemini'], ['kosu', 'Engelli Koşu'], ['zemin', 'Zemin Çöküyor'], ['cubuk', 'Dönen Çubuk']] },
+    modes: [['sakla', 'Saklambaç'], ['doner', 'Döner Tabla'], ['sumo', 'Sumo'], ['futbol', 'Dev Top Futbolu'], ['lav', 'Lav Yükseliyor'], ['bomba', 'Bomba Elden Ele'], ['kuyruk', 'Kuyruk Kapmaca'], ['renk', 'Renk Zemini'], ['kosu', 'Engelli Koşu'], ['zemin', 'Zemin Çöküyor'], ['cubuk', 'Dönen Çubuk']] },
   { k: 'cizbil', cat: 'parti', legacy: true, name: 'Çiz Bil', sub: 'Biri çizer, diğerleri tahmin eder.', who: '2–8 kişi', time: '8–12 dk' },
   { k: 'casus', cat: 'parti', name: 'Kim Casus?', sub: 'Herkes kelimeyi biliyor, biri hariç. Casusu bul!', who: '3–10 kişi', time: '8–12 dk' },
   { k: 'isimsehir', cat: 'parti', name: 'İsim Şehir', sub: 'Harf gelir, kategorileri en hızlı sen doldur.', who: '2–8 kişi', time: '8–12 dk' },

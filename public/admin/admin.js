@@ -3,7 +3,7 @@ import { icon } from '/js/icons.js';
 
 const S = { token: localStorage.getItem('su_admin'), me: null, counts: {} };
 const can = (p) => S.me?.role === 'owner' || (S.me?.perms || []).includes(p);
-const SEC_PERM = { growth: 'growth', users: 'users', support: 'support', reports: 'reports', appeals: 'appeals', flags: 'flags', verify: 'verify', orders: 'orders', payouts: 'payouts', market: 'market', ledger: 'erp', erp: 'erp', promos: 'promos', quests: 'quests', songs: 'songs', contests: 'contests', fal: 'fal', content: 'content', media: 'content', announce: 'announce', notes: 'notes', audit: 'audit', database: 'database', maintenance: 'maintenance', settings: 'settings', tags: 'tags', engage: 'engage', karaoke: 'engage' };
+const SEC_PERM = { growth: 'growth', users: 'users', support: 'support', reports: 'reports', appeals: 'appeals', flags: 'flags', verify: 'verify', orders: 'orders', payouts: 'payouts', market: 'market', ledger: 'erp', erp: 'erp', promos: 'promos', quests: 'quests', songs: 'songs', contests: 'contests', fal: 'fal', content: 'content', media: 'content', announce: 'announce', notes: 'notes', audit: 'audit', database: 'database', maintenance: 'maintenance', settings: 'settings', tags: 'tags', engage: 'engage', karaoke: 'engage', photomod: 'reports' };
 const canSec = (k) => !SEC_PERM[k] || can(SEC_PERM[k]);
 const root = document.getElementById('root');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -45,6 +45,7 @@ const SECTIONS = [
   ['support', 'Destek', 'question', 'supportOpen'],
   ['tags', 'Etiketler', 'star'],
   ['reports', 'Şikayetler', 'flag', 'reportsOpen'],
+  ['photomod', 'Fotoğraf denetimi', 'image', 'photosOpen'],
   ['appeals', 'İtirazlar', 'reply', 'appealsOpen'],
   ['flags', 'Moderasyon', 'shield', 'flagsOpen'],
   ['verify', 'Doğrulama', 'verified', 'verifyOpen'],
@@ -113,7 +114,7 @@ function paintMaintBanner() {
 async function refreshCounts() {
   try {
     const o = await api('/overview');
-    const changed = ['songsPending', 'supportOpen', 'reportsOpen', 'appealsOpen', 'falPending', 'flagsOpen', 'verifyOpen', 'ordersPaid', 'payoutsOpen', 'marketOpen', 'maintenance'].some((k) => S.counts[k] !== o[k]);
+    const changed = ['songsPending', 'supportOpen', 'reportsOpen', 'photosOpen', 'appealsOpen', 'falPending', 'flagsOpen', 'verifyOpen', 'ordersPaid', 'payoutsOpen', 'marketOpen', 'maintenance'].some((k) => S.counts[k] !== o[k]);
     if (S.counts.users && (o.supportOpen || 0) > (S.counts.supportOpen || 0)) { toast('🎧 Yeni destek mesajı var.'); ding(); }
     S.counts = o;
     paintMaintBanner();
@@ -409,6 +410,25 @@ VIEWS.erp = async (main) => {
 };
 
 // ---- Şarkı yarışması ----
+// Fotoğraf denetimi: yapay zekanın sınırda bulduğu fotoğraflar ve engellenen yüklemeler
+VIEWS.photomod = async (main) => {
+  const d = await api('/photomod'); const pc = (n) => `%${Math.round((n || 0) * 100)}`;
+  const card = (f, open) => `<div class="pmc" data-id="${esc(f.id)}">
+      <div class="pmi">${f.url ? `<img src="${esc(f.url)}" alt="" loading="lazy">` : `<span class="pmx">${icon(f.verdict === 'block' ? 'block' : 'image')}<small>${f.verdict === 'block' ? 'Kaydedilmedi' : 'Silindi'}</small></span>`}</div>
+      <div class="pmb">${userCell(f.user)}
+        <div class="pmt"><span class="chip ${f.verdict === 'block' ? 'bad' : 'warn'}">${esc(f.label || '')} ${pc(f.score)}</span>${f.userBlocked > 1 ? `<span class="chip bad">${f.userBlocked} engellenen yükleme</span>` : ''}<span class="muted">${dt(f.at)}</span></div>
+        ${open ? `<div class="row" style="gap:6px"><button class="btn sm pm-ok">${icon('check')} Uygun</button><button class="btn sm danger pm-rm">${icon('trash')} Kaldır</button></div>` : `<small class="muted">${{ approved: 'Onaylandı', removed: 'Kaldırıldı', blocked: 'Yüklenirken engellendi' }[f.status] || ''}${f.by ? ` · ${esc(f.by)}` : ''}</small>`}</div></div>`;
+  main.innerHTML = `${head('Fotoğraf denetimi', 'Yüklenen her fotoğraf yapay zekayla taranır. Açık cinsel içerik hiç kaydedilmez; sınırda kalanlar yayına çıkar ve burada incelemeni bekler.')}
+    ${d.enabled ? `<div class="stats"><div class="stat"><b>${d.stats.checked}</b><span>Taranan (açılıştan beri)</span></div><div class="stat"><b>${d.stats.blocked}</b><span>Engellenen</span></div><div class="stat"><b>${d.stats.review}</b><span>İncelemeye düşen</span></div><div class="stat${d.stats.failed ? ' alert' : ''}"><b>${d.stats.failed}</b><span>Servis hatası</span></div></div>${d.stats.lastError ? `<p class="erp-hint" style="margin-top:12px">${icon('shield')} Son servis hatası: ${esc(d.stats.lastError)}. Hata olduğunda yüklemeler engellenmez.</p>` : ''}`
+    : `<div class="panel"><div class="pb"><b>Denetim kapalı.</b><p class="muted" style="margin:6px 0 0;max-width:70ch">Sightengine hesabı açıp Render'da <code>SIGHTENGINE_USER</code> ve <code>SIGHTENGINE_SECRET</code> ortam değişkenlerini tanımlayınca otomatik başlar. Ücretsiz planda ayda 2.000 tarama var.</p></div></div>`}
+    <div class="panel" style="margin-top:16px"><div class="ph"><h3>İnceleme bekleyenler · ${d.open.length}</h3></div><div class="pb">${d.open.length ? `<div class="pmg">${d.open.map((f) => card(f, true)).join('')}</div>` : '<div class="empty">İnceleme bekleyen fotoğraf yok.</div>'}</div></div>
+    <div class="panel" style="margin-top:16px"><div class="ph"><h3>Son kararlar</h3></div><div class="pb">${d.recent.length ? `<div class="pmg">${d.recent.map((f) => card(f, false)).join('')}</div>` : '<div class="empty">Henüz kayıt yok.</div>'}</div></div>`;
+  main.addEventListener('click', async (e) => {
+    const b = e.target.closest('.pm-ok, .pm-rm'); if (!b) return; const id = b.closest('.pmc').dataset.id; const rm = b.classList.contains('pm-rm');
+    if (rm && !confirm('Fotoğraf kalıcı olarak silinsin ve kullanıcıya bildirilsin mi?')) return;
+    try { await api(`/photomod/${id}`, { body: { action: rm ? 'remove' : 'approve' } }); toast(rm ? 'Fotoğraf kaldırıldı.' : 'Fotoğraf uygun bulundu.'); VIEWS.photomod(main); } catch (er) { toast(er.message); }
+  }, { once: true });
+};
 VIEWS.karaoke = async (main) => {
   const { default: karaoke } = await import('./karaoke.js');
   await karaoke(main, { api, esc, toast, head, d, icon, can, token: () => S.token });

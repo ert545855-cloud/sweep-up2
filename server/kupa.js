@@ -6,9 +6,9 @@ const { nanoid } = require('nanoid');
 const MAXP = 8; const TICK = 100; const INTRO_MS = 5500; const RESULT_MS = 4500; const WAIT_MS = 12000;
 // Her kupada üç tur çekilir: kalabalık tur → orta tur → final
 // Futbol yalnızca ikinci turda: ilk turdan 8 kişilik kupada 6, 16 kişilik kupada 8 kişi çıkar (3'e 3 ya da 4'e 4).
-const POOL = [['cubuk', 'kuyruk', 'renk', 'bomba', 'sakla', 'sakla'], ['zemin', 'sumo', 'lav', 'renk', 'bomba', 'kuyruk', 'sakla', 'futbol', 'futbol'], ['kosu', 'sumo', 'lav', 'zemin']];
-const TITLES = { cubuk: 'Dönen Çubuk', zemin: 'Zemin Çöküyor', kosu: 'Engelli Koşu', kuyruk: 'Kuyruk Kapmaca', sumo: 'Sumo', renk: 'Renk Zemini', lav: 'Lav Yükseliyor', futbol: 'Dev Top Futbolu', bomba: 'Bomba Elden Ele', sakla: 'Saklambaç' };
-const CAP = { cubuk: 75000, zemin: 60000, kosu: 100000, kuyruk: 45000, sumo: 90000, renk: 120000, lav: 85000, futbol: 75000, bomba: 150000, sakla: 60000 };
+const POOL = [['cubuk', 'kuyruk', 'renk', 'bomba', 'sakla', 'sakla', 'doner', 'doner'], ['zemin', 'sumo', 'lav', 'renk', 'bomba', 'kuyruk', 'sakla', 'futbol', 'futbol', 'doner'], ['kosu', 'sumo', 'lav', 'zemin', 'doner']];
+const TITLES = { cubuk: 'Dönen Çubuk', zemin: 'Zemin Çöküyor', kosu: 'Engelli Koşu', kuyruk: 'Kuyruk Kapmaca', sumo: 'Sumo', doner: 'Döner Tabla', renk: 'Renk Zemini', lav: 'Lav Yükseliyor', futbol: 'Dev Top Futbolu', bomba: 'Bomba Elden Ele', sakla: 'Saklambaç' };
+const CAP = { cubuk: 75000, zemin: 60000, kosu: 100000, kuyruk: 45000, sumo: 90000, doner: 80000, renk: 120000, lav: 85000, futbol: 75000, bomba: 150000, sakla: 60000 };
 const MODES = Object.entries(TITLES); // [anahtar, ad]: istemcideki oyun seçici için
 if (process.env.KUPA_CAPS) { try { Object.assign(CAP, JSON.parse(process.env.KUPA_CAPS)); } catch { /* yerel deneme için tur süresi */ } }
 const G = 22; const JUMP = 8.5; // istemciyle aynı fizik sabitleri
@@ -28,6 +28,9 @@ const KOSU_OBS = [16, 24, 32, 44, 50, 56, 68, 76, 88, 98]; const KOSU_CP = [0, 6
 // Kuyruk / bomba: çitli yuvarlak alan. Sumo: daralan platform. Renk: 7×7 renkli karo. Lav: sarmal basamaklar. Futbol: duvarlı saha.
 // Kalabalık turlarda (10'dan fazla oyuncu) alanlar büyür: ölçüler odada tutulur (r.R, r.sumo, r.fut).
 const TAG_R = 10; const SUMO = { r0: 9, r1: 1.4, rate: 0.11, from: 4 };
+// Döner Tabla: hızlanan ve yön değiştiren tabla oyuncuları taşır ve dışarı savurur (istemciyle birebir aynı hesap)
+const DON = { r: 9, hub: 1.6, w0: 0.55, acc: 0.045, flip: 9, ramp: 1.2, k: 0.34 };
+const donW = (c, t) => { if (t <= 0) return 0; const n = Math.floor(t / c.flip); return (n % 2 ? -1 : 1) * (c.w0 + c.acc * t) * Math.min(1, (t - n * c.flip) / c.ramp); };
 const sumoR = (s, t) => Math.max(s.r1, s.r0 - s.rate * Math.max(0, t - s.from));
 const RENK = { n: 7, size: 2.4, cols: 5 };
 function mulberry(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -114,10 +117,11 @@ const HM = { small: hexMap(RINGS), big: hexMap(RINGS + 2) }; // kalabalık turda
 
 // Kostümler: lokumun lezzeti (renk) ve şapkası. Fiyat jeton; 0 = ücretsiz.
 const LOOKS = {
-  colors: [['gul', 'Gül', 0], ['limon', 'Limon', 0], ['fistik', 'Fıstık', 0], ['portakal', 'Portakal', 0], ['nar', 'Nar', 40], ['nane', 'Nane', 40], ['bogurtlen', 'Böğürtlen', 60], ['cikolata', 'Çikolata', 60], ['altin', 'Altın', 150]],
-  hats: [['yok', 'Şapkasız', 0], ['parti', 'Parti şapkası', 50], ['fes', 'Fes', 80], ['kulaklik', 'Kulaklık', 80], ['tac', 'Taç', 120]],
+  colors: [['gul', 'Gül', 0], ['limon', 'Limon', 0], ['fistik', 'Fıstık', 0], ['portakal', 'Portakal', 0], ['nar', 'Nar', 40], ['nane', 'Nane', 40], ['bogurtlen', 'Böğürtlen', 60], ['lavanta', 'Lavanta', 40], ['deniz', 'Deniz', 60], ['cikolata', 'Çikolata', 60], ['gece', 'Gece', 90], ['altin', 'Altın', 150]],
+  hats: [['yok', 'Şapkasız', 0], ['parti', 'Parti şapkası', 50], ['cicek', 'Papatya', 60], ['sef', 'Aşçı kepi', 70], ['fes', 'Fes', 80], ['kulaklik', 'Kulaklık', 80], ['kovboy', 'Kovboy şapkası', 100], ['pervane', 'Pervaneli şapka', 110], ['tac', 'Taç', 120], ['hale', 'Hale', 180]],
+  trails: [['izsiz', 'İzsiz', 0], ['yildiz', 'Yıldız tozu', 90], ['kalp', 'Kalpler', 90], ['ates', 'Ateş', 140], ['gokkusagi', 'Gökkuşağı', 200]], // koşarken arkada kalan iz
 };
-const PRICE = new Map([...LOOKS.colors, ...LOOKS.hats].map(([id, , p]) => [id, p]));
+const PRICE = new Map([...LOOKS.colors, ...LOOKS.hats, ...LOOKS.trails].map(([id, , p]) => [id, p]));
 const BOT_NAMES = ['Tarçın', 'Vişne', 'Sakız', 'Badem', 'Kaymak', 'Safran', 'Susam', 'Fındık', 'Ceviz', 'Damla', 'Helva', 'Pekmez', 'Kestane', 'Zencefil', 'Karanfil', 'Anason', 'Kakule', 'Sumak'];
 const rnd = (a, b) => a + Math.random() * (b - a); const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -126,7 +130,7 @@ module.exports = function kupa(app, ctx) {
   const { store, auth, io, notify, limited, eco, isBlocked } = ctx;
   const rooms = new Map(); const now = () => Date.now();
   const firstName = (u) => String(u.name || u.username || 'Oyuncu').split(' ')[0].slice(0, 14);
-  const lookOf = (uid) => { const w = store.get('kupa_looks', uid); return { color: w?.color || 'gul', hat: w?.hat || 'yok' }; };
+  const lookOf = (uid) => { const w = store.get('kupa_looks', uid); return { color: w?.color || 'gul', hat: w?.hat || 'yok', trail: w?.trail || 'izsiz' }; };
   const humans = (r) => r.players.filter((p) => !p.bot);
   const alive = (r) => r.players.filter((p) => p.alive);
   const idx = (r, uid) => r.players.findIndex((p) => p.uid === uid);
@@ -136,7 +140,7 @@ module.exports = function kupa(app, ctx) {
     const mine = r.players.find((p) => p.uid === uid);
     return {
       id: r.id, status: r.status, host: r.host === uid, pub: r.pub, me: idx(r, uid), max: MAXP, now: now(), startAt: r.startAt || null,
-      players: r.players.map((p) => ({ name: p.name, avatar: p.avatar, bot: !!p.bot, look: p.look, alive: p.alive, out: p.out, place: p.place || null })),
+      players: r.players.map((p) => ({ id: p.uid || null, name: p.name, avatar: p.avatar, bot: !!p.bot, look: p.look, alive: p.alive, out: p.out, place: p.place || null, voice: !!p.voice })),
       round: r.round, rounds: r.plan?.length || 3, pick: r.pick || null, modes: MODES, mode: r.mode || null, title: r.mode ? TITLES[r.mode] : null, phase: r.phase || null, playAt: r.playAt || null, keep: r.keep || null,
       conf: confOf(r), st: r.st || null,
       spawn: r.spawn || null, result: r.result || null, at: mine && r.status === 'playing' && r.phase === 'play' && mine.alive ? [r2(mine.x), r2(mine.y), r2(mine.z)] : null,
@@ -145,7 +149,7 @@ module.exports = function kupa(app, ctx) {
   const confOf = (r) => {
     const m = r.mode;
     return m === 'cubuk' ? { r: r.R, bars: BARS } : m === 'zemin' ? { rings: r.hm.rings, hex: HEX, ms: r.tileMs || TILE_MS, tiles: Object.fromEntries(r.tiles || []) } : m === 'kosu' ? { len: TRACK }
-      : m === 'kuyruk' || m === 'bomba' ? { r: r.R, len: CAP[m] / 1000 } : m === 'sumo' ? r.sumo : m === 'renk' ? { ...RENK, seed: r.rk.seed, cyc: r.rk.cyc } : m === 'lav' ? LAV : m === 'futbol' ? { ...r.fut, len: CAP.futbol / 1000 }
+      : m === 'kuyruk' || m === 'bomba' ? { r: r.R, len: CAP[m] / 1000 } : m === 'sumo' ? r.sumo : m === 'doner' ? DON : m === 'renk' ? { ...RENK, seed: r.rk.seed, cyc: r.rk.cyc } : m === 'lav' ? LAV : m === 'futbol' ? { ...r.fut, len: CAP.futbol / 1000 }
       : m === 'sakla' ? { ...SAK, walls: SAK_WALLS, ebes: (r.ebes || []).map((e) => [r2(e.x), r2(e.z), r2(e.ry)]) } : null;
   };
   const push = (r) => r.players.forEach((p) => { if (p.uid) ctx.emitTo(p.uid, 'k3', view(r, p.uid)); });
@@ -202,6 +206,7 @@ module.exports = function kupa(app, ctx) {
       else if (m === 'renk') { p.x = ((k % 4) - 1.5) * 2.4; p.z = (Math.floor(k / 4) - (Math.ceil(n / 4) - 1) / 2) * 2.4; if (B) p.b = { vx: 0, vz: 0 }; }
       else if (m === 'lav') { const an = (-0.3 - 0.2 * Math.floor(k / 4)) * LAV.da; const rr = 4.6 + (k % 4) * 0.8; /* ilk basamağın önünde dörderli sıra */ p.x = Math.cos(an) * rr; p.z = Math.sin(an) * rr; if (B) p.b = { step: 0, hop: null, next: rnd(0.5, 1.6), sk: rnd(0.8, 1.4), hx: p.x, hz: p.z }; }
       else if (m === 'sakla') { ring(big ? 4 : 3.2); if (B) p.b = { vx: 0, vz: 0, path: null, home: null, react: rnd(0.25, 1), sp: rnd(5.6, 6.6), alarm: 0 }; } // ebenin çevresinden dağılırlar
+      else if (m === 'doner') { ring(4.6 + (k % 2) * 1.6); if (B) p.b = { vx: 0, vz: 0, sk: rnd(0.8, 1), lane: rnd(0, 1.3), nap: 0 }; }
       else { ring(m === 'sumo' ? r.sumo.r0 * (big ? 0.5 : 0.6) : r.R * 0.6); if (B) p.b = { vx: 0, vz: 0 }; }
     });
     if (m === 'kuyruk') { cont.slice().sort(() => Math.random() - 0.5).slice(0, r.keep).forEach((p) => { p.tail = true; }); r.st = { tails: r.players.map((p, i) => (p.tail && !p.out ? i : -1)).filter((i) => i >= 0) }; }
@@ -245,6 +250,8 @@ module.exports = function kupa(app, ctx) {
     r.result = { winner: r.players.indexOf(win[0]), winners: win.map((p) => r.players.indexOf(p)), single: !!r.single, mode: r.single ? r.mode : null,
       order: r.players.map((p, i) => [p.place || 99, i]).sort((a, b) => a[0] - b[0]).map(([, i]) => i) };
     humans(r).forEach((p) => ctx.addXp?.(p.uid, 'oyun', win.includes(p) ? 2 : 1));
+    // Lig puanı: kupada 1. 10, 2. 6, 3. 4, diğerleri 2; tek oyunda kazanan 4, diğerleri 1
+    r.result.pts = {}; humans(r).forEach((p) => { const pts = r.single ? (win.includes(p) ? 4 : 1) : p.place === 1 ? 10 : p.place === 2 ? 6 : p.place === 3 ? 4 : 2; r.result.pts[r.players.indexOf(p)] = addSeason(p.uid, pts, win.includes(p)); });
     push(r); lobby();
   }
 
@@ -402,6 +409,17 @@ module.exports = function kupa(app, ctx) {
     }
     if (Math.hypot(p.x, p.z) > R + 0.35) { b.fly = [b.vx * 0.6, 0, b.vz * 0.6]; elim(r, p); }
   }
+  function botDoner(r, p, b, t, dt) { // tabla botu taşır ve savurur; bot göbeğe doğru koşar, ara sıra dalar
+    const w = donW(DON, t); const rr = Math.hypot(p.x, p.z) || 0.01; const a = w * dt; const cs = Math.cos(a); const sn = Math.sin(a);
+    const x = p.x * cs - p.z * sn; const z = p.x * sn + p.z * cs; const out = DON.k * w * w * rr * dt; p.x = x + (x / rr) * out; p.z = z + (z / rr) * out; p.fl = 0;
+    if (t > (b.nap || 0)) {
+      if (Math.random() < dt * 0.1) b.nap = t + rnd(0.3, 0.8);
+      const r2 = Math.hypot(p.x, p.z);
+      if (r2 > DON.hub + 0.9 + b.lane) steer(p, 0, 0, 5.8 * b.sk, dt); else steer(p, p.x - p.z, p.z + p.x, 2.2, dt); // yerindeyse göbeğin çevresinde dolanır
+    }
+    const r3 = Math.hypot(p.x, p.z) || 0.01; const min = DON.hub + 0.45;
+    if (r3 < min) { p.x *= min / r3; p.z *= min / r3; } else if (r3 > DON.r + 0.35) { b.fly = [(p.x / r3) * 5, 0, (p.z / r3) * 5]; elim(r, p); }
+  }
   function sumoTick(r) { // botların itilmesi (insanın itilmesini kendi cihazı hesaplar)
     const al = alive(r); const n = now(); r.hit = r.hit || new Map();
     for (let i = 0; i < al.length; i++) for (let j = i + 1; j < al.length; j++) {
@@ -553,8 +571,8 @@ module.exports = function kupa(app, ctx) {
       const push = (0.9 - d) / d / (A.bot && B.bot ? 2 : 1); if (A.bot) { A.x -= dx * push; A.z -= dz * push; } if (B.bot) { B.x += dx * push; B.z += dz * push; }
     }
   }
-  const BOT = { cubuk: botCubuk, zemin: botZemin, kosu: botKosu, kuyruk: botTag, bomba: botTag, sumo: botSumo, renk: botRenk, lav: botLav, futbol: botFut, sakla: botSakla };
-  const MODE_TICK = { kuyruk: (r) => { spread(r); tagTick(r); }, bomba: (r) => { spread(r); tagTick(r); }, sumo: sumoTick, renk: renkTick, futbol: (r, t, dt) => { spread(r); futTick(r, t, dt); }, sakla: saklaTick };
+  const BOT = { cubuk: botCubuk, zemin: botZemin, kosu: botKosu, kuyruk: botTag, bomba: botTag, sumo: botSumo, doner: botDoner, renk: botRenk, lav: botLav, futbol: botFut, sakla: botSakla };
+  const MODE_TICK = { kuyruk: (r) => { spread(r); tagTick(r); }, bomba: (r) => { spread(r); tagTick(r); }, sumo: sumoTick, doner: (r) => spread(r), renk: renkTick, futbol: (r, t, dt) => { spread(r); futTick(r, t, dt); }, sakla: saklaTick };
 
   function touch(r, i) { if (r.tiles.has(i)) return; const at = now() + (r.tileMs || TILE_MS); r.tiles.set(i, at); cast(r, 'k3:tile', [i, at]); }
   function win(r, p) { if (r.phase !== 'play' || r.mode !== 'kosu') return; cast(r, 'k3:ev', { t: 'fin', i: r.players.indexOf(p) }); finish(r, p); }
@@ -566,6 +584,38 @@ module.exports = function kupa(app, ctx) {
     if (!humans(r).length) { clear(r); rooms.delete(r.id); } else { if (r.host === uid) r.host = humans(r)[0].uid; push(r); }
     lobby();
   }
+
+  // ---- Lig: haftalık sezon (İstanbul saatiyle pazartesi başlar). Haftanın ilk üçü jeton kazanır. ----
+  const DAYMS = 86400000; const TIERS = [['bronz', 'Bronz', 0], ['gumus', 'Gümüş', 30], ['altin', 'Altın', 80], ['elmas', 'Elmas', 160]]; const PRIZE = [300, 200, 100]; const DAYCAP = 80;
+  const weekId = (t = now()) => { const d = new Date(t + 3 * 3600000); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7))).toISOString().slice(0, 10); };
+  const weekEnd = (id) => Date.parse(`${id}T00:00:00Z`) - 3 * 3600000 + 7 * DAYMS;
+  const tierOf = (pts) => [...TIERS].reverse().find((t) => pts >= t[2]);
+  function addSeason(uid, pts, won) { // dönen: bu oyundan yazılan puan (günlük sınır dolduysa 0)
+    const w = weekId(); const id = `${w}:${uid}`; const day = new Date(now() + 3 * 3600000).toISOString().slice(0, 10);
+    const o = store.get('kupa_season', id) || { id, week: w, uid, pts: 0, wins: 0, games: 0 }; const used = o.day === day ? o.dayPts || 0 : 0; const add = Math.max(0, Math.min(pts, DAYCAP - used));
+    store.put('kupa_season', { ...o, pts: o.pts + add, wins: o.wins + (won ? 1 : 0), games: o.games + 1, day, dayPts: used + add, at: now() }); return add;
+  }
+  const board = (w) => store.filter('kupa_season', (x) => x.week === w && x.pts > 0).sort((a, b) => b.pts - a.pts || a.at - b.at);
+  function settle() {
+    const w = weekId(); const meta = store.get('kupa_meta', 'season');
+    if (!meta) { store.put('kupa_meta', { id: 'season', week: w }); return; }
+    if (meta.week === w) return;
+    const top = board(meta.week).slice(0, 3);
+    top.forEach((x, k) => { eco.addCoins(x.uid, PRIZE[k], 'kupa_season', { week: meta.week, place: k + 1 }); notify(x.uid, { type: 'order', text: `🏆 Parti Kupası liginde haftayı ${k + 1}. bitirdin! ${PRIZE[k]} jeton hesabında.`, url: '/#/oyunlar', tag: 'kupa-lig' }); });
+    store.put('kupa_meta', { id: 'season', week: w, last: { week: meta.week, top: top.map((x) => ({ uid: x.uid, pts: x.pts })) } });
+  }
+  const tSeason = setInterval(() => { try { settle(); } catch (e) { console.error('[kupa] lig', e); } }, 5 * 60000); tSeason.unref?.(); try { settle(); } catch (e) { console.error('[kupa] lig', e); }
+  const who = (uid) => { const u = store.get('users', uid); return u ? { id: u.id, username: u.username, avatar: u.avatar } : null; };
+  app.get('/api/kupa/season', auth, (req, res) => {
+    const w = weekId(); const all = board(w); const mine = store.get('kupa_season', `${w}:${req.user.id}`); const rank = all.findIndex((x) => x.uid === req.user.id);
+    const pts = mine?.pts || 0; const tier = tierOf(pts); const next = TIERS[TIERS.indexOf(tier) + 1] || null; const last = store.get('kupa_meta', 'season')?.last;
+    res.json({
+      week: w, endsAt: weekEnd(w), prize: PRIZE, tiers: TIERS, dayCap: DAYCAP,
+      me: { pts, wins: mine?.wins || 0, games: mine?.games || 0, rank: rank < 0 ? null : rank + 1, tier: tier[0], tierName: tier[1], next: next ? { name: next[1], at: next[2] } : null },
+      top: all.slice(0, 20).map((x, k) => ({ rank: k + 1, user: who(x.uid), pts: x.pts, wins: x.wins, tier: tierOf(x.pts)[0], me: x.uid === req.user.id })).filter((x) => x.user),
+      last: last ? last.top.map((x, k) => ({ rank: k + 1, user: who(x.uid), pts: x.pts })).filter((x) => x.user) : [],
+    });
+  });
 
   // ---- Uç noktalar ----
   const getR = (req, res) => { const r = rooms.get(req.params.id); if (!r) { res.status(404).json({ error: 'Oda bulunamadı. Oyun bitmiş olabilir.' }); return null; } return r; };
@@ -589,8 +639,8 @@ module.exports = function kupa(app, ctx) {
       if (!eco.spend(req.user.id, price, 'kupa_look', { ref: id })) return res.status(402).json({ error: `Yeterli jetonun yok. Bu kostüm ${price} jeton.` });
       owned.push(id);
     }
-    const isHat = LOOKS.hats.some(([h]) => h === id);
-    store.put('kupa_looks', { ...w, id: req.user.id, owned, [isHat ? 'hat' : 'color']: id });
+    const slot = LOOKS.hats.some(([h]) => h === id) ? 'hat' : LOOKS.trails.some(([h]) => h === id) ? 'trail' : 'color';
+    store.put('kupa_looks', { ...w, id: req.user.id, owned, [slot]: id });
     const r = roomOfUser(req.user.id); const p = r?.players.find((x) => x.uid === req.user.id); if (p) { p.look = lookOf(req.user.id); push(r); }
     res.json({ ...LOOKS, owned, ...lookOf(req.user.id), coins: store.get('users', req.user.id)?.coins || 0 });
   });
@@ -639,7 +689,15 @@ module.exports = function kupa(app, ctx) {
     const uid = socket.data.userId; let room = null; let me = null;
     const bind = (id) => { const r = rooms.get(id); const p = r?.players.find((x) => x.uid === uid); room = p ? r : null; me = p || null; return !!p; };
     socket.on('k3:join', ({ id } = {}) => { if (bind(id)) socket.join(`k3:${id}`); });
-    socket.on('k3:leave', ({ id } = {}) => { socket.leave(`k3:${id}`); room = null; me = null; });
+    const mute = () => { if (me?.voice) { me.voice = false; if (room) push(room); } };
+    socket.on('k3:leave', ({ id } = {}) => { mute(); socket.leave(`k3:${id}`); room = null; me = null; });
+    socket.on('disconnect', mute);
+    // Sesli sohbet: odadaki insanlar birbirine doğrudan bağlanır (WebRTC); sunucu yalnızca el sıkışmayı taşır
+    socket.on('k3:voice', (on) => { if (!room || !me || limited('k3v:' + uid, 20, 10000)) return; me.voice = !!on; push(room); });
+    socket.on('k3:rtc', ({ to, data } = {}) => {
+      if (!room || !me?.voice || typeof to !== 'string' || !data || limited('k3rtc:' + uid, 400, 10000)) return;
+      const p = room.players.find((x) => x.uid === to); if (p?.voice && to !== uid) ctx.emitTo(to, 'k3:rtc', { from: uid, data });
+    });
     socket.on('k3:s', (s) => {
       if (!room || !me || !me.alive || !Array.isArray(s)) return;
       const [x, y, z, ry, fl] = s.map(Number); if (![x, y, z, ry].every(Number.isFinite)) return;

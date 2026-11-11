@@ -159,6 +159,7 @@ module.exports = function mountAdmin(app, ctx) {
       falPending: falMsgs.filter((m) => m.fal.status === 'pending').length,
       falTotal: falMsgs.length,
       reportsOpen: store.filter('reports', (r) => r.status === 'open').length,
+      photosOpen: store.filter('photo_flags', (f) => f.status === 'open').length,
       appealsOpen: store.filter('appeals', (a) => a.status === 'open').length,
       ordersOpen: store.filter('orders', (o) => o.status === 'paid' || o.status === 'pending').length,
       ordersPaid: store.filter('orders', (o) => o.status === 'paid').length,

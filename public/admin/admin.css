@@ -498,3 +498,13 @@ tr.sgw td { background: color-mix(in srgb, #ffc926 10%, transparent); }
 .ksync { display: grid; gap: 8px; padding: 14px; border-radius: 14px; background: var(--soft); }
 .ksync .ks-p, .ksync .ks-n { margin: 0; color: var(--muted); min-height: 20px; }
 .ksync .ks-c { margin: 0; font-family: var(--display); font-size: 21px; font-weight: 800; line-height: 1.25; min-height: 27px; }
+
+/* Fotoğraf denetimi */
+.pmg { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.pmc { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); display: grid; grid-template-rows: auto 1fr; }
+.pmi { aspect-ratio: 4 / 3; background: var(--soft); display: grid; place-items: center; overflow: hidden; }
+.pmi img { width: 100%; height: 100%; object-fit: cover; filter: blur(14px); transition: filter .2s; }
+.pmc:hover .pmi img, .pmc:focus-within .pmi img { filter: none; } /* görsel, üstüne gelince açılır */
+.pmx { display: grid; justify-items: center; gap: 4px; color: var(--muted); } .pmx svg { width: 26px; height: 26px; }
+.pmb { padding: 10px 12px 12px; display: grid; gap: 8px; align-content: start; }
+.pmt { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; }

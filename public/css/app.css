@@ -4056,3 +4056,16 @@ html.land-game #fx-layer { display: none; }
 .kr-web { margin: 0 14px 8px; display: grid; gap: 6px; } .kr-web:empty { display: none; } .kr-web .kr-cat-t { margin: 6px 2px 2px; }
 .kr-pick img { width: 34px; height: 34px; border-radius: 9px; object-fit: cover; flex: none; }
 .kr-web-n { margin: 2px 2px 0; font-size: 12.5px; }
+/* Parti Kupası: lig penceresi */
+.k3-lg { display: grid; gap: 12px; }
+.k3-lgme { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 16px; background: var(--surface-2); }
+.k3-lgme > i { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; color: #fff; flex: none; } .k3-lgme > i svg { width: 28px; height: 28px; }
+.k3-lgme .grow { display: grid; gap: 3px; min-width: 0; } .k3-lgme small { color: var(--muted); font-size: 12.5px; }
+.k3-lgbar { height: 7px; border-radius: 4px; background: var(--line); overflow: hidden; } .k3-lgbar span { display: block; height: 100%; background: linear-gradient(90deg, #ff7a3d, #ff4f9a); border-radius: 4px; }
+.k3-lgn { margin: 0; font-size: 12.5px; line-height: 1.45; }
+.k3-lgl { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 42vh; overflow-y: auto; }
+.k3-lgl li { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 12px; } .k3-lgl li.me { background: var(--uv-soft); }
+.k3-lgl em { font-style: normal; font-weight: 800; width: 22px; text-align: center; color: var(--muted); } .k3-lgl img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
+.k3-lgl b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .k3-lgl li > i { width: 10px; height: 10px; border-radius: 50%; } .k3-lgl span { font-weight: 800; font-variant-numeric: tabular-nums; }
+.k3-pts { color: #ffd34d !important; font-weight: 750; }
+.k3-top .k3-mic.on { background: #2fbf71; }

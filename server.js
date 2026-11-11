@@ -616,9 +616,13 @@ app.post('/api/upload', auth, upload.single('file'), wrap(async (req, res) => {
   }
   const { mime, buffer } = fixed;
   if (!/^(image|video|audio)\//.test(mime)) return res.status(400).json({ error: 'Sadece fotoğraf, video veya ses yüklenebilir.' });
+  // Fotoğraf denetimi: açık cinsel içerik kaydedilmez; sınırdakiler kaydedilir ve yönetimde incelemeye düşer
+  const pm = await photomod.check(buffer, mime);
+  if (pm.verdict === 'block') { featureCtx.photoFlag?.(req.user.id, pm); return res.status(422).json({ error: 'Bu fotoğraf topluluk kurallarına uymuyor (çıplaklık ya da cinsel içerik). Lütfen başka bir fotoğraf seç.' }); }
   const id = nanoid(16);
   const where = await store.saveMedia(id, mime, buffer);
   store.put('media_meta', { id, userId: req.user.id, mime, size: buffer.length, where, at: now() });
+  if (pm.verdict === 'review') featureCtx.photoFlag?.(req.user.id, pm, id);
   res.json({ url: `/media/${id}`, type: mime.split('/')[0], mime });
 }));
 
@@ -1707,6 +1711,7 @@ app.post('/api/admin/push/test', adminApi.adminAuth, wrap(async (req, res) => {
 }));
 
 // ---------- Ek özellikler (mağaza, doğrulama, gizlilik, çıkartmalar, etiketler…) ----------
+const photomod = require('./server/photomod');
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
   isBlocked, limited, isMedia, isGif: (u) => GIF_HOSTS.test(String(u || '')), extractTags, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
@@ -1736,6 +1741,7 @@ require('./server/games')(app, featureCtx); // oyun salonu: Okey, Çiz Bil
 require('./server/playkit')(app, featureCtx); // oyun altyapısı + server/play/*.js oyunları
 require('./server/minigames')(app, featureCtx); // sohbet içi mini oyunlar: XOX, Dört Taş, TKM, Amiral Battı
 require('./server/kupa')(app, featureCtx); // Parti Kupası (3D)
+photomod(app, featureCtx); // fotoğraf denetimi (Sightengine)
 require('./server/engage')(app, featureCtx); // seriler, kulüpler, günün sorusu, seçki, karaoke… (en son yüklenir)
 gameOut = featureCtx.gameOut;
 
