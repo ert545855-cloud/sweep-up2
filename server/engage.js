@@ -704,13 +704,13 @@ module.exports = function engage(app, ctx) {
     const c = cfg().karaoke;
     const cur = K.cur && (() => {
       const vals = Object.values(K.cur.scores); const u = user(K.cur.uid);
-      return { user: brief(u), song: K.cur.song, startedAt: K.cur.startedAt, endsAt: K.cur.endsAt, live: !!brief(u)?.live, votes: vals.length, avg: vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null, myScore: K.cur.scores[me] || null };
+      return { user: brief(u), song: K.cur.song, sid: K.cur.sid || null, startedAt: K.cur.startedAt, endsAt: K.cur.endsAt, live: !!brief(u)?.live, votes: vals.length, avg: vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null, myScore: K.cur.scores[me] || null };
     })();
     const ws = weekStart();
     const turns = store.filter('karaoke_turns', (t) => t.at >= ws && t.votes >= 3);
     const best = new Map(); turns.forEach((t) => { if (!best.has(t.uid) || best.get(t.uid).avg < t.avg) best.set(t.uid, t); });
     const board = [...best.values()].sort((a, b) => (b.avg - a.avg) || (b.votes - a.votes)).slice(0, 10).map((t, i) => ({ rank: i + 1, user: brief(user(t.uid)), song: t.song, avg: t.avg, votes: t.votes })).filter((x) => x.user);
-    return { enabled: c.enabled, turnMinutes: c.turnMinutes, cur, queue: K.queue.map((q, i) => ({ pos: i + 1, user: brief(user(q.uid)), song: q.song, mine: q.uid === me })).filter((q) => q.user), myPos: K.queue.findIndex((q) => q.uid === me) + 1 || null, myTurn: K.cur?.uid === me, board, weekStart: ws };
+    return { enabled: c.enabled, turnMinutes: c.turnMinutes, catalog: store.col('karaoke_songs').size, cur, queue: K.queue.map((q, i) => ({ pos: i + 1, user: brief(user(q.uid)), song: q.song, sid: q.sid || null, mine: q.uid === me })).filter((q) => q.user), myPos: K.queue.findIndex((q) => q.uid === me) + 1 || null, myTurn: K.cur?.uid === me, board, weekStart: ws };
   };
   const kPing = () => io.emit('karaoke', {});
   function kFinish(reason) {
@@ -722,7 +722,7 @@ module.exports = function engage(app, ctx) {
         store.put('karaoke_turns', { id: nanoid(10), uid: c.uid, song: c.song, avg, votes: vals.length, at: now() });
         notify(c.uid, { type: 'order', text: `🎤 Karaoke bitti! ${vals.length} kişi puan verdi, ortalaman ${avg} ⭐`, url: '/#/karaoke', tag: 'karaoke' });
         if (avg >= 4.5 && vals.length >= 5) notify(c.uid, { type: 'order', text: `🏆 ${avg} puanla ön elemeyi geçtin! Şarkını SwipeUp şarkı yarışmasına yükle.`, url: '/#/sarki/yukle', tag: 'karaoke-final' });
-      } else if (reason === 'noshow') notify(c.uid, { type: 'order', text: '🎤 Karaoke sıran geldi ama yayına başlamadın, sıradaki kişiye geçtik.', url: '/#/karaoke', tag: 'karaoke' });
+      } else if (reason === 'noshow') notify(c.uid, { type: 'order', text: '🎤 Karaoke sıran geldi ama sahneye çıkmadın, sıradaki kişiye geçtik.', url: '/#/karaoke', tag: 'karaoke' });
     }
     kNext();
   }
@@ -732,8 +732,8 @@ module.exports = function engage(app, ctx) {
     const u = user(q.uid);
     if (!active(u)) return kNext();
     const mins = cfg().karaoke.turnMinutes;
-    K.cur = { uid: q.uid, song: q.song, startedAt: now(), endsAt: now() + mins * 60000, scores: {}, seenLive: false };
-    notify(q.uid, { type: 'order', text: `🎤 Sıra sende! "${q.song}" için 90 saniye içinde yayına başla.`, url: '/#/karaoke', tag: 'karaoke' });
+    K.cur = { uid: q.uid, song: q.song, sid: q.sid || null, startedAt: now(), endsAt: now() + mins * 60000, scores: {}, seenLive: false };
+    notify(q.uid, { type: 'order', text: `🎤 Sıra sende! "${q.song}" için 90 saniye içinde sahneye çık.`, url: '/#/karaoke/sahne', tag: 'karaoke' });
     emitTo(q.uid, 'karaoke:turn', { song: q.song });
     kPing();
   }
@@ -747,10 +747,11 @@ module.exports = function engage(app, ctx) {
   app.get('/api/karaoke', auth, (req, res) => res.json(kOut(req.user.id)));
   app.post('/api/karaoke/queue', auth, (req, res) => {
     if (!cfg().karaoke.enabled) return res.status(503).json({ error: 'Karaoke şu an kapalı.' });
-    const song = clip(req.body?.song, 80); if (song.length < 2) return res.status(400).json({ error: 'Hangi şarkıyı söyleyeceğini yaz.' });
+    const pick = req.body?.songId ? store.get('karaoke_songs', String(req.body.songId)) : null;
+    const song = pick ? clip(`${pick.title} – ${pick.artist}`, 80) : clip(req.body?.song, 80); if (song.length < 2) return res.status(400).json({ error: 'Hangi şarkıyı söyleyeceğini yaz.' });
     if (K.cur?.uid === req.user.id || K.queue.some((q) => q.uid === req.user.id)) return res.status(409).json({ error: 'Zaten sıradasın.' });
     if (K.queue.length >= 30) return res.status(400).json({ error: 'Sıra dolu, biraz sonra tekrar dene.' });
-    K.queue.push({ uid: req.user.id, song: moderation.mask(song), at: now() });
+    K.queue.push({ uid: req.user.id, song: pick ? song : moderation.mask(song), sid: pick?.id || null, at: now() });
     kNext();
     res.json(kOut(req.user.id));
   });
@@ -763,6 +764,41 @@ module.exports = function engage(app, ctx) {
     K.cur.scores[req.user.id] = n;
     kPing();
     res.json(kOut(req.user.id));
+  });
+  // ---- Karaoke şarkı kataloğu: vokalsiz kayıt + sözler (LRC zaman damgalı ya da düz metin) ----
+  const kSynced = (t) => (String(t || '').match(/\[\d{1,3}:\d{2}/g) || []).length >= 2;
+  const kSong = (s, full) => ({ id: s.id, title: s.title, artist: s.artist, hasAudio: !!s.audio, hasLyrics: !!s.lyrics, synced: kSynced(s.lyrics), ...(full ? { audio: s.audio || null, lyrics: s.lyrics || '', vox: !!s.vox } : {}) });
+  const kSorted = () => store.all('karaoke_songs').sort((a, b) => trLower(a.title).localeCompare(trLower(b.title), 'tr'));
+  app.get('/api/karaoke/songs', auth, (req, res) => {
+    const q = trLower(clip(req.query.q, 60));
+    res.json(kSorted().filter((s) => !q || trLower(`${s.title} ${s.artist}`).includes(q)).slice(0, 80).map((s) => kSong(s)));
+  });
+  app.get('/api/karaoke/songs/:id', auth, (req, res) => {
+    const s = store.get('karaoke_songs', req.params.id); if (!s) return res.status(404).json({ error: 'Şarkı bulunamadı.' });
+    res.json(kSong(s, true));
+  });
+  // Sözleri açık söz veritabanından (LRCLIB) ara. Bulunamazsa ya da ulaşılamazsa null döner; kullanıcı sözleri elle de yapıştırabilir.
+  const lyrCache = new Map();
+  async function findLyrics(title, artist) {
+    title = clip(title, 100); artist = clip(artist, 80); if (title.length < 2) return null;
+    const key = trLower(`${title}|${artist}`); if (lyrCache.has(key)) return lyrCache.get(key);
+    const qs = artist ? `track_name=${encodeURIComponent(title)}&artist_name=${encodeURIComponent(artist)}` : `q=${encodeURIComponent(title.replace(/\s[–—-]\s/g, ' '))}`;
+    let out = null;
+    try {
+      const r = await fetch(`https://lrclib.net/api/search?${qs}`, { headers: { 'User-Agent': 'SwipeUp-Karaoke/1.0 (https://swipeup-hh1f.onrender.com)' }, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return null;
+      const list = await r.json();
+      const ok = (Array.isArray(list) ? list : []).filter((x) => x && !x.instrumental && (x.syncedLyrics || x.plainLyrics));
+      const hit = ok.find((x) => x.syncedLyrics) || ok[0]; // zaman damgalı olan önce
+      if (hit) out = { title: clip(hit.trackName, 80), artist: clip(hit.artistName, 60), dur: Math.round(+hit.duration || 0), synced: !!hit.syncedLyrics, lyrics: String(hit.syncedLyrics || hit.plainLyrics).slice(0, 12000) };
+    } catch { return null; } // ağ hatası: önbelleğe alma, sonra yeniden denensin
+    lyrCache.set(key, out); if (lyrCache.size > 300) lyrCache.delete(lyrCache.keys().next().value);
+    return out;
+  }
+  app.get('/api/karaoke/lyrics', auth, async (req, res) => {
+    if (limited('klyr:' + req.user.id, 12, 60000)) return res.status(429).json({ error: 'Biraz yavaş, birazdan tekrar dene.' });
+    const hit = await findLyrics(req.query.q, req.query.artist);
+    res.json(hit || { lyrics: '' });
   });
   app.post('/api/karaoke/done', auth, (req, res) => {
     if (K.cur?.uid !== req.user.id) return res.status(400).json({ error: 'Sahnede değilsin.' });
@@ -781,6 +817,29 @@ module.exports = function engage(app, ctx) {
   // ===================================================================
   const A = ctx.admin;
   if (!A?.adminAuth) return;
+  // Yönetim: şarkı ekle / düzenle / sil
+  app.get('/api/admin/karaoke/songs', A.adminAuth, (req, res) => res.json({ songs: kSorted().map((s) => ({ ...kSong(s, true), at: s.at, size: store.get('media_meta', String(s.audio || '').split('/').pop())?.size || 0 })) }));
+  app.get('/api/admin/karaoke/lyrics', A.adminAuth, async (req, res) => { const hit = await findLyrics(req.query.title, req.query.artist); res.json(hit || { lyrics: '' }); });
+  app.post('/api/admin/karaoke/songs', A.adminAuth, (req, res) => {
+    const b = req.body || {}; const old = b.id ? store.get('karaoke_songs', String(b.id)) : null;
+    if (b.id && !old) return res.status(404).json({ error: 'Şarkı bulunamadı.' });
+    const title = clip(b.title, 80); const artist = clip(b.artist, 60);
+    if (title.length < 2) return res.status(400).json({ error: 'Şarkı adını yaz.' });
+    if (artist.length < 2) return res.status(400).json({ error: 'Sanatçı adını yaz.' });
+    const audio = typeof b.audio === 'string' && /^\/media\/[\w-]{6,40}$/.test(b.audio) ? b.audio : '';
+    if (audio) { const meta = store.get('media_meta', audio.split('/').pop()); if (!meta || !/^audio\//.test(meta.mime)) return res.status(400).json({ error: 'Müzik dosyası bir ses dosyası olmalı (MP3, M4A, WAV).' }); }
+    const lyrics = String(b.lyrics || '').replace(/\r/g, '').trim().slice(0, 12000);
+    if (!audio && !lyrics) return res.status(400).json({ error: 'En azından müzik dosyası ya da şarkı sözü ekle.' });
+    const s = store.put('karaoke_songs', { ...(old || { id: nanoid(10), at: now() }), title, artist, audio, lyrics, vox: !!b.vox, updatedAt: now() });
+    A.audit(req.admin, old ? 'karaoke şarkısını güncelledi' : 'karaoke şarkısı ekledi', null, `${title} · ${artist}`);
+    res.json(kSong(s, true));
+  });
+  app.delete('/api/admin/karaoke/songs/:id', A.adminAuth, (req, res) => {
+    const s = store.get('karaoke_songs', req.params.id); if (!s) return res.status(404).json({ error: 'Şarkı bulunamadı.' });
+    store.del('karaoke_songs', s.id);
+    A.audit(req.admin, 'karaoke şarkısını sildi', null, `${s.title} · ${s.artist}`);
+    res.json({ ok: true });
+  });
   app.get('/api/admin/engage', A.adminAuth, (req, res) => {
     const d = trDay(); const y = addDays(d, -1);
     const st = store.all('streaks').filter((s) => s.last === d || s.last === y);

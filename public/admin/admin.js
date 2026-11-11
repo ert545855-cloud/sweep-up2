@@ -3,7 +3,7 @@ import { icon } from '/js/icons.js';
 
 const S = { token: localStorage.getItem('su_admin'), me: null, counts: {} };
 const can = (p) => S.me?.role === 'owner' || (S.me?.perms || []).includes(p);
-const SEC_PERM = { growth: 'growth', users: 'users', support: 'support', reports: 'reports', appeals: 'appeals', flags: 'flags', verify: 'verify', orders: 'orders', payouts: 'payouts', market: 'market', ledger: 'erp', erp: 'erp', promos: 'promos', quests: 'quests', songs: 'songs', contests: 'contests', fal: 'fal', content: 'content', media: 'content', announce: 'announce', notes: 'notes', audit: 'audit', database: 'database', maintenance: 'maintenance', settings: 'settings', tags: 'tags', engage: 'engage' };
+const SEC_PERM = { growth: 'growth', users: 'users', support: 'support', reports: 'reports', appeals: 'appeals', flags: 'flags', verify: 'verify', orders: 'orders', payouts: 'payouts', market: 'market', ledger: 'erp', erp: 'erp', promos: 'promos', quests: 'quests', songs: 'songs', contests: 'contests', fal: 'fal', content: 'content', media: 'content', announce: 'announce', notes: 'notes', audit: 'audit', database: 'database', maintenance: 'maintenance', settings: 'settings', tags: 'tags', engage: 'engage', karaoke: 'engage' };
 const canSec = (k) => !SEC_PERM[k] || can(SEC_PERM[k]);
 const root = document.getElementById('root');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -57,6 +57,7 @@ const SECTIONS = [
   ['engage', 'Etkileşim', 'flame'],
   ['fal', 'Fal', 'star', 'falPending'],
   ['songs', 'Şarkı yarışması', 'music', 'songsPending'],
+  ['karaoke', 'Karaoke şarkıları', 'mic'],
   ['contests', 'Yarışmalar', 'trophy'],
   ['content', 'İçerik', 'grid'],
   ['media', 'Medya', 'image'],
@@ -408,6 +409,10 @@ VIEWS.erp = async (main) => {
 };
 
 // ---- Şarkı yarışması ----
+VIEWS.karaoke = async (main) => {
+  const { default: karaoke } = await import('./karaoke.js');
+  await karaoke(main, { api, esc, toast, head, d, icon, can, token: () => S.token });
+};
 VIEWS.songs = async (main) => {
   const { default: songs } = await import('./songs.js');
   await songs(main, { api, esc, toast, head, d, dt, icon, userCell, can, token: () => S.token });

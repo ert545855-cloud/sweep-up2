@@ -70,6 +70,7 @@ const routes = [
   [/^\/kulup\/([a-z0-9]+)$/, 'clubs', { tab: 'home' }],
   [/^\/secki$/, 'picks', { tab: 'swipe' }],
   [/^\/karaoke$/, 'karaoke', { tabs: false }],
+  [/^\/karaoke\/sahne$/, 'sahne', { tabs: false }],
   [/^\/burc(?:\?.*)?$/, 'burc', { tab: 'home' }],
   [/^\/market\/(i|o|new|edit)(?:\/([\w-]+))?$/, 'market', { tabs: false }],
   [/^\/market(?:\/(\w+))?(?:\/([\w-]+))?$/, 'market', { tab: 'home' }],
@@ -213,7 +214,7 @@ function wireRealtime() {
     if (d.count < 2 && !d.coins) return;
     toast(d.coins ? `${d.count} günlük giriş serisi! +${d.coins} jeton` : `${d.count}. gün! Serin devam ediyor${d.freezeUsed ? ' (seri koruyucu kullanıldı)' : ''}`, { title: 'Seri', img: '/img/eg/seri.svg', href: '#/seriler', ms: 4200 });
   });
-  on('karaoke:turn', (d) => { if (location.hash !== '#/karaoke') toast(`Karaoke sırası sende! "${d?.song || ''}"`, { title: 'Karaoke', img: '/img/eg/karaoke.svg', href: '#/karaoke', ms: 9000 }); });
+  on('karaoke:turn', (d) => { if (!location.hash.startsWith('#/karaoke')) toast(`Karaoke sırası sende! "${d?.song || ''}"`, { title: 'Karaoke', img: '/img/eg/karaoke.svg', href: '#/karaoke/sahne', ms: 9000 }); });
   on('level', (d) => { if (d?.level) toast(`${d.em} Seviye atladın! Artık ${d.level}. seviyedesin · ${d.title} · +${d.coins} jeton`, { href: '#/seviye', ms: 5000 }); });
   on('quests', (d) => { if (d?.done && location.hash !== '#/gorevler') toast(`✅ Görev tamamlandı: ${d.title}. Ödülünü al!`, { href: '#/gorevler', ms: 4500 }); });
   on('message', (m) => {

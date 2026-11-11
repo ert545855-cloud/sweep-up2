@@ -4,8 +4,15 @@ export default async function erp(main, H) {
   const TABS = [['ozet', 'Özet', 'gauge'], ['gelir', 'Gelir-gider', 'sliders'], ['faturalar', 'Faturalar', 'doc'], ['cariler', 'Cariler', 'users'], ['hesaplar', 'Kasa ve banka', 'wallet'], ['personel', 'Personel ve maaş', 'person'], ['gorevler', 'Görevler', 'check'], ['raporlar', 'Raporlar', 'poll'], ['sirket', 'Şirket bilgileri', 'settings']];
   const parts = location.hash.slice(2).split('/');
   const tab = TABS.some((t) => t[0] === parts[1]) ? parts[1] : 'ozet';
-  main.innerHTML = `${head('Şirket yönetimi', 'Muhasebe, fatura, cari, kasa-banka, personel ve görevler. Bu veriler sadece yönetim panelinde tutulur.')}
-    <div class="tabs erp-tabs">${TABS.map(([k, l, ic]) => `<a href="#/erp/${k}" class="${k === tab ? 'on' : ''}">${icon(ic)} ${l}</a>`).join('')}</div><div class="erp-body"><div class="spin"></div></div>`;
+  const AY = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+  const bugun = new Date(); const ayAdi = `${AY[bugun.getMonth()]} ${bugun.getFullYear()}`;
+  main.innerHTML = `<div class="erp">
+    <header class="erp-mast"><div><h1>Şirket yönetimi</h1><p>Muhasebe, fatura, cari, kasa ve banka, personel, görevler. Bu veriler yalnızca yönetim panelinde tutulur.</p></div>
+      <div class="erp-when"><b>${ayAdi}</b><span class="erp-co"></span></div></header>
+    <nav class="erp-nav" aria-label="Şirket bölümleri">${TABS.map(([k, l, ic]) => `<a href="#/erp/${k}" class="${k === tab ? 'on' : ''}"${k === tab ? ' aria-current="page"' : ''}>${icon(ic)}<span>${l}</span></a>`).join('')}</nav>
+    <div class="erp-body"><div class="spin"></div></div></div>`;
+  const nav = main.querySelector('.erp-nav'); const fade = () => nav.classList.toggle('more', nav.scrollWidth - nav.clientWidth - nav.scrollLeft > 6); // sağda görünmeyen bölüm varsa kenarı soldur
+  nav.querySelector('.on')?.scrollIntoView({ block: 'nearest', inline: 'center' }); nav.addEventListener('scroll', fade, { passive: true }); fade();
   const body = main.querySelector('.erp-body');
   const money = (n, cls = '') => `<span class="money ${cls}">${tl(n)}</span>`;
   const mlabel = (m) => new Date(`${m}-15`).toLocaleDateString('tr-TR', { month: 'short', year: '2-digit' });
@@ -26,24 +33,48 @@ export default async function erp(main, H) {
   // ================= ÖZET =================
   T.ozet = async () => {
     const s = await api('/erp/summary');
+    const net = s.income - s.expense; const top = s.income + s.expense; const inPct = top ? (s.income / top) * 100 : 50;
     const max = Math.max(1, ...s.chart.map((c) => Math.max(c.gelir, c.gider)));
-    const KIND = { odeme: ['bad', 'Ödeme'], tahsilat: ['ok', 'Tahsilat'], maas: ['warn', 'Maaş'], gorev: ['info', 'Görev'] };
+    const KIND = { odeme: 'Ödeme', tahsilat: 'Tahsilat', maas: 'Maaş', gorev: 'Görev' };
+    const TYPE = { kasa: 'Kasa', banka: 'Banka', pos: 'POS', kredi: 'Kredi kartı' };
+    // Büyük rakam: tam kısım iri, kuruş ve ₺ küçük
+    const big = (n) => { const [a, k] = fmtN(Math.abs(n)).split(','); return `${a}<small>,${k} ₺</small>`; };
+    const sign = (n) => (n > 0 ? '+' : n < 0 ? '−' : '');
+    const say = !top ? 'Bu ay henüz kayıt yok. Gelir-gider bölümünden ekleyebilirsin.' : !s.income ? 'Bu ay henüz gelir girilmedi.' : `Gider, gelirin %${Math.round((s.expense / s.income) * 100)} kadarı.`;
+    const pos = s.accounts.reduce((a, x) => a + Math.max(0, x.balance), 0) || 1; const due = s.receivable - s.payable;
+    const leaf = (ymd) => { const [, m, g] = ymd.split('-'); return `<time datetime="${ymd}"><b>${+g}</b><span>${AY[+m - 1].slice(0, 3)}</span></time>`; };
+    main.querySelector('.erp-co').textContent = s.company?.title || '';
     body.innerHTML = `${!s.company?.title ? `<a class="erp-hint" href="#/erp/sirket">${icon('settings')} Önce şirket bilgilerini gir; faturalarda görünür.</a>` : ''}
-      <div class="stats">
-        <div class="stat"><b class="money in">${tl(s.income)}</b><span>Bu ay gelir</span></div><div class="stat"><b class="money out">${tl(s.expense)}</b><span>Bu ay gider</span></div>
-        <div class="stat"><b class="money ${s.income - s.expense >= 0 ? 'in' : 'out'}">${tl(s.income - s.expense)}</b><span>Bu ay net kâr</span></div>
-        <div class="stat"><b class="money">${tl(s.cash)}</b><span>Kasa + banka</span><a href="#/erp/hesaplar">Hesaplar</a></div>
-        <div class="stat ${s.overdue ? 'alert' : ''}"><b class="money in">${tl(s.receivable)}</b><span>Alacak (tahsil edilecek)${s.overdue ? ` · ${s.overdue} gecikmiş` : ''}</span><a href="#/erp/faturalar">Faturalar</a></div>
-        <div class="stat"><b class="money out">${tl(s.payable)}</b><span>Borç (ödenecek)</span></div>
-        <div class="stat"><b class="money">${tl(s.vat.out - s.vat.in)}</b><span>Bu ay KDV farkı (hesaplanan ${tl(s.vat.out)} − indirilecek ${tl(s.vat.in)})</span></div>
-        <div class="stat"><b>${s.staff.count}</b><span>Personel · aylık ${tl(s.staff.monthly)}${s.staff.unpaid ? ` · ${s.staff.unpaid} maaş ödenmedi` : ''}</span><a href="#/erp/personel">Personel</a></div>
-        <div class="stat ${s.tasks.overdue ? 'alert' : ''}"><b>${s.tasks.todo + s.tasks.doing}</b><span>Açık görev${s.tasks.overdue ? ` · ${s.tasks.overdue} gecikmiş` : ''}</span><a href="#/erp/gorevler">Görevler</a></div>
-      </div>
+      <section class="erp-pos">
+        <div class="erp-net">
+          <h2>${ayAdi} net sonucu</h2>
+          <p class="erp-fig${net < 0 ? ' neg' : ''}">${sign(net)}${big(net)}</p>
+          <div class="erp-split" role="img" aria-label="Gelir ${tl(s.income)}, gider ${tl(s.expense)}"><i style="width:${inPct.toFixed(1)}%"></i></div>
+          <dl class="erp-io"><div><dt>Gelir</dt><dd>${tl(s.income)}</dd></div><div><dt>Gider</dt><dd>${tl(s.expense)}</dd></div></dl>
+          <p class="erp-say">${say}</p>
+        </div>
+        <div class="erp-cash">
+          <div class="erp-ct"><h2>Kasa ve banka</h2><a href="#/erp/hesaplar">Hesapları yönet</a></div>
+          <p class="erp-fig${s.cash < 0 ? ' neg' : ''}">${s.cash < 0 ? '−' : ''}${big(s.cash)}</p>
+          ${s.accounts.length ? `<ul class="erp-accs">${s.accounts.map((a) => `<li style="--w:${Math.max(0, (a.balance / pos) * 100).toFixed(1)}%"><span class="erp-tag">${esc(TYPE[a.type] || 'Hesap')}</span><b>${esc(a.name)}</b>${money(a.balance, a.balance < 0 ? 'out' : '')}</li>`).join('')}</ul>` : '<p class="muted" style="margin:0">Henüz hesap yok. Kasa ve banka hesaplarını ekleyince bakiyeler burada görünür.</p>'}
+        </div>
+      </section>
+      <section class="erp-scale" aria-label="Alacak ve borç">
+        <a class="sd in" href="#/erp/faturalar"><span>Tahsil edilecek</span><b>${tl(s.receivable)}</b>${s.overdue ? `<em>${s.overdue} fatura gecikti</em>` : ''}</a>
+        <div class="mid"><span>${due >= 0 ? 'Net alacak' : 'Net borç'}</span><b class="money ${due >= 0 ? 'in' : 'out'}">${tl(Math.abs(due))}</b></div>
+        <a class="sd out" href="#/erp/faturalar"><span>Ödenecek</span><b>${tl(s.payable)}</b></a>
+      </section>
+      <section class="erp-strip">
+        <div><span>Bu ay KDV farkı</span><b class="money">${tl(s.vat.out - s.vat.in)}</b><small>hesaplanan ${tl(s.vat.out)} − indirilecek ${tl(s.vat.in)}</small></div>
+        <a href="#/erp/personel"><span>Personel</span><b>${s.staff.count}</b><small>aylık ${tl(s.staff.monthly)}${s.staff.unpaid ? ` · <em>${s.staff.unpaid} maaş ödenmedi</em>` : ''}</small></a>
+        <a href="#/erp/gorevler"><span>Açık görev</span><b>${s.tasks.todo + s.tasks.doing}</b><small>${s.tasks.overdue ? `<em>${s.tasks.overdue} gecikti</em>` : 'geciken yok'}</small></a>
+      </section>
       <div class="grid g21">
-        <div class="panel"><div class="ph"><h3>Son 12 ay gelir / gider</h3><span class="chip ok">Gelir</span><span class="chip bad">Gider</span></div><div class="pb"><div class="chart">${s.chart.map((c) => `<div class="b two" title="${c.month}: +${tl(c.gelir)} / −${tl(c.gider)}"><i style="height:${(c.gelir / max) * 100}%"></i><i style="height:${(c.gider / max) * 100}%"></i><small>${mlabel(c.month)}</small></div>`).join('')}</div></div></div>
-        <div class="panel"><div class="ph"><h3>Yaklaşanlar</h3></div><div class="pb">${s.upcoming.length ? s.upcoming.map((u) => `<div class="row erp-up ${u.date < today() ? 'late' : ''}"><span class="chip ${KIND[u.kind][0]}">${KIND[u.kind][1]}</span><span class="grow">${esc(u.text)}<div class="muted" style="font-size:11.5px">${d(u.date)}${u.date < today() ? ' · gecikti' : ''}</div></span>${u.amount != null ? money(u.amount) : ''}</div>`).join('') : '<div class="muted">Yaklaşan ödeme, tahsilat ya da görev yok.</div>'}</div></div>
-      </div>
-      <div class="panel" style="margin-top:14px"><div class="ph"><h3>Hesap bakiyeleri</h3><a class="btn sm" href="#/erp/hesaplar">Yönet</a></div><div class="pb row" style="gap:10px;flex-wrap:wrap">${s.accounts.length ? s.accounts.map((a) => `<div class="acc-chip"><small>${esc({ kasa: 'Kasa', banka: 'Banka', pos: 'POS', kredi: 'Kredi kartı' }[a.type])}</small><b>${esc(a.name)}</b>${money(a.balance, a.balance < 0 ? 'out' : '')}</div>`).join('') : '<span class="muted">Henüz hesap yok. Kasa ve banka hesaplarını ekle.</span>'}</div></div>`;
+        <div class="panel"><div class="ph"><h3>Son 12 ay</h3><span class="erp-lg in">Gelir</span><span class="erp-lg out">Gider</span></div>
+          <div class="pb"><div class="erp-chart">${s.chart.map((c, i) => `<div class="col${i === s.chart.length - 1 ? ' now' : ''}" title="${mlabel(c.month)}: gelir ${tl(c.gelir)}, gider ${tl(c.gider)}"><div class="bars"><i class="in" style="height:${((c.gelir / max) * 100).toFixed(1)}%"></i><i class="out" style="height:${((c.gider / max) * 100).toFixed(1)}%"></i></div><small>${mlabel(c.month).replace(/ (\d+)$/, '<span class="yy"> $1</span>')}</small></div>`).join('')}</div>
+            <p class="erp-max">En yüksek ay ${tl(max)}</p></div></div>
+        <div class="panel"><div class="ph"><h3>Yaklaşanlar</h3></div><div class="erp-agenda">${s.upcoming.length ? s.upcoming.map((u) => `<div class="erp-ag${u.date < today() ? ' late' : ''}">${leaf(u.date)}<div class="t"><b>${esc(u.text)}</b><small><span class="erp-k k-${u.kind}">${KIND[u.kind] || ''}</span>${u.date < today() ? ' · gecikti' : ''}</small></div>${u.amount != null ? money(u.amount) : ''}</div>`).join('') : '<p class="muted" style="margin:12px 0">Yaklaşan ödeme, tahsilat ya da görev yok.</p>'}</div></div>
+      </div>`;
   };
 
   // ================= GELİR-GİDER =================

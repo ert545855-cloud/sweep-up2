@@ -3,9 +3,11 @@ import {
   shareSheet, state, api, esc, on, toast, el, sheet, needCoins, tick, FILTERS, filterCss,
 } from '../core.js';
 import { giftIcon } from '../eg-icons.js';
+import { openCamera, switchCamera } from '../cam.js';
+import { lyricView } from '../lyrics.js';
 
 // Yayıncı efekt seçici (izleyicilerde de aynı efekt görünür)
-function effectSheet(cur, onPick) {
+export function effectSheet(cur, onPick) {
   sheet('Efektler', `<div class="fstrip big">${FILTERS.map(([id, name, css]) => `<button data-f="${id}" class="${(cur || '') === id ? 'on' : ''}"><span style="background:linear-gradient(135deg,#ff8a3d,#7c3aed 55%,#22c55e);filter:${css}"></span>${name}</button>`).join('')}</div>`, {
     onMount(sh, close) {
       sh.querySelector('.fstrip').onclick = (e) => { const b = e.target.closest('[data-f]'); if (!b) return; onPick(b.dataset.f); close(); };
@@ -37,7 +39,7 @@ async function giftSheet(hostId) {
 
 const rtcConfig = () => ({ iceServers: state.config?.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] });
 
-function makePeer(remoteId, onTrack) {
+export function makePeer(remoteId, onTrack) {
   const pc = new RTCPeerConnection(rtcConfig());
   const pending = [];
   pc.onicecandidate = (e) => { if (e.candidate) state.socket.emit('live:signal', { to: remoteId, data: { candidate: e.candidate } }); };
@@ -58,9 +60,10 @@ function makePeer(remoteId, onTrack) {
   return pc;
 }
 
-function chrome(view, user, { host }) {
+export function chrome(view, user, { host }) {
   view.innerHTML = `<div class="live">
     <video playsinline autoplay ${host ? 'muted class="mirror"' : ''}></video>
+    <div class="ks-bg" aria-hidden="true"><i></i><i></i><i></i><span class="ks-av"><img src="${esc(user.avatar)}" alt=""></span><b class="ks-title"></b></div>
     <div class="shade"></div>
     <div class="lt">
       <img class="av av-32" src="${esc(user.avatar)}" alt="">
@@ -77,7 +80,7 @@ function chrome(view, user, { host }) {
   return view.querySelector('.live');
 }
 
-function wireChat(root, hostId) {
+export function wireChat(root, hostId) {
   const cm = root.querySelector('.comments');
   const hearts = root.querySelector('.hearts');
   const addComment = (c) => {
@@ -116,92 +119,130 @@ function wireChat(root, hostId) {
 }
 
 // ------------ Yayıncı ------------
+// Yayıncı çekirdeği: her izleyiciye bağlantı kurar. Görüntü izi sonradan eklenebilir, değiştirilebilir ya da kapatılabilir
+// (sesli yayın, kamerayı çevirme, karaoke sahnesi bunu kullanır).
+export function caster(getStream) {
+  const peers = new Map(); let live = false; let vtrack = null;
+  const offer = async (id, pc, n = 0) => {
+    if (peers.get(id) !== pc) return;
+    if (pc.signalingState !== 'stable') { if (n < 10) setTimeout(() => offer(id, pc, n + 1), 400); return; } // önceki el sıkışma bitsin
+    try { await pc.setLocalDescription(await pc.createOffer()); state.socket.emit('live:signal', { to: id, data: { sdp: pc.localDescription } }); } catch { /* bağlantı kapanmış olabilir */ }
+  };
+  const offs = [
+    on('live:viewer', async ({ viewerId }) => {
+      if (!live) return;
+      peers.get(viewerId)?.close();
+      const pc = makePeer(viewerId); peers.set(viewerId, pc);
+      const s = getStream(); s.getAudioTracks().forEach((t) => pc.addTrack(t, s));
+      if (vtrack) pc.vs = pc.addTrack(vtrack, s);
+      await offer(viewerId, pc);
+    }),
+    on('live:signal', ({ from, data }) => { peers.get(from)?.handle(data).catch(() => {}); }),
+    on('live:viewer-left', ({ viewerId }) => { peers.get(viewerId)?.close(); peers.delete(viewerId); }),
+  ];
+  return {
+    get on() { return live; },
+    start() { live = true; },
+    // Görüntü izi: yeni iz (kamera açıldı ya da çevrildi) veya null (kamera kapandı)
+    setVideo(track) {
+      vtrack = track || null;
+      peers.forEach((pc, id) => {
+        if (pc.vs) pc.vs.replaceTrack(vtrack).catch(() => {});
+        else if (vtrack) { pc.vs = pc.addTrack(vtrack, getStream()); offer(id, pc); }
+      });
+    },
+    stop() { live = false; peers.forEach((pc) => pc.close()); peers.clear(); },
+    off() { offs.forEach((f) => f()); },
+  };
+}
+
 async function host(view) {
   const root = chrome(view, state.me, { host: true });
   const video = root.querySelector('video');
   const slot = root.querySelector('.slot');
-  let stream; let facing = 'user'; let live = false; let offChat = null; let fx = '';
-  const peers = new Map();
+  let stream; let facing = 'user'; let offChat = null; let fx = ''; let busy = false;
+  const cast = caster(() => stream);
+  const hasCam = () => !!stream?.getVideoTracks().length;
+  const say = () => state.socket.emit('live:k', { cam: hasCam() });
+  const showCam = () => { // önizlemeyi tazele (aynı akış yeniden bağlanmazsa bazı tarayıcılar eski görüntüde kalır)
+    root.classList.toggle('audio', !hasCam()); video.srcObject = null;
+    if (hasCam()) { video.srcObject = stream; video.play?.().catch(() => {}); }
+    video.classList.toggle('mirror', facing === 'user');
+  };
 
   if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) {
-    slot.innerHTML = '<div class="center-msg">Bu tarayıcı kamera ile canlı yayını desteklemiyor.</div>';
+    slot.innerHTML = '<div class="center-msg">Bu tarayıcı canlı yayını desteklemiyor.</div>';
   } else {
+    const audio = { echoCancellation: true, noiseSuppression: true };
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 720 }, height: { ideal: 1280 }, aspectRatio: { ideal: 9 / 16 } }, audio: { echoCancellation: true, noiseSuppression: true } });
-      video.srcObject = stream;
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 720 }, height: { ideal: 1280 }, aspectRatio: { ideal: 9 / 16 } }, audio });
     } catch {
-      slot.innerHTML = `<div class="center-msg"><div>${icon('camera')}<p>Canlı yayın için kamera ve mikrofon izni gerekiyor. Tarayıcı ayarlarından izin verip sayfayı yenile.</p></div></div>`;
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio }); toast('Kamera açılamadı. İstersen yalnızca sesli yayın yapabilirsin.'); } catch {
+        slot.innerHTML = `<div class="center-msg"><div>${icon('mic')}<p>Canlı yayın için mikrofon izni gerekiyor. Tarayıcı ayarlarından izin verip sayfayı yenile.</p></div></div>`;
+      }
     }
   }
 
+  async function flip() {
+    if (busy || !hasCam()) return; busy = true;
+    const r = await switchCamera(stream, facing === 'user' ? 'environment' : 'user'); busy = false;
+    facing = r.facing; cast.setVideo(r.track); showCam(); tools();
+    if (!r.ok) toast(r.track ? 'Diğer kameraya geçilemedi.' : 'Kamera açılamadı.');
+    if (cast.on) say();
+  }
+  async function toggleCam() {
+    if (busy) return; busy = true;
+    if (hasCam()) { const t = stream.getVideoTracks()[0]; stream.removeTrack(t); t.stop(); cast.setVideo(null); } else {
+      try { const t = await openCamera(facing); stream.addTrack(t); cast.setVideo(t); } catch { toast('Kamera açılamadı. Tarayıcı ayarlarından kamera iznini kontrol et.'); }
+    }
+    busy = false; showCam(); tools(); if (cast.on) say();
+  }
+  function tools() {
+    let t = root.querySelector('.tools'); if (!t) { t = el('<div class="tools"></div>'); root.append(t); }
+    const micOn = stream.getAudioTracks()[0]?.enabled !== false;
+    t.innerHTML = `<button class="cam" aria-label="${hasCam() ? 'Kamerayı kapat' : 'Kamerayı aç'}">${icon(hasCam() ? 'video' : 'videoOff')}</button>
+      ${hasCam() ? `<button class="flip" aria-label="Kamerayı çevir">${icon('flip')}</button>` : ''}
+      <button class="mic" aria-label="${micOn ? 'Mikrofonu kapat' : 'Mikrofonu aç'}">${icon(micOn ? 'mic' : 'micOff')}</button>
+      ${hasCam() ? `<button class="fx" aria-label="Efektler">${icon('wand')}</button>` : ''}`;
+    t.querySelector('.cam').onclick = toggleCam;
+    t.querySelector('.flip')?.addEventListener('click', flip);
+    t.querySelector('.mic').onclick = () => { const a = stream.getAudioTracks()[0]; if (!a) return; a.enabled = !a.enabled; tools(); };
+    t.querySelector('.fx')?.addEventListener('click', () => effectSheet(fx, (f) => {
+      fx = f; video.style.filter = filterCss(f);
+      if (cast.on) state.socket.emit('live:filter', { filter: f });
+      const n = FILTERS.find((x) => x[0] === f)?.[1]; if (n) toast(`Efekt: ${n}`, { ms: 1200 });
+    }));
+  }
+
   if (stream) {
+    showCam(); tools();
     slot.innerHTML = `<div class="setup">
       <input class="title" placeholder="Yayına bir başlık ekle (isteğe bağlı)" maxlength="80">
       <button class="go-live">Canlı yayına başla</button>
-      <p style="margin:0;text-align:center;opacity:.8;font-size:13px">Takipçilerine bildirim gidecek.</p></div>`;
+      <p style="margin:0;text-align:center;opacity:.8;font-size:13px">Takipçilerine bildirim gidecek. Kamerayı sağ üstten kapatıp yalnızca sesli de yayın yapabilirsin.</p></div>`;
     slot.querySelector('.go-live').onclick = () => {
       const title = slot.querySelector('.title').value;
       state.socket.emit('live:start', { title }, () => {
-        live = true;
-        slot.innerHTML = `<div class="tools">
-          <button class="flip" aria-label="Kamerayı çevir">${icon('flip')}</button>
-          <button class="mic" aria-label="Mikrofonu kapat">${icon('mic')}</button>
-          <button class="fx" aria-label="Efektler">${icon('wand')}</button></div>`;
+        cast.setVideo(stream.getVideoTracks()[0] || null); cast.start();
+        slot.innerHTML = '';
         root.querySelector('.badge-live').hidden = false;
         root.querySelector('.badge-v').hidden = false;
         offChat = wireChat(root, state.me.id);
-        slot.querySelector('.flip').onclick = flip;
-        slot.querySelector('.fx').onclick = () => effectSheet(fx, (f) => {
-          fx = f; video.style.filter = filterCss(f);
-          state.socket.emit('live:filter', { filter: f });
-          const n = FILTERS.find((x) => x[0] === f)?.[1]; if (n) toast(`Efekt: ${n}`, { ms: 1200 });
-        });
-        slot.querySelector('.mic').onclick = (e) => {
-          const t = stream.getAudioTracks()[0]; if (!t) return;
-          t.enabled = !t.enabled;
-          e.currentTarget.innerHTML = icon(t.enabled ? 'mic' : 'micOff');
-        };
+        say(); if (fx) state.socket.emit('live:filter', { filter: fx });
       });
     };
   }
 
-  async function flip() {
-    facing = facing === 'user' ? 'environment' : 'user';
-    try {
-      const ns = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 720 }, height: { ideal: 1280 }, aspectRatio: { ideal: 9 / 16 } } });
-      const nt = ns.getVideoTracks()[0];
-      const old = stream.getVideoTracks()[0];
-      stream.removeTrack(old); old.stop(); stream.addTrack(nt);
-      peers.forEach((pc) => pc.getSenders().find((x) => x.track?.kind === 'video')?.replaceTrack(nt));
-      video.srcObject = stream;
-      video.classList.toggle('mirror', facing === 'user');
-    } catch { toast('Diğer kameraya geçilemedi.'); }
-  }
-
-  const offs = [
-    on('live:viewer', async ({ viewerId }) => {
-      if (!live) return;
-      const pc = makePeer(viewerId);
-      peers.set(viewerId, pc);
-      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-      await pc.setLocalDescription(await pc.createOffer());
-      state.socket.emit('live:signal', { to: viewerId, data: { sdp: pc.localDescription } });
-    }),
-    on('live:signal', ({ from, data }) => peers.get(from)?.handle(data)),
-    on('live:viewer-left', ({ viewerId }) => { peers.get(viewerId)?.close(); peers.delete(viewerId); }),
-  ];
-
   const stop = () => {
-    if (live) state.socket.emit('live:stop');
-    live = false;
-    peers.forEach((pc) => pc.close()); peers.clear();
+    if (cast.on) state.socket.emit('live:stop');
+    cast.stop();
     stream?.getTracks().forEach((t) => t.stop());
   };
   root.querySelector('.x').onclick = () => {
-    if (live && !confirm('Canlı yayın bitirilsin mi?')) return;
+    if (cast.on && !confirm('Canlı yayın bitirilsin mi?')) return;
     stop(); history.length > 1 ? history.back() : (location.hash = '#/');
   };
-  return () => { stop(); offs.forEach((f) => f()); offChat?.(); };
+  return () => { stop(); cast.off(); offChat?.(); };
 }
 
 // ------------ İzleyici ------------
@@ -214,9 +255,37 @@ async function watch(view, hostId) {
   slot.innerHTML = '<div class="center-msg"><div class="spinner"></div></div>';
   let pc = null;
 
+  // Sesli yayın / karaoke durumu: kamera açık mı, hangi şarkı çalıyor, sözlerin neresindeyiz
+  const kl = el('<div class="kl" hidden></div>'); root.append(kl);
+  const lv = lyricView(kl);
+  let k = null; let kAt = 0; let kKey = null;
+  const tickK = () => { if (k && lv.has) lv.at(k.pos + (k.playing ? (performance.now() - kAt) / 1000 : 0), k.dur || 0, k.playing); };
+  const applyK = (m, age = 0) => {
+    if (typeof m.lyr !== 'string') m.lyr = k?.lyr || '';
+    k = m; kAt = performance.now() - age;
+    root.classList.toggle('audio', !m.cam);
+    root.querySelector('.ks-title').textContent = m.title || '';
+    const key = `${m.timed ? 1 : 0}|${m.lyr}`; if (key !== kKey) { kKey = key; lv.set(m.lyr, { timed: !!m.timed }); }
+    root.classList.toggle('kar', lv.has);
+    if (m.kar && !root.querySelector('.lb .rb')) { // karaoke: dinleyici yayından çıkmadan puan verebilsin
+      const b = el(`<button type="button" class="rb" aria-label="Puan ver">${icon('star')}</button>`);
+      root.querySelector('.lb .hb')?.before(b);
+      b.onclick = () => sheet('Performansa puan ver', `<div class="kr-stars big">${[1, 2, 3, 4, 5].map((i) => `<button class="kr-st" data-s="${i}" aria-label="${i} yıldız">★</button>`).join('')}</div><p class="muted" style="text-align:center;margin:10px 0 0;font-size:13px">Puanın şarkı bitince ortalamaya eklenir.</p>`, {
+        onMount(sh, close) {
+          sh.querySelector('.kr-stars').onclick = async (e) => {
+            const st = e.target.closest('.kr-st'); if (!st) return;
+            try { await api('/karaoke/score', { body: { score: +st.dataset.s } }); toast(`${st.dataset.s} puan verdin`); close(); } catch (er) { toast(er.message); }
+          };
+        },
+      });
+    }
+    tickK();
+  };
+  const kTimer = setInterval(tickK, 120);
+
   const ended = () => {
     pc?.close(); pc = null;
-    video.srcObject = null;
+    video.srcObject = null; clearInterval(kTimer); kl.hidden = true; root.classList.remove('audio', 'kar');
     root.querySelector('.lb')?.remove();
     root.querySelector('.badge-live').hidden = true;
     slot.innerHTML = `<div class="center-msg"><div><img class="av av-56" src="${esc(host_.avatar)}" alt="" style="margin:0 auto 12px"><h2 style="margin:0 0 6px">Canlı yayın sona erdi</h2>
@@ -243,6 +312,7 @@ async function watch(view, hostId) {
     }),
     on('live:ended', ({ userId }) => { if (userId === hostId) ended(); }),
     on('live:filter', ({ hostId: h, filter }) => { if (h === hostId) video.style.filter = filterCss(filter); }),
+    on('live:k', (m) => { if (m.hostId === hostId) applyK(m); }),
   ];
 
   const r = await new Promise((res) => state.socket.emit('live:join', { hostId }, res));
@@ -254,11 +324,12 @@ async function watch(view, hostId) {
     root.querySelector('.vc').textContent = r.live.viewers;
     video.style.filter = filterCss(r.live.filter);
     offChat = wireChat(root, hostId);
+    if (r.k) applyK({ hostId, ...r.k }, Math.max(0, (r.now || 0) - (r.k.at || 0)));
     let last = 0;
     video.addEventListener('click', () => { const t = Date.now(); if (t - last < 300) state.socket.emit('live:heart', { hostId }); last = t; });
   }
   root.querySelector('.x').onclick = () => (history.length > 1 ? history.back() : (location.hash = '#/'));
-  return () => { state.socket.emit('live:leave'); pc?.close(); offs.forEach((f) => f()); offChat?.(); };
+  return () => { state.socket.emit('live:leave'); clearInterval(kTimer); pc?.close(); offs.forEach((f) => f()); offChat?.(); };
 }
 
 export default function live(view, hostId) {

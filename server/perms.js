@@ -35,7 +35,7 @@ const LEGACY = ALL.filter((p) => !['erp', 'database', 'maintenance', 'settings']
 
 const PREFIX = {
   admins: 'owner', announcements: 'announce', appeals: 'appeals', audit: 'audit', content: 'content', media: 'content', database: 'database',
-  economy: 'settings', event: 'settings', legal: 'settings', rooms: 'settings', fal: 'fal', falai: 'fal', flags: 'flags', growth: 'growth', engage: 'engage',
+  economy: 'settings', event: 'settings', legal: 'settings', rooms: 'settings', fal: 'fal', falai: 'fal', flags: 'flags', growth: 'growth', engage: 'engage', karaoke: 'engage',
   ledger: 'erp', erp: 'erp', maintenance: 'maintenance', market: 'market', notes: 'notes', orders: 'orders', payouts: 'payouts', promos: 'promos',
   quests: 'quests', wheel: 'quests', reports: 'reports', songs: 'songs', contests: 'contests', support: 'support', tags: 'tags', verifications: 'verify',
 };

@@ -1568,7 +1568,7 @@ app.get('/api/badges', auth, (req, res) => {
 });
 
 // ---------- Canlı ----------
-const liveOut = (l) => ({ userId: l.userId, title: l.title, startedAt: l.startedAt, viewers: l.viewers.size, filter: l.filter || null, user: brief(store.get('users', l.userId)) });
+const liveOut = (l) => ({ userId: l.userId, title: l.title, startedAt: l.startedAt, viewers: l.viewers.size, filter: l.filter || null, kar: !!l.kar, user: brief(store.get('users', l.userId)) });
 app.get('/api/lives', auth, (req, res) => res.json([...lives.values()].map(liveOut)));
 
 // ---------- Müzik (Spotify + önizleme) ----------
@@ -1766,6 +1766,7 @@ featureCtx.pushIcon = (u) => `${iconBase(LOGO_ICONS.has(u?.logo) && isPlus(u) ? 
 // ---------- Statik ----------
 // 3D oyunlar için three.js (yalnızca 3D oyun açılınca yüklenir)
 app.use('/vendor/three', express.static(path.join(__dirname, 'node_modules', 'three', 'build'), { maxAge: '30d', immutable: true, index: false }));
+app.use('/vendor/cannon', express.static(path.join(__dirname, 'node_modules', 'cannon-es', 'dist'), { maxAge: '30d', immutable: true, index: false })); // 3D oyunların fizik motoru
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, p) {
     if (p.endsWith('sw.js') || p.endsWith('.html') || p.endsWith('.js') || p.endsWith('.css')) res.setHeader('Cache-Control', 'no-cache');
@@ -1945,9 +1946,9 @@ io.on('connection', (socket) => {
   socket.on('call:signal', ({ to, data }) => { if (typeof to === 'string') io.to(to).emit('call:signal', { from: socket.id, data }); });
 
   // ---- Canlı yayın ----
-  socket.on('live:start', ({ title } = {}, ack) => {
+  socket.on('live:start', ({ title, kar } = {}, ack) => {
     endLive(uid);
-    lives.set(uid, { userId: uid, socketId: socket.id, title: String(title || '').slice(0, 80), startedAt: now(), viewers: new Set() });
+    lives.set(uid, { userId: uid, socketId: socket.id, title: String(title || '').slice(0, 80), startedAt: now(), viewers: new Set(), kar: !!kar });
     featureCtx.track?.('live');
     socket.join(`live:${uid}`);
     io.emit('lives', [...lives.values()].map(liveOut));
@@ -1971,7 +1972,7 @@ io.on('connection', (socket) => {
     io.to(l.socketId).emit('live:viewer', { viewerId: socket.id, user: brief(store.get('users', uid)) });
     io.to(`live:${hostId}`).emit('live:count', { hostId, viewers: l.viewers.size });
     io.to(`live:${hostId}`).emit('live:comment', { hostId, system: true, user: brief(store.get('users', uid)), text: 'katıldı 👋', at: now() });
-    ack?.({ ok: true, live: liveOut(l) });
+    ack?.({ ok: true, live: liveOut(l), k: l.k || null, now: now() });
   });
   const leave = () => {
     const hostId = socket.data.watching;
@@ -1989,6 +1990,20 @@ io.on('connection', (socket) => {
     text = String(text || '').trim().slice(0, 200);
     if (!text || !lives.has(hostId) || limited('lc:' + uid, 20, 30000)) return;
     io.to(`live:${hostId}`).emit('live:comment', { hostId, user: brief(store.get('users', uid)), text: moderation.mask(text), at: now() });
+  });
+  // Sesli yayın / karaoke sahnesi durumu: kamera açık mı, hangi şarkı, kaçıncı saniye, sözler (izleyiciler eşzamanlı görür)
+  socket.on('live:k', (k = {}) => {
+    const l = lives.get(uid);
+    if (!l || !k || typeof k !== 'object' || limited('lk:' + uid, 60, 10000)) return;
+    const prev = l.k || {}; const fresh = typeof k.lyr === 'string';
+    l.k = {
+      kar: !!l.kar, cam: !!k.cam, playing: !!k.playing, timed: !!k.timed,
+      title: String(k.title ?? prev.title ?? '').slice(0, 100),
+      pos: Math.max(0, Math.min(7200, +k.pos || 0)), dur: Math.max(0, Math.min(7200, +k.dur || 0)), at: now(),
+      lyr: fresh ? moderation.mask(k.lyr.slice(0, 12000)) : prev.lyr || '',
+    };
+    const { lyr, ...lite } = l.k;
+    io.to(`live:${uid}`).emit('live:k', { hostId: uid, ...lite, ...(fresh ? { lyr } : {}) });
   });
   socket.on('live:filter', ({ filter } = {}) => {
     const l = lives.get(uid);

@@ -6,7 +6,7 @@ try { lang = localStorage.getItem('su_lang') || 'tr'; } catch {}
 export const getLang = () => lang;
 let dict = null; let pats = [];
 const norm = (s) => s.replace(/\s+/g, ' ').trim();
-const SKIP = 'script,style,textarea,.mwrap .msg,.cap,.ctext,.bio,.tp-t,.post-h .u,.n,.u,.vw-h b,.pq-quote,.cmt,.stk,.ov,.genel .bubble,[data-noi18n]';
+const SKIP = 'script,style,textarea,.mwrap .msg,.cap,.ctext,.bio,.tp-t,.post-h .u,.n,.u,.vw-h b,.pq-quote,.cmt,.stk,.ov,.genel .bubble,.ly,.ks-title,.ks-meta b,.ks-set h2,.kr-pick b,.kr-pick small,[data-noi18n]';
 
 function tr(s) {
   if (!dict || !s) return null;
