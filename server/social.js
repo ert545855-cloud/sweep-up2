@@ -16,16 +16,16 @@ const PROMPTS = [
 const PROMPT = Object.fromEntries(PROMPTS);
 
 const FRAMES = [
-  { id: 'gokkusagi', name: 'Gökkuşağı', coins: 100 },
-  { id: 'neon', name: 'Neon', coins: 120 },
-  { id: 'alev', name: 'Alev', coins: 120 },
-  { id: 'okyanus', name: 'Okyanus', coins: 120 },
-  { id: 'altin', name: 'Altın', coins: 180 },
-  { id: 'galaksi', name: 'Galaksi', coins: 200 },
-  { id: 'elmas', name: 'Elmas', coins: 300 },
-  { id: 'cadi', name: 'Cadılar Bayramı', coins: 90, event: 'halloween' },
-  { id: 'yilbasi', name: 'Yılbaşı', coins: 90, event: 'yilbasi' },
-  { id: 'sevgililer', name: 'Sevgililer', coins: 90, event: 'sevgililer' },
+  { id: 'gokkusagi', name: 'Gökkuşağı', coins: 25 },
+  { id: 'neon', name: 'Neon', coins: 30 },
+  { id: 'alev', name: 'Alev', coins: 30 },
+  { id: 'okyanus', name: 'Okyanus', coins: 30 },
+  { id: 'altin', name: 'Altın', coins: 45 },
+  { id: 'galaksi', name: 'Galaksi', coins: 50 },
+  { id: 'elmas', name: 'Elmas', coins: 75 },
+  { id: 'cadi', name: 'Cadılar Bayramı', coins: 22, event: 'halloween' },
+  { id: 'yilbasi', name: 'Yılbaşı', coins: 22, event: 'yilbasi' },
+  { id: 'sevgililer', name: 'Sevgililer', coins: 22, event: 'sevgililer' },
 ];
 const EVENT_BADGE = { halloween: { em: '🎃', name: 'Cadılar Bayramı' }, yilbasi: { em: '🎄', name: 'Yılbaşı' }, sevgililer: { em: '💘', name: 'Sevgililer Günü' } };
 const BADGE_LIMIT = 500;
@@ -104,7 +104,7 @@ module.exports = function social(app, ctx) {
     const year = new Date(e.end - 1).getUTCFullYear();
     const id = `${e.id}-${year}`;
     const sold = store.filter('users', (u) => (u.badges || []).some((b) => b.id === id)).length;
-    return { id, em: EVENT_BADGE[e.id].em, name: `${EVENT_BADGE[e.id].name} ${year}`, coins: 50, limit: BADGE_LIMIT, left: Math.max(0, BADGE_LIMIT - sold), until: e.end };
+    return { id, em: EVENT_BADGE[e.id].em, name: `${EVENT_BADGE[e.id].name} ${year}`, coins: 12, limit: BADGE_LIMIT, left: Math.max(0, BADGE_LIMIT - sold), until: e.end };
   };
   app.get('/api/cosmetics', auth, (req, res) => {
     const e = liveEvent();
@@ -409,8 +409,9 @@ module.exports = function social(app, ctx) {
     const s = eco.get();
     const f = falci();
     if (!f) return res.status(503).json({ error: 'Falcı Teyze şu an hizmet vermiyor.' });
-    if (!eco.spend(req.user.id, s.falSubCoins, 'fal_sub')) return res.status(402).json({ error: `Abonelik ${s.falSubCoins} jeton.`, need: s.falSubCoins });
-    eco.earn(f.id, Math.round(s.falSubCoins * s.falciShare), 'fal_sub', { fromId: req.user.id });
+    const pay = eco.spend(req.user.id, s.falSubCoins, 'fal_sub');
+    if (!pay) return res.status(402).json({ error: `Abonelik ${s.falSubCoins} jeton.`, need: s.falSubCoins });
+    eco.earn(f.id, pay.paid * s.falciShare, 'fal_sub', { fromId: req.user.id });
     const cur = req.user.falSub || {};
     const base = Math.max(now(), cur.until || 0);
     const sub = { until: base + 30 * DAY, kahveLeft: (ctx.falSubActive(req.user) ? cur.kahveLeft || 0 : 0) + 1, since: cur.since && cur.until > now() ? cur.since : now(), burcWeek: cur.burcWeek || null };

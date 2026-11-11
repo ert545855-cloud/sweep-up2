@@ -85,15 +85,15 @@ const COMPAT_QS = [
 
 // ---------- Falcı Teyze paketleri ----------
 const DEFAULT_PACKS = [
-  { id: 'ask_ay', em: '💞', name: 'Aylık aşk falı paketi', desc: '30 gün içinde 4 aşk uyumu falı', type: 'uyum', credits: 4, days: 30, coins: 90, enabled: true },
-  { id: 'tarot_ay', em: '🔮', name: 'Aylık tarot paketi', desc: '30 gün içinde 4 tarot falı', type: 'tarot', credits: 4, days: 30, coins: 90, enabled: true },
-  { id: 'kahve_3', em: '☕️', name: 'Kahve falı üçlüsü', desc: '60 gün içinde 3 kahve falı', type: 'kahve', credits: 3, days: 60, coins: 100, enabled: true },
-  { id: 'yillik', em: '🌟', name: 'Yıllık burç raporu', desc: 'Önümüzdeki 12 ayın aşk, iş ve para yorumu', type: 'yillik', credits: 1, days: 0, coins: 150, enabled: true },
+  { id: 'ask_ay', em: '💞', name: 'Aylık aşk falı paketi', desc: '30 gün içinde 4 aşk uyumu falı', type: 'uyum', credits: 4, days: 30, coins: 22, enabled: true },
+  { id: 'tarot_ay', em: '🔮', name: 'Aylık tarot paketi', desc: '30 gün içinde 4 tarot falı', type: 'tarot', credits: 4, days: 30, coins: 22, enabled: true },
+  { id: 'kahve_3', em: '☕️', name: 'Kahve falı üçlüsü', desc: '60 gün içinde 3 kahve falı', type: 'kahve', credits: 3, days: 60, coins: 25, enabled: true },
+  { id: 'yillik', em: '🌟', name: 'Yıllık burç raporu', desc: 'Önümüzdeki 12 ayın aşk, iş ve para yorumu', type: 'yillik', credits: 1, days: 0, coins: 38, enabled: true },
 ];
 
 const DEFAULTS = {
-  streak: { enabled: true, milestones: { 3: 5, 7: 15, 14: 25, 30: 60, 50: 100, 100: 250 }, warnHour: 20 },
-  login: { enabled: true, milestones: { 3: 3, 7: 10, 14: 20, 30: 50 }, freezeCoins: 20, maxFreezes: 2, warnHour: 20 },
+  streak: { enabled: true, milestones: { 3: 1, 7: 4, 14: 6, 30: 15, 50: 25, 100: 60 }, warnHour: 20 }, // 1 jeton = 1 TL
+  login: { enabled: true, milestones: { 3: 1, 7: 3, 14: 5, 30: 12 }, freezeCoins: 5, maxFreezes: 2, warnHour: 20 },
   picks: { enabled: false, count: 5, notifyHour: 9 }, // kullanıcı isteğiyle kapatıldı ("Bugün 5 kişi")
   ai: { textCheck: false, imageCheck: true, verifyCheck: true, verifyAuto: false },
   karaoke: { enabled: true, turnMinutes: 5 },
@@ -536,8 +536,9 @@ module.exports = function engage(app, ctx) {
     const gift = s.gifts.find((g) => g.id === req.body?.giftId);
     if (!gift) return res.status(400).json({ error: 'Hediye bulunamadı.' });
     if (limited('cgift:' + req.user.id, 30, 3600000)) return res.status(429).json({ error: 'Biraz yavaş 🙂' });
-    if (!eco.spend(req.user.id, gift.coins, 'gift', { to: to.id, gift: gift.id, chat: chat.id })) return res.status(402).json({ error: 'Jetonun yetmiyor.', needCoins: true });
-    eco.earn(to.id, Math.round(gift.coins * s.creatorShare), 'gift', { fromId: req.user.id, gift: gift.id, chat: chat.id });
+    const pay = eco.spend(req.user.id, gift.coins, 'gift', { to: to.id, gift: gift.id, chat: chat.id }, { paidFirst: true });
+    if (!pay) return res.status(402).json({ error: 'Jetonun yetmiyor.', needCoins: true });
+    eco.earn(to.id, pay.paid * s.creatorShare, 'gift', { fromId: req.user.id, gift: gift.id, chat: chat.id });
     const msg = sendMessage(chat, req.user.id, { text: `${gift.em} ${gift.name} gönderdi`, gift: { id: gift.id, em: gift.em, name: gift.name, coins: gift.coins } });
     emitTo(req.user.id, 'wallet', {}); emitTo(to.id, 'wallet', {});
     res.json({ message: msg && ctx.msgOut(msg), coins: user(req.user.id).coins || 0 });
@@ -555,8 +556,9 @@ module.exports = function engage(app, ctx) {
     const u = req.user;
     const z = zodiacOf(u);
     if (p.type === 'yillik' && !z) return res.status(400).json({ error: 'Yıllık rapor için önce profiline doğum tarihini ya da burcunu ekle.' });
-    if (!eco.spend(u.id, p.coins, 'fal_pack', { ref: p.id })) return res.status(402).json({ error: `Bu paket ${p.coins} jeton.`, need: p.coins });
-    eco.earn(f.id, Math.round(p.coins * eco.get().falciShare), 'fal_pack', { fromId: u.id, ref: p.id });
+    const pay = eco.spend(u.id, p.coins, 'fal_pack', { ref: p.id });
+    if (!pay) return res.status(402).json({ error: `Bu paket ${p.coins} jeton.`, need: p.coins });
+    eco.earn(f.id, pay.paid * eco.get().falciShare, 'fal_pack', { fromId: u.id, ref: p.id });
     let chatId = null;
     if (p.type === 'yillik') {
       const chat = chatBetween(u.id, f.id); chatId = chat.id;

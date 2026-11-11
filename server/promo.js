@@ -3,7 +3,7 @@
 const { nanoid } = require('nanoid');
 
 const DAY = 86400000;
-const DEFAULTS = { enabled: true, impPerCoin: 20, minCoins: 20, maxCoins: 5000, perViewerDay: 3 };
+const DEFAULTS = { enabled: true, impPerCoin: 80, minCoins: 5, maxCoins: 1250, perViewerDay: 3 }; // 1 jeton = 1 TL
 
 module.exports = function promo(app, ctx) {
   const { store, auth, brief, eco, notify, emitTo, canSee, isBlocked, postOut, priv } = ctx;
@@ -58,7 +58,7 @@ module.exports = function promo(app, ctx) {
   function finish(p, status, { reason = '', refund = true } = {}) {
     if (!['active', 'paused'].includes(p.status)) return p;
     const back = refund ? Math.min(p.coins, refundOf(p)) : 0;
-    if (back > 0) eco.addCoins(p.userId, back, 'promo_refund', { ref: p.id });
+    if (back > 0) eco.addCoins(p.userId, back, 'promo_refund', { ref: p.id, paidBack: Math.min(back, p.paidCoins || 0) });
     store.update('promos', p.id, { status, endedAt: now(), refunded: back, reason, shown: p.shown, reach: p.reach, hits: p.hits });
     dirty.delete(p.id);
     const post = store.get('posts', p.postId);
@@ -101,9 +101,10 @@ module.exports = function promo(app, ctx) {
       ageMin: Math.max(18, Math.min(99, parseInt(t.ageMin, 10) || 18)), ageMax: Math.max(18, Math.min(99, parseInt(t.ageMax, 10) || 99)),
     };
     if (target.ageMin > target.ageMax) [target.ageMin, target.ageMax] = [target.ageMax, target.ageMin];
-    if (!eco.spend(req.user.id, coins, 'promo', { ref: post.id })) return res.status(402).json({ error: `Bunun için ${coins} jeton gerekiyor.`, need: coins });
+    const pay = eco.spend(req.user.id, coins, 'promo', { ref: post.id });
+    if (!pay) return res.status(402).json({ error: `Bunun için ${coins} jeton gerekiyor.`, need: coins });
     const p = store.put('promos', {
-      id: nanoid(10), userId: req.user.id, postId: post.id, type: post.type, coins, days, impressions: coins * c.impPerCoin, shown: 0, reach: 0, hits: 0,
+      id: nanoid(10), userId: req.user.id, postId: post.id, type: post.type, coins, paidCoins: pay.paid, days, impressions: coins * c.impPerCoin, shown: 0, reach: 0, hits: 0,
       target, status: 'active', at: now(), start: now(), end: now() + days * DAY, likesAtStart: post.likes.length,
     });
     emitTo(req.user.id, 'wallet', {});

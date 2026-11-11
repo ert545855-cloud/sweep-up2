@@ -4069,3 +4069,18 @@ html.land-game #fx-layer { display: none; }
 .k3-lgl b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .k3-lgl li > i { width: 10px; height: 10px; border-radius: 50%; } .k3-lgl span { font-weight: 800; font-variant-numeric: tabular-nums; }
 .k3-pts { color: #ffd34d !important; font-weight: 750; }
 .k3-top .k3-mic.on { background: #2fbf71; }
+
+/* Kayıtlı hesaplar */
+.acc-sw { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 4px 8px; border-radius: 10px; }
+.acc-sw:hover { background: var(--surface-2); }
+.acc-sw .acc-cv { width: 16px; height: 16px; opacity: .7; }
+.acc-list { display: grid; gap: 4px; padding: 4px 8px 8px; }
+.acc { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 10px; border-radius: 14px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; }
+.acc:hover { background: var(--surface-2); }
+.acc.on { background: var(--uv-soft); }
+.acc img, .acc .acc-plus { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex: none; }
+.acc .acc-plus { display: grid; place-items: center; border: 1.5px dashed var(--line); color: var(--muted); }
+.acc .grow { display: grid; min-width: 0; } .acc b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .acc small { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acc > svg { width: 20px; height: 20px; color: var(--uv); flex: none; }
+.acc-note { margin: 4px 18px 14px; font-size: 12.5px; line-height: 1.45; }
+.acc-add-h { text-align: center; margin: 14px 0 4px; font-size: 24px; }

@@ -1,7 +1,8 @@
+import { remember, accountSheet, switchFromUrl } from './accounts.js';
 import { icon } from './icons.js';
 import { initNav } from './nav.js';
 import {
-  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin, notifHref, applyLogo, refreshStoryMap,
+  state, api, on, emit, connectSocket, refreshBadges, toast, esc, el, applySkin, currentSkin, notifHref, applyLogo, refreshStoryMap, syncPush,
 } from './core.js';
 import { initCalls } from './calls.js';
 import { checkVersion, recover, afterBoot } from './update.js';
@@ -92,6 +93,15 @@ function renderTabbar(active) {
   ];
   tabbar.innerHTML = tabs.map(([k, href, ic, label, cls]) => `<a href="${href}" class="${k === active ? 'on' : ''} ${cls}" aria-label="${label}">${ic}</a>`).join('');
 }
+// Profil sekmesine uzun basınca hesap seçici açılır
+{
+  let lp = null; let fired = false;
+  const isMe = (e) => e.target.closest?.('a[href="#/me"]');
+  tabbar.addEventListener('pointerdown', (e) => { if (!isMe(e) || !state.me) return; fired = false; clearTimeout(lp); lp = setTimeout(() => { fired = true; navigator.vibrate?.(12); accountSheet(); }, 480); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => tabbar.addEventListener(ev, () => clearTimeout(lp)));
+  tabbar.addEventListener('click', (e) => { if (fired && isMe(e)) { e.preventDefault(); fired = false; } }, true);
+  tabbar.addEventListener('contextmenu', (e) => { if (isMe(e)) e.preventDefault(); });
+}
 on('badges', () => renderTabbar(tabbar.dataset.active));
 
 function showBan(ban) {
@@ -168,7 +178,9 @@ async function router() {
   if (!state.token && !match.opts.public && !match.opts.any) { location.hash = '#/login'; return; }
   if (state.me?.needsBirthdate && state.me.role !== 'falci' && !match.opts.any) return showBirthGate();
   if (match.name === 'market' && !state.config?.features?.market) { location.hash = '#/'; return; }
-  if (state.token && match.opts.public) { location.hash = '#/'; return; }
+  // Hesap ekleme: giriş yapmışken giriş/kayıt ekranı açılabilir; başka sayfaya dönülünce işaret kalkar
+  let adding = false; try { adding = !!sessionStorage.getItem('su_add'); if (adding && match.name !== 'auth') { sessionStorage.removeItem('su_add'); adding = false; } } catch { /* yok */ }
+  if (state.token && match.opts.public && !(adding && match.name === 'auth')) { location.hash = '#/'; return; }
 
   const my = ++navToken;
   if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
@@ -308,16 +320,20 @@ async function boot() {
   try { const lg = localStorage.getItem('su_logo'); if (lg) document.documentElement.dataset.logo = lg; } catch {}
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   navigator.serviceWorker?.addEventListener('message', (e) => {
-    if (e.data?.type === 'navigate' && e.data.url) location.href = e.data.url;
+    if (e.data?.type !== 'navigate' || !e.data.url) return;
+    const u = new URL(e.data.url); const as = u.searchParams.get('as');
+    if (!as || as === state.me?.id) { u.searchParams.delete('as'); if (u.pathname === location.pathname && !u.search) { location.hash = u.hash || '#/'; return; } }
+    location.href = u.href; // başka hesabın bildirimi: o hesapla yeniden açılır
   });
+  switchFromUrl(); // bildirimden gelindiyse o bildirimin hesabına geç
   if (state.token) {
     try {
       const [cfg, me] = await Promise.all([api('/config'), api('/me')]);
-      state.config = cfg; state.me = me;
+      state.config = cfg; state.me = me; remember(state.token, me);
       if (me.ban) state.ban = me.ban;
       if (me.skin && me.skin !== currentSkin()) applySkin(me.skin);
       applyLogo(me.plus ? me.logo : 'klasik');
-      if (!state.ban) { wireRealtime(); refreshBadges(); }
+      if (!state.ban) { wireRealtime(); refreshBadges(); setTimeout(syncPush, 2500); }
     } catch { state.token = null; }
   }
   if (!state.config) state.config = await fetch('/api/config').then((r) => r.json()).catch(() => ({}));

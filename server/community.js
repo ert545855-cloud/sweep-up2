@@ -37,7 +37,7 @@ module.exports = function community(app, ctx) {
     const before = levelOfXp(u.xp || 0); const xp = (u.xp || 0) + add; const after = levelOfXp(xp);
     store.update('users', uid, { xp, level: after });
     if (after > before) {
-      const [, em, title] = titleOf(after); const coins = Math.min(100, after * 3);
+      const [, em, title] = titleOf(after); const coins = Math.min(25, Math.max(1, Math.round(after * 0.75))); // 1 jeton = 1 TL
       eco.addCoins(uid, coins, 'level');
       notify(uid, { type: 'level', text: `Tebrikler! ${after}. seviyeye ulaştın ${em} ${title} · +${coins} jeton`, url: '/#/seviye', tag: 'level' });
       emitTo(uid, 'level', { level: after, title, em, coins });
@@ -97,10 +97,10 @@ module.exports = function community(app, ctx) {
     const items = ranking(from, to, me).slice(0, 15).map((p, i) => ({ ...postOut(p, me), rank: i + 1 }));
     const prev = store.get('weekly_best', weekOf(from - DAY));
     const last = prev ? prev.items.map((x) => { const p = store.get('posts', x.id); const o = p && store.get('users', p.userId); return p && o && !isBlocked(me, o.id) && canSee(me, o) ? { ...postOut(p, me), rank: x.rank, coins: x.coins } : null; }).filter(Boolean) : [];
-    res.json({ from, to, items, last, lastWeek: prev?.id || null });
+    res.json({ from, to, items, last, lastWeek: prev?.id || null, prize: PRIZE });
   });
   // Pazartesi 10:00 (TR): geçen haftanın ilk 3'ü ödüllendirilir
-  const PRIZE = [50, 30, 20];
+  const PRIZE = [12, 8, 5];
   setInterval(() => {
     const d = trNow(); if (d.getUTCDay() !== 1 || d.getUTCHours() < 10) return;
     const from = weekStart() - 7 * DAY; const id = weekOf(from);

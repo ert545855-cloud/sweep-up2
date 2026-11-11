@@ -50,7 +50,7 @@ module.exports = function features(app, ctx) {
     }
     let code; do { code = 'SU-' + orderCode(); } while (store.find('orders', (o) => o.code === code));
     const o = store.put('orders', {
-      id: nanoid(10), code, userId: req.user.id, productId: p.id, kind: p.kind, title: p.title, amount: p.price,
+      id: nanoid(10), code, userId: req.user.id, productId: p.id, kind: p.kind, title: p.title, amount: p.price, ...(p.kind === 'coins' ? { coins: p.coins } : {}),
       status: 'pending', at: now(),
     });
     res.json({ ...orderOut(o), bank: s.bank });
@@ -77,7 +77,7 @@ module.exports = function features(app, ctx) {
   app.get('/api/wallet', auth, (req, res) => {
     const s = eco.get();
     res.json({
-      coins: req.user.coins || 0, earnings: req.user.earnings || 0, earningsTL: +((req.user.earnings || 0) * s.coinTL).toFixed(2), coinTL: s.coinTL,
+      coins: req.user.coins || 0, earnings: req.user.earnings || 0, earningsTL: +((req.user.earnings || 0) * s.coinTL).toFixed(2), coinTL: s.coinTL, perCoinTL: +(s.creatorShare * s.coinTL).toFixed(2), paidCoins: Math.min(req.user.paid || 0, req.user.coins || 0),
       tx: store.filter('coin_tx', (t) => t.userId === req.user.id).sort((a, b) => b.at - a.at).slice(0, 50),
       earned: store.filter('earn_tx', (t) => t.userId === req.user.id).sort((a, b) => b.at - a.at).slice(0, 50)
         .map((t) => ({ ...t, from: t.fromId ? brief(store.get('users', t.fromId)) : null })),

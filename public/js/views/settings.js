@@ -1,3 +1,4 @@
+import { accounts, accountSheet } from '../accounts.js';
 import { icon } from '../icons.js';
 import {
   state, api, esc, toast, sheet, logout, avatar, refreshBadges, logoMenu,
@@ -57,6 +58,7 @@ export default function settings(view) {
     </div>
     <div class="group-t">Hesap</div>
     <div class="group">
+      <button class="it acs">${icon('users')}<span class="grow">Hesaplar<div class="sub">${accounts().length > 1 ? `Bu cihazda ${accounts().length} hesap kayıtlı · geçiş yap ya da ekle` : 'Başka hesap ekle, şifresiz geçiş yap'}</div></span></button>
       <button class="it em">${icon('mail')}<span class="grow">E-posta<div class="sub">${esc(me.email || 'Eklenmedi — şifre sıfırlama için ekle')}</div></span></button>
       <button class="it pw">${icon('lock')}<span class="grow">Şifreyi değiştir</span></button>
       <button class="it rc">${icon('key')}<span class="grow">Yeni kurtarma kodu oluştur<div class="sub">Eski kod geçersiz olur</div></span></button>
@@ -79,7 +81,7 @@ export default function settings(view) {
       <a class="it" href="#/legal/kurallar">${icon('users')}<span class="grow">Topluluk kuralları</span></a>
       <button class="it dl">${icon('download')}<span class="grow">Verilerimi indir<div class="sub">Profil, gönderi, mesaj ve diğer verilerin (JSON)</div></span></button>
     </div>
-    <div class="group"><button class="it danger lo">${icon('logout')}Çıkış yap</button>${me.role === 'falci' ? '' : `<button class="it danger del">${icon('trash')}Hesabımı sil</button>`}</div>
+    <div class="group"><button class="it danger lo">${icon('logout')}${accounts().length > 1 ? `@${esc(me.username)} hesabından çık` : 'Çıkış yap'}</button>${accounts().length > 1 ? `<button class="it danger loa">${icon('logout')}Tüm hesaplardan çık</button>` : ''}${me.role === 'falci' ? '' : `<button class="it danger del">${icon('trash')}Hesabımı sil</button>`}</div>
     <p class="muted" style="text-align:center;font-size:12px;padding-bottom:20px">SwipeUp · @${esc(me.username)}</p>`;
 
   view.querySelector('.sw-ev')?.addEventListener('change', (e) => {
@@ -130,7 +132,12 @@ export default function settings(view) {
     <p class="muted" style="margin:6px 16px 16px;font-size:12.5px" data-noi18n>Gönderiler, mesajlar ve kullanıcıların yazdıkları çevrilmez. · Posts, messages and user content are not translated.</p>`, {
     onMount(sh) { sh.querySelector('.menu').onclick = (e) => { const b = e.target.closest('[data-l]'); if (b && b.dataset.l !== getLang()) setLang(b.dataset.l); }; },
   });
-  view.querySelector('.lo').onclick = () => { if (confirm('Çıkış yapılsın mı?')) logout(); };
+  view.querySelector('.lo').onclick = () => {
+    const other = accounts().find((a) => a.id !== me.id);
+    if (confirm(other ? `@${me.username} hesabından çıkılsın mı? @${other.username} hesabına geçilecek.` : 'Çıkış yapılsın mı?')) logout();
+  };
+  view.querySelector('.loa')?.addEventListener('click', () => { if (confirm('Bu cihazdaki tüm hesaplardan çıkılsın mı?')) logout(true); });
+  view.querySelector('.acs').onclick = accountSheet;
   view.querySelector('.em').onclick = () => sheet('E-posta', `<form class="form"><p class="muted" style="margin:0">Şifreni unutursan sıfırlama kodu bu adrese gönderilir. Başkalarına gösterilmez.</p>
       <input class="field" name="e" type="email" value="${esc(me.email || '')}" placeholder="ornek@mail.com"><button class="btn primary block">Kaydet</button></form>`, {
     onMount(sh, close) {

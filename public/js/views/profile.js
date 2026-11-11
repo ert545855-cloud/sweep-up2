@@ -173,7 +173,7 @@ export default async function profile(view, username) {
 
   view.innerHTML = `<header class="topbar">
       ${self ? `<a class="ib soft" href="#/create" aria-label="Oluştur">${icon('plus')}</a>` : `<button class="ib" onclick="history.length > 1 ? history.back() : (location.hash = '#/')" aria-label="Geri">${icon('back')}</button>`}
-      <div class="center ig-un">${u.privacy?.private ? `${icon('lock', '', 'style="width:15px;height:15px;vertical-align:-2px"')} ` : ''}${esc(u.username)}</div>
+      ${self ? `<button class="center ig-un acc-sw" aria-label="Hesap değiştir">${u.privacy?.private ? `${icon('lock', '', 'style="width:15px;height:15px;vertical-align:-2px"')} ` : ''}${esc(u.username)}${icon('chevDown', 'acc-cv')}</button>` : `<div class="center ig-un">${u.privacy?.private ? `${icon('lock', '', 'style="width:15px;height:15px;vertical-align:-2px"')} ` : ''}${esc(u.username)}</div>`}
       ${self ? `<a class="ib soft" href="#/settings" aria-label="Ayarlar">${icon('menu')}</a>` : `<button class="ib soft menu-btn" aria-label="Seçenekler">${icon('more')}</button>`}
     </header>
     <section class="ig-hero">
@@ -227,6 +227,7 @@ export default async function profile(view, username) {
       ${tabs.map((t, i) => `<button data-t="${t}" class="${i ? '' : 'on'}" aria-label="${TAB[t][1]}" title="${TAB[t][1]}">${icon(TAB[t][0])}</button>`).join('')}
     </div>
     <div class="tab-body"></div>`;
+  view.querySelector('.acc-sw')?.addEventListener('click', () => import('../accounts.js').then((m) => m.accountSheet()));
 
   const body = view.querySelector('.tab-body');
   const showTab = async (t) => {

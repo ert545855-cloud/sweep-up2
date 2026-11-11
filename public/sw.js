@@ -1,5 +1,5 @@
 // SwipeUp service worker: anlık bildirimler + çevrimdışı kabuk
-const CACHE = 'swipeup-v68';
+const CACHE = 'swipeup-v69';
 const SHELL = ['/', '/css/app.css', '/js/app.js', '/js/core.js', '/js/icons.js', '/js/components.js', '/icons/icon-192.png', '/icons/mark.png', '/js/music.js', '/js/update.js', '/js/event.js'];
 
 self.addEventListener('install', (e) => {
@@ -33,7 +33,7 @@ self.addEventListener('push', (e) => {
     badge: '/icons/badge-96.png',
     tag: d.tag,
     renotify: !!d.tag,
-    data: { url: d.url || '/' },
+    data: { url: d.url || '/', uid: d.uid || null },
     vibrate: d.call ? [400, 200, 400, 200, 400] : [40, 30, 40],
     requireInteraction: !!d.call,
   }));
@@ -41,7 +41,8 @@ self.addEventListener('push', (e) => {
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const url = new URL(e.notification.data?.url || '/', location.origin).href;
+  const u = new URL(e.notification.data?.url || '/', location.origin); if (e.notification.data?.uid) u.searchParams.set('as', e.notification.data.uid); // bildirimin hesabına geçilsin
+  const url = u.href;
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
     for (const c of list) {
       if (new URL(c.url).origin === location.origin) {

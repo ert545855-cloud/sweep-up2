@@ -3,11 +3,11 @@
 const { nanoid } = require('nanoid');
 
 const DEFAULT_SLICES = [
-  { id: 'c10', em: '🪙', label: '10 jeton', type: 'coins', amount: 10, chance: 7 },
-  { id: 'c25', em: '🪙', label: '25 jeton', type: 'coins', amount: 25, chance: 3 },
+  { id: 'c10', em: '🪙', label: '3 jeton', type: 'coins', amount: 3, chance: 7 },
+  { id: 'c25', em: '🪙', label: '6 jeton', type: 'coins', amount: 6, chance: 3 },
   { id: 'boost', em: '⚡', label: '30 dk Boost', type: 'boost', amount: 30, chance: 2 },
   { id: 'plus3', em: '👑', label: '3 gün SwipeUp+', type: 'plus', amount: 3, chance: 1.5 },
-  { id: 'c100', em: '💰', label: '100 jeton', type: 'coins', amount: 100, chance: 1 },
+  { id: 'c100', em: '💰', label: '25 jeton', type: 'coins', amount: 25, chance: 1 },
   { id: 'plus7', em: '💎', label: '7 gün SwipeUp+', type: 'plus', amount: 7, chance: 0.5 },
 ];
 const PAS = [
@@ -23,7 +23,7 @@ const imgOf = (s) => {
   if (!s) return `${IMG}pas.svg`;
   if (s.type === 'plus') return `${IMG}${s.amount >= 7 ? 'diamond' : 'crown'}.svg`;
   if (s.type === 'boost') return `${IMG}boost.png`;
-  return `${IMG}${s.amount >= 75 ? 'coins-l' : s.amount >= 20 ? 'coins-m' : 'coins-s'}.png`;
+  return `${IMG}${s.amount >= 20 ? 'coins-l' : s.amount >= 5 ? 'coins-m' : 'coins-s'}.png`;
 };
 
 module.exports = function wheel(app, ctx) {

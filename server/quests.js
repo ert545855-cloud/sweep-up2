@@ -1,14 +1,14 @@
 // Günlük görevler: her gün yenilenir, tamamlanan görevin jetonu alınır, hepsi bitince bonus.
 const DEFAULT_QUESTS = [
   { id: 'giris', em: '👋', title: 'Uygulamaya uğra', goal: 1, coins: 1 },
-  { id: 'begeni', em: '🔥', title: 'Kaydırmada 3 kişiyi beğen', goal: 3, coins: 3 },
-  { id: 'mesaj', em: '💬', title: 'Bir sohbete mesaj yaz', goal: 1, coins: 2 },
-  { id: 'yorum', em: '✍️', title: 'Bir gönderiye yorum yap', goal: 1, coins: 2 },
-  { id: 'vitrin', em: '🎬', title: 'Vitrin’de 5 video izle', goal: 5, coins: 2 },
-  { id: 'paylas', em: '📸', title: 'Hikaye ya da gönderi paylaş', goal: 1, coins: 5 },
-  { id: 'seri', em: '🔥', title: 'Bir sohbet serisini sürdür', goal: 1, coins: 3 },
+  { id: 'begeni', em: '🔥', title: 'Kaydırmada 3 kişiyi beğen', goal: 3, coins: 1 },
+  { id: 'mesaj', em: '💬', title: 'Bir sohbete mesaj yaz', goal: 1, coins: 1 },
+  { id: 'yorum', em: '✍️', title: 'Bir gönderiye yorum yap', goal: 1, coins: 1 },
+  { id: 'vitrin', em: '🎬', title: 'Vitrin’de 5 video izle', goal: 5, coins: 1 },
+  { id: 'paylas', em: '📸', title: 'Hikaye ya da gönderi paylaş', goal: 1, coins: 1 },
+  { id: 'seri', em: '🔥', title: 'Bir sohbet serisini sürdür', goal: 1, coins: 1 },
 ];
-const DEFAULTS = { enabled: true, bonus: 5, list: DEFAULT_QUESTS };
+const DEFAULTS = { enabled: true, bonus: 2, list: DEFAULT_QUESTS }; // 1 jeton = 1 TL
 
 module.exports = function quests(app, ctx) {
   const { store, auth, eco, emitTo } = ctx;

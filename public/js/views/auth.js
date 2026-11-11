@@ -55,9 +55,10 @@ function forgot(view) {
 export default function auth(view, mode) {
   if (mode === 'forgot') return forgot(view);
   const reg = mode === 'register';
+  let adding = false; try { adding = !!sessionStorage.getItem('su_add') && !!state.token; } catch { /* yok */ } // giriş yapmışken başka hesap ekleniyor
   view.innerHTML = `<section class="auth">
     <div class="wordmark">${logo()}</div>
-    <p class="tagline">${reg ? 'Kaydır, eşleş, vitrine göz at, canlı yayında buluş.' : 'Kaydırmaya kaldığın yerden devam et.'}</p>
+    ${adding ? `<h2 class="acc-add-h">${reg ? 'Yeni hesap aç' : 'Hesap ekle'}</h2><p class="tagline">Şu anki hesabın kayıtlı kalır; aralarında Profil’den tek dokunuşla geçebilirsin.</p>` : `<p class="tagline">${reg ? 'Kaydır, eşleş, vitrine göz at, canlı yayında buluş.' : 'Kaydırmaya kaldığın yerden devam et.'}</p>`}
     <form novalidate>
       ${reg ? `<label class="ic-field">${icon('person')}<input class="field" name="name" placeholder="Adın" autocomplete="name" maxlength="40"></label>` : ''}
       <label class="ic-field">${icon('person')}<input class="field" name="username" placeholder="${reg ? 'Kullanıcı adı' : 'Kullanıcı adı veya e-posta'}" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
@@ -74,6 +75,7 @@ export default function auth(view, mode) {
     ${reg ? '' : `<a class="ins-cta" href="#/install"><img src="/icons/icon-192.png" alt=""><span><b>Uygulamayı telefona yükle</b><small>iPhone ve Android · ücretsiz</small></span>${icon('download')}</a>`}
     ${reg ? '' : `<div class="legal-links"><a href="#/legal/gizlilik">Gizlilik</a> · <a href="#/legal/kosullar">Koşullar</a> · <a href="#/legal/kvkk">KVKK</a></div>`}
     <div class="switch">${reg ? 'Hesabın var mı? <a class="link" href="#/login">Giriş yap</a>' : 'Yeni misin? <a class="link" href="#/register">Hesap oluştur</a>'}</div>
+    ${adding ? '<div class="switch"><a class="link acc-cancel" href="#/me">Vazgeç, hesabıma dön</a></div>' : ''}
   </section>`;
   const f = view.querySelector('form');
   const err = view.querySelector('.err');
@@ -95,6 +97,7 @@ export default function auth(view, mode) {
       btn.disabled = false;
     }
   };
+  view.querySelector('.acc-cancel')?.addEventListener('click', () => { try { sessionStorage.removeItem('su_add'); } catch { /* yok */ } });
   f.querySelectorAll('[data-doc]').forEach((a) => { a.onclick = (e) => { e.preventDefault(); legalSheet(a.dataset.doc); }; });
   f.username.addEventListener('input', () => { if (reg) f.username.value = f.username.value.toLowerCase().replace(/\s/g, ''); });
   return null;

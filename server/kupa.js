@@ -120,9 +120,9 @@ const HM = { small: hexMap(RINGS), big: hexMap(RINGS + 2) }; // kalabalık turda
 
 // Kostümler: lokumun lezzeti (renk) ve şapkası. Fiyat jeton; 0 = ücretsiz.
 const LOOKS = {
-  colors: [['gul', 'Gül', 0], ['limon', 'Limon', 0], ['fistik', 'Fıstık', 0], ['portakal', 'Portakal', 0], ['nar', 'Nar', 40], ['nane', 'Nane', 40], ['bogurtlen', 'Böğürtlen', 60], ['lavanta', 'Lavanta', 40], ['deniz', 'Deniz', 60], ['cikolata', 'Çikolata', 60], ['gece', 'Gece', 90], ['altin', 'Altın', 150]],
-  hats: [['yok', 'Şapkasız', 0], ['parti', 'Parti şapkası', 50], ['cicek', 'Papatya', 60], ['sef', 'Aşçı kepi', 70], ['fes', 'Fes', 80], ['kulaklik', 'Kulaklık', 80], ['kovboy', 'Kovboy şapkası', 100], ['pervane', 'Pervaneli şapka', 110], ['tac', 'Taç', 120], ['hale', 'Hale', 180]],
-  trails: [['izsiz', 'İzsiz', 0], ['yildiz', 'Yıldız tozu', 90], ['kalp', 'Kalpler', 90], ['ates', 'Ateş', 140], ['gokkusagi', 'Gökkuşağı', 200]], // koşarken arkada kalan iz
+  colors: [['gul', 'Gül', 0], ['limon', 'Limon', 0], ['fistik', 'Fıstık', 0], ['portakal', 'Portakal', 0], ['nar', 'Nar', 10], ['nane', 'Nane', 10], ['bogurtlen', 'Böğürtlen', 15], ['lavanta', 'Lavanta', 10], ['deniz', 'Deniz', 15], ['cikolata', 'Çikolata', 15], ['gece', 'Gece', 22], ['altin', 'Altın', 38]],
+  hats: [['yok', 'Şapkasız', 0], ['parti', 'Parti şapkası', 12], ['cicek', 'Papatya', 15], ['sef', 'Aşçı kepi', 18], ['fes', 'Fes', 20], ['kulaklik', 'Kulaklık', 20], ['kovboy', 'Kovboy şapkası', 25], ['pervane', 'Pervaneli şapka', 28], ['tac', 'Taç', 30], ['hale', 'Hale', 45]],
+  trails: [['izsiz', 'İzsiz', 0], ['yildiz', 'Yıldız tozu', 22], ['kalp', 'Kalpler', 22], ['ates', 'Ateş', 35], ['gokkusagi', 'Gökkuşağı', 50]], // koşarken arkada kalan iz
 };
 const PRICE = new Map([...LOOKS.colors, ...LOOKS.hats, ...LOOKS.trails].map(([id, , p]) => [id, p]));
 const BOT_NAMES = ['Tarçın', 'Vişne', 'Sakız', 'Badem', 'Kaymak', 'Safran', 'Susam', 'Fındık', 'Ceviz', 'Damla', 'Helva', 'Pekmez', 'Kestane', 'Zencefil', 'Karanfil', 'Anason', 'Kakule', 'Sumak'];
@@ -648,7 +648,7 @@ module.exports = function kupa(app, ctx) {
   }
 
   // ---- Lig: haftalık sezon (İstanbul saatiyle pazartesi başlar). Haftanın ilk üçü jeton kazanır. ----
-  const DAYMS = 86400000; const TIERS = [['bronz', 'Bronz', 0], ['gumus', 'Gümüş', 30], ['altin', 'Altın', 80], ['elmas', 'Elmas', 160]]; const PRIZE = [300, 200, 100]; const DAYCAP = 80;
+  const DAYMS = 86400000; const TIERS = [['bronz', 'Bronz', 0], ['gumus', 'Gümüş', 30], ['altin', 'Altın', 80], ['elmas', 'Elmas', 160]]; const PRIZE = [75, 50, 25]; const DAYCAP = 80; // 1 jeton = 1 TL
   const weekId = (t = now()) => { const d = new Date(t + 3 * 3600000); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7))).toISOString().slice(0, 10); };
   const weekEnd = (id) => Date.parse(`${id}T00:00:00Z`) - 3 * 3600000 + 7 * DAYMS;
   const tierOf = (pts) => [...TIERS].reverse().find((t) => pts >= t[2]);

@@ -574,7 +574,7 @@ module.exports = function mountAdmin(app, ctx) {
     const note = String(req.body?.note || '').slice(0, 300);
     const p = eco.product(o.productId);
     if (approve) {
-      if (o.kind === 'coins') eco.addCoins(o.userId, p ? p.coins : parseInt(o.title, 10) || 0, 'purchase', { ref: o.id });
+      if (o.kind === 'coins') eco.addCoins(o.userId, o.coins != null ? o.coins : p ? p.coins : parseInt(o.title, 10) || 0, 'purchase', { ref: o.id }); // sipariş anındaki jeton sayısı
       if (o.kind === 'plus') eco.grantPlus(o.userId, p ? p.days : 30);
       const day = new Date(); const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
       store.put('adm_ledger', {
@@ -645,7 +645,7 @@ module.exports = function mountAdmin(app, ctx) {
       }
     } else if (paid) {
       const day = new Date(); const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-      store.put('adm_ledger', { id: nanoid(10), type: 'gider', amount: p.amount, date: ymd, category: 'Yayıncı / falcı ödemesi', note: `@${u?.username || '?'} · ${p.coins} jeton · ${p.iban}`, currency: 'TRY', by: req.admin.username, auto: true, createdAt: now() });
+      store.put('adm_ledger', { id: nanoid(10), type: 'gider', amount: p.amount, date: ymd, category: 'Yayıncı / falcı ödemesi', note: `@${u?.username || '?'} · ${p.iban}`, currency: 'TRY', by: req.admin.username, auto: true, createdAt: now() });
       notify(p.userId, { type: 'order', text: `💸 ${p.amount} ₺ kazanç ödemen hesabına gönderildi.`, title: 'SwipeUp', url: '/#/wallet' });
     } else {
       if (u) store.update('users', u.id, { earnings: (u.earnings || 0) + p.coins });
@@ -662,7 +662,7 @@ module.exports = function mountAdmin(app, ctx) {
     const s = eco.get();
     const amount = +(u.earnings * s.coinTL).toFixed(2);
     const day = new Date(); const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-    if (req.body?.ledger !== false) store.put('adm_ledger', { id: nanoid(10), type: 'gider', amount, date: ymd, category: 'Yayıncı / falcı ödemesi', note: `@${u.username} · ${u.earnings} jeton`, currency: 'TRY', by: req.admin.username, auto: true, createdAt: now() });
+    if (req.body?.ledger !== false) store.put('adm_ledger', { id: nanoid(10), type: 'gider', amount, date: ymd, category: 'Yayıncı / falcı ödemesi', note: `@${u.username} · ${amount} ₺ kazanç`, currency: 'TRY', by: req.admin.username, auto: true, createdAt: now() });
     store.update('users', u.id, { earnings: 0 });
     audit(req.admin, 'kazancı ödendi olarak işaretledi', u.id, `${amount} ₺`);
     res.json({ ok: true, amount });

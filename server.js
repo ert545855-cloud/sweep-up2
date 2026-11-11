@@ -196,16 +196,20 @@ async function notify(userId, n) {
   }
   const visible = [...(online.get(userId) || [])].some((s) => s.data.visible);
   if (visible || !VAPID) return;
-  const payload = JSON.stringify({
+  const me = store.get('users', userId);
+  const body = {
     title: n.title || (from && n.type !== 'liked' ? from.name : 'SwipeUp'),
     body: n.text,
     icon: n.type !== 'liked' && from?.avatar && !from.avatar.includes('svg') ? from.avatar : (featureCtx.pushIcon?.(store.get('users', userId)) || '/icons/icon-192.png'),
     url: n.url || '/#/notifications',
-    tag: n.tag || n.type,
+    tag: `${userId.slice(0, 8)}:${n.tag || n.type}`,
     call: n.type === 'call',
-  });
+    uid: userId,
+  };
   const subs = store.filter('pushSubs', (s) => s.userId === userId);
-  await Promise.all(subs.map((s) => webpush.sendNotification(s.sub, payload, { TTL: n.type === 'call' ? 30 : 3600, urgency: n.type === 'call' || n.type === 'message' ? 'high' : 'normal' })
+  // Bu cihazda başka hesap da kayıtlıysa bildirimin hangi hesaba geldiği yazılır
+  const shared = (s) => store.filter('pushSubs', (x) => x.sub?.endpoint === s.sub?.endpoint && x.userId !== userId).length > 0;
+  await Promise.all(subs.map((s) => webpush.sendNotification(s.sub, JSON.stringify(shared(s) && me ? { ...body, title: `@${me.username} · ${body.title}` } : body), { TTL: n.type === 'call' ? 30 : 3600, urgency: n.type === 'call' || n.type === 'message' ? 'high' : 'normal' })
     .catch((e) => { if (e.statusCode === 404 || e.statusCode === 410) store.del('pushSubs', s.id); })));
 }
 
@@ -584,13 +588,17 @@ app.patch('/api/me', auth, (req, res) => {
 app.post('/api/push/subscribe', auth, (req, res) => {
   const sub = req.body?.subscription;
   if (!sub?.endpoint) return res.status(400).json({ error: 'Geçersiz abonelik' });
-  const id = crypto.createHash('sha1').update(sub.endpoint).digest('hex');
+  // Aynı cihazda birden çok hesap olabilir: abonelik cihaz + hesap çifti olarak tutulur
+  const legacy = crypto.createHash('sha1').update(sub.endpoint).digest('hex'); const old = store.get('pushSubs', legacy);
+  if (old) { store.del('pushSubs', legacy); if (old.userId !== req.user.id) store.put('pushSubs', { ...old, id: crypto.createHash('sha1').update(`${sub.endpoint}|${old.userId}`).digest('hex') }); }
+  const id = crypto.createHash('sha1').update(`${sub.endpoint}|${req.user.id}`).digest('hex');
+  const cur = store.get('pushSubs', id); if (cur && JSON.stringify(cur.sub) === JSON.stringify(sub)) return res.json({ ok: true }); // açılışta yeniden eşitleme: değişiklik yok
   store.put('pushSubs', { id, userId: req.user.id, sub, at: now() });
   res.json({ ok: true });
 });
 app.post('/api/push/unsubscribe', auth, (req, res) => {
   const ep = req.body?.endpoint;
-  if (ep) store.del('pushSubs', crypto.createHash('sha1').update(ep).digest('hex'));
+  if (ep) { store.del('pushSubs', crypto.createHash('sha1').update(`${ep}|${req.user.id}`).digest('hex')); const old = store.get('pushSubs', crypto.createHash('sha1').update(ep).digest('hex')); if (old?.userId === req.user.id) store.del('pushSubs', old.id); }
   res.json({ ok: true });
 });
 app.post('/api/push/test', auth, wrap(async (req, res) => {
@@ -1503,8 +1511,8 @@ app.post('/api/fal', auth, (req, res) => {
   featureCtx.useFalSub?.(req.user, fp.use);
   featureCtx.onFalRequest?.(msg);
   if (price) {
-    eco.spend(req.user.id, price, 'fal', { ref: msg.id });
-    eco.earn(f.id, Math.round(price * eco.get().falciShare), 'fal', { ref: msg.id, fromId: req.user.id });
+    const pay = eco.spend(req.user.id, price, 'fal', { ref: msg.id });
+    if (pay) eco.earn(f.id, pay.paid * eco.get().falciShare, 'fal', { ref: msg.id, fromId: req.user.id });
   }
   res.json({ ok: true, chatId: chat.id, messageId: msg.id, coins: store.get('users', req.user.id).coins || 0 });
 });
@@ -2034,8 +2042,9 @@ io.on('connection', (socket) => {
     const gift = eco.get().gifts.find((g) => g.id === giftId);
     if (!l || !gift || hostId === uid) return ack?.({ error: 'Hediye gönderilemedi.' });
     if (limited('gift:' + uid, 20, 10000)) return ack?.({ error: 'Biraz yavaş 🙂' });
-    if (!eco.spend(uid, gift.coins, 'gift', { to: hostId, gift: gift.id })) return ack?.({ error: 'Jetonun yetmiyor.', needCoins: true });
-    eco.earn(hostId, Math.round(gift.coins * eco.get().creatorShare), 'gift', { fromId: uid, gift: gift.id });
+    const pay = eco.spend(uid, gift.coins, 'gift', { to: hostId, gift: gift.id }, { paidFirst: true });
+    if (!pay) return ack?.({ error: 'Jetonun yetmiyor.', needCoins: true });
+    eco.earn(hostId, pay.paid * eco.get().creatorShare, 'gift', { fromId: uid, gift: gift.id, live: true }); // satın alınmış her jeton için yayıncıya 0,60 ₺
     l.gifts = (l.gifts || 0) + gift.coins;
     const user = brief(store.get('users', uid));
     io.to(`live:${hostId}`).emit('live:gift', { hostId, gift, user, total: l.gifts, at: now() });
@@ -2144,6 +2153,7 @@ async function ensureOfficial() {
 (async () => {
   await store.init();
   await store.initStorage();
+  const coinMoved = require('./server/coinrate')(store); // 1 jeton = 1 TL geçişi (bir kez)
   const meta = store.get('meta', 'secrets') || store.put('meta', {
     id: 'secrets',
     jwt: crypto.randomBytes(32).toString('hex'),
@@ -2159,6 +2169,8 @@ async function ensureOfficial() {
   await ensureOfficial();
   await adminApi.ensureAdmin?.();
   music.selfTest().catch(() => {});
+  if (coinMoved.length) setTimeout(() => coinMoved.forEach((m) => notify(m.uid, { type: 'order', tag: 'jeton-tl', url: '/#/wallet',
+    text: `Jeton sistemi güncellendi: artık 1 jeton = 1 TL. ${m.from ? `Bakiyen aynı değerde kalacak şekilde ${m.from} jetondan ${m.to} jetona çevrildi; fiyatlar da buna göre düştü.` : ''}${m.tl ? ` Kazancın artık TL olarak görünüyor: ${m.tl.toFixed(2).replace('.', ',')} ₺.` : ''}`.trim() }).catch(() => {})), 15000).unref?.();
   server.listen(PORT, () => {
     console.log(`SwipeUp hazır · port ${PORT} · sürüm ${APP_VERSION}`);
     // GIF anahtarı tanımlıysa bir kez dene, sonucu kayda yaz

@@ -1,4 +1,5 @@
 // Ortak durum, API, socket, yardımcılar
+import { remember, forget, accounts } from './accounts.js';
 import { icon } from './icons.js';
 
 export const state = {
@@ -36,7 +37,7 @@ export async function api(path, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && state.token) { logout(); throw new Error(data.error); }
+  if (res.status === 401 && state.token) { logout(false, true); throw new Error(data.error); }
   if (res.status === 423) { emit('banned', data); throw new Error(data.error); }
   if (res.status === 503 && data.maintenance) { emit('maintenance', data.maintenance); throw new Error(data.error); }
   if (!res.ok) { const er = new Error(data.error || 'Bir şeyler ters gitti.'); er.status = res.status; er.data = data; throw er; }
@@ -252,12 +253,33 @@ export function pickFile(accept, capture) {
 export function setSession(token, user) {
   state.token = token; state.me = user;
   localStorage.setItem('su_token', token);
+  remember(token, user); // cihazda kayıtlı hesaplara ekle
+  try { sessionStorage.removeItem('su_add'); } catch { /* yok */ }
 }
-export function logout() {
-  localStorage.removeItem('su_token');
+// Çıkış: yalnızca bu hesaptan çıkılır; cihazda başka kayıtlı hesap varsa ona geçilir. all: hepsinden çık.
+// expired: anahtar geçersizleşti (sunucu 401 döndü), bildirim aboneliği sunucuda zaten ulaşılamaz
+let leaving = false;
+export async function logout(all = false, expired = false) {
+  if (leaving) return; leaving = true;
+  const tok = state.token;
+  // Bu cihazın bildirimleri artık çıkılan hesap(lar) için gelmesin
+  const toks = all ? [...new Set([tok, ...accounts().map((a) => a.token)])].filter(Boolean) : expired ? [] : [tok].filter(Boolean);
+  if (toks.length) {
+    try {
+      const reg = await Promise.race([navigator.serviceWorker?.ready, new Promise((r) => setTimeout(r, 800))]);
+      const sub = await reg?.pushManager?.getSubscription();
+      if (sub) {
+        await Promise.race([Promise.allSettled(toks.map((t) => fetch('/api/push/unsubscribe', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${t}` }, body: JSON.stringify({ endpoint: sub.endpoint }) }))), new Promise((r) => setTimeout(r, 1500))]);
+        if (all) await sub.unsubscribe().catch(() => {});
+      }
+    } catch { /* çıkış yine de sürer */ }
+  }
+  try { if (all) Object.keys(localStorage).filter((k) => k.startsWith('su_push_off:')).forEach((k) => localStorage.removeItem(k)); else if (state.me?.id) localStorage.removeItem(`su_push_off:${state.me.id}`); } catch { /* yok */ }
+  const rest = all ? [] : accounts().filter((a) => a.token !== tok && a.id !== state.me?.id);
+  if (all) { try { localStorage.removeItem('su_accounts'); } catch { /* yok */ } } else accounts().filter((a) => a.token === tok || a.id === state.me?.id).forEach((a) => forget(a.id));
   state.token = null; state.me = null;
   state.socket?.disconnect(); state.socket = null;
-  location.hash = '#/login';
+  if (rest.length) { localStorage.setItem('su_token', rest[0].token); location.hash = '#/'; } else { localStorage.removeItem('su_token'); location.hash = '#/login'; }
   location.reload();
 }
 
@@ -267,11 +289,11 @@ export function connectSocket() {
   const s = io({ auth: { token: state.token }, transports: ['websocket', 'polling'] });
   state.socket = s;
   s.on('connect_error', (e) => {
-    if (e.message === 'unauthorized') logout();
+    if (e.message === 'unauthorized') logout(false, true);
     if (e.message === 'maintenance') { s.disconnect(); fetch('/api/maintenance').then((r) => r.json()).then((d) => d.maintenance && emit('maintenance', d.maintenance)).catch(() => {}); }
     if (e.message === 'banned') { s.disconnect(); api('/me').then((m) => m.ban && emit('banned', m.ban)).catch(() => {}); }
   });
-  s.on('account:deleted', () => logout());
+  s.on('account:deleted', () => logout(false, true));
   s.on('account:banned', () => { api('/me').then((m) => m.ban && emit('banned', m.ban)).catch(() => {}); });
   s.on('connect', () => s.emit('visibility', document.visibilityState === 'visible'));
   document.addEventListener('visibilitychange', () => s.emit('visibility', document.visibilityState === 'visible'));
@@ -499,17 +521,34 @@ export async function enablePush() {
   let sub = await reg.pushManager.getSubscription();
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(state.config.vapidPublicKey) });
   await api('/push/subscribe', { body: { subscription: sub.toJSON() } });
+  pushOff(false);
   return true;
 }
+// Birden fazla hesap aynı cihaz aboneliğini paylaşır: bir hesapta kapatmak diğerlerini etkilemesin
+const offKey = () => `su_push_off:${state.me?.id || ''}`;
+function pushOff(v) { try { if (v) localStorage.setItem(offKey(), '1'); else localStorage.removeItem(offKey()); } catch { /* yok */ } }
+const isPushOff = () => { try { return !!localStorage.getItem(offKey()); } catch { return false; } };
 export async function disablePush() {
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.getSubscription();
-  if (sub) { await api('/push/unsubscribe', { body: { endpoint: sub.endpoint } }); await sub.unsubscribe(); }
+  if (!sub) return;
+  await api('/push/unsubscribe', { body: { endpoint: sub.endpoint } });
+  const others = accounts().some((a) => a.id !== state.me?.id);
+  if (others) pushOff(true); else await sub.unsubscribe();
 }
 export async function pushEnabled() {
-  if (!pushSupported() || Notification.permission !== 'granted') return false;
+  if (!pushSupported() || Notification.permission !== 'granted' || isPushOff()) return false;
   const reg = await navigator.serviceWorker.ready;
   return !!(await reg.pushManager.getSubscription());
+}
+// Açılışta: cihazda bildirim izni ve abonelik varsa bu hesabı da abone et (hesap ekleyince/geçince bildirimler gelsin)
+export async function syncPush() {
+  try {
+    if (!pushSupported() || Notification.permission !== 'granted' || isPushOff()) return;
+    const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 4000))]);
+    const sub = await reg?.pushManager?.getSubscription();
+    if (sub) await api('/push/subscribe', { body: { subscription: sub.toJSON() } });
+  } catch { /* sessiz */ }
 }
 
 // ---- Rozetler ----
