@@ -494,3 +494,7 @@ tr.sgw td { background: color-mix(in srgb, #ffc926 10%, transparent); }
 .erp .chart .b.two i:nth-child(1) { background: var(--erp-in); } .erp .chart .b.two i:nth-child(2) { background: var(--erp-out); }
 .erp .stat.alert b { color: var(--erp-out); }
 .erp .chip.ok { background: color-mix(in srgb, var(--erp-in) 14%, transparent); color: var(--erp-in); } .erp .chip.bad { background: color-mix(in srgb, var(--erp-out) 13%, transparent); color: var(--erp-out); }
+
+.ksync { display: grid; gap: 8px; padding: 14px; border-radius: 14px; background: var(--soft); }
+.ksync .ks-p, .ksync .ks-n { margin: 0; color: var(--muted); min-height: 20px; }
+.ksync .ks-c { margin: 0; font-family: var(--display); font-size: 21px; font-weight: 800; line-height: 1.25; min-height: 27px; }

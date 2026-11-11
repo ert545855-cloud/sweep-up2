@@ -4050,3 +4050,9 @@ html.land-game #fx-layer { display: none; }
 .kr-pick em { font-style: normal; font-size: 11px; font-weight: 750; padding: 2px 7px; border-radius: 999px; background: var(--uv-soft); color: var(--uv); flex: none; }
 .kr-cat-t { margin: 6px 16px 4px; font-size: 12.5px; font-weight: 750; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .ks-bg > i, .ks-av::before, .ks-av::after, .ly .cu.in, .ks-count { animation: none; } }
+
+.live .lb .db.on { background: #ffd34d; color: #2a1740; }
+.live .tools .duo.on { background: #ffd34d; color: #2a1740; }
+.kr-web { margin: 0 14px 8px; display: grid; gap: 6px; } .kr-web:empty { display: none; } .kr-web .kr-cat-t { margin: 6px 2px 2px; }
+.kr-pick img { width: 34px; height: 34px; border-radius: 9px; object-fit: cover; flex: none; }
+.kr-web-n { margin: 2px 2px 0; font-size: 12.5px; }

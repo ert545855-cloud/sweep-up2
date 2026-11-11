@@ -57,7 +57,10 @@ export default async function karaokeAdmin(main, H) {
         <audio class="kau" controls preload="none" hidden style="width:100%"></audio>
         <label class="row"><input type="checkbox" name="vox" ${s?.vox ? 'checked' : ''}> Kayıtta vokal var: şarkıcının sesini otomatik kıs</label>
         <label>Sözler <span class="muted" style="font-weight:400">(düz metin ya da [dk:sn.xx] zaman damgalı)</span><textarea class="field" name="lyrics" rows="14" maxlength="12000" style="font-family:ui-monospace,Menlo,monospace;font-size:13px;line-height:1.5">${esc(s?.lyrics || '')}</textarea></label>
-        <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn sm kfind">${icon('search')} Sözleri bul</button><span class="muted kls" style="font-size:12.5px"></span></div>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn sm kfind">${icon('search')} Sözleri bul</button><button type="button" class="btn sm ksyn">${icon('sliders')} Sözleri müziğe eşle</button><span class="muted kls" style="font-size:12.5px"></span></div>
+        <div class="ksync" hidden><p class="muted" style="margin:0;font-size:12.5px">Müzik çalarken her satır başladığında düğmeye (ya da boşluk tuşuna) bas. Bitince zaman damgaları sözlere yazılır.</p>
+          <p class="ks-p"></p><p class="ks-c"></p><p class="ks-n"></p>
+          <div class="row" style="gap:8px;flex-wrap:wrap"><button type="button" class="btn primary ktap">Bu satır başladı</button><button type="button" class="btn kundo">Geri al</button><button type="button" class="btn kdone">Bitir ve yaz</button><button type="button" class="btn kcancel">Vazgeç</button><span class="muted kcount" style="font-size:12.5px"></span></div></div>
         <div class="row" style="gap:8px;margin-top:6px"><button class="btn primary">${icon('check')} Kaydet</button>${s ? `<button type="button" class="btn danger krm">${icon('trash')} Sil</button>` : ''}</div></form>`, (dr, close) => {
       const f = dr.querySelector('form'); const fn = dr.querySelector('.kfn'); const au = dr.querySelector('.kau'); const del = dr.querySelector('.kdel'); const ls = dr.querySelector('.kls');
       const show = () => { fn.textContent = cur.audio ? `Yüklendi${cur.size ? ` · ${mb(cur.size)}` : ''}` : 'MP3, M4A ya da WAV · en çok 40 MB'; au.hidden = !cur.audio; del.hidden = !cur.audio; if (cur.audio) au.src = cur.audio; else au.removeAttribute('src'); };
@@ -85,6 +88,23 @@ export default async function karaokeAdmin(main, H) {
         } catch (er) { toast(er.message); }
         b.disabled = false; lyr();
       };
+      // Elle eşleme: satırlar sırayla gösterilir, her dokunuş o anki saniyeyi satıra yazar
+      const sy = dr.querySelector('.ksync'); let lines = []; let stamps = []; let syncing = false;
+      const fmt = (t) => `[${String(Math.floor(t / 60)).padStart(2, '0')}:${(t % 60).toFixed(2).padStart(5, '0')}]`;
+      const drawSync = () => { const i = stamps.length; sy.querySelector('.ks-p').textContent = i > 0 ? lines[i - 1] : ''; sy.querySelector('.ks-c').textContent = i < lines.length ? lines[i] : 'Bütün satırlar eşlendi.'; sy.querySelector('.ks-n').textContent = lines[i + 1] || ''; sy.querySelector('.kcount').textContent = `${i} / ${lines.length}`; };
+      const stopSync = (write) => {
+        if (!syncing) return; syncing = false; au.pause(); sy.hidden = true; document.removeEventListener('keydown', key, true);
+        if (write && stamps.length) { f.lyrics.value = lines.map((l, i) => (i < stamps.length ? `${fmt(stamps[i])} ${l}` : l)).join('\n'); lyr(); toast(stamps.length < lines.length ? `${stamps.length} satır eşlendi. Kalanlar zaman damgasız kaldı.` : 'Sözler müziğe eşlendi. Kaydetmeyi unutma.'); }
+      };
+      const tap = () => { if (!syncing || stamps.length >= lines.length) return; stamps.push(Math.max(0, au.currentTime - 0.12)); drawSync(); if (stamps.length >= lines.length) stopSync(true); };
+      function key(e) { if (e.code === 'Space' && syncing && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') { e.preventDefault(); tap(); } }
+      dr.querySelector('.ksyn').onclick = () => {
+        if (!cur.audio) return toast('Önce müzik dosyasını yükle.');
+        lines = f.lyrics.value.split('\n').map((l) => l.replace(/\[[^\]]*\]/g, '').trim()).filter(Boolean); if (lines.length < 2) return toast('Önce sözleri yaz ya da yapıştır.');
+        stamps = []; syncing = true; sy.hidden = false; drawSync(); au.currentTime = 0; au.play().catch(() => toast('Müziği oynatıcıdan başlat.')); document.addEventListener('keydown', key, true); sy.scrollIntoView({ block: 'nearest' });
+      };
+      sy.querySelector('.ktap').onclick = tap; sy.querySelector('.kdone').onclick = () => stopSync(true); sy.querySelector('.kcancel').onclick = () => stopSync(false);
+      sy.querySelector('.kundo').onclick = () => { if (!stamps.length) return; stamps.pop(); au.currentTime = Math.max(0, (stamps[stamps.length - 1] ?? 0) - 1.5); drawSync(); };
       f.onsubmit = async (e) => {
         e.preventDefault();
         try { await api('/karaoke/songs', { body: { id: s?.id, title: f.title.value, artist: f.artist.value, audio: cur.audio, lyrics: f.lyrics.value, vox: f.vox.checked } }); toast(s ? 'Şarkı güncellendi.' : 'Şarkı kataloğa eklendi.'); close(); rerender(); } catch (er) { toast(er.message); }

@@ -27,7 +27,7 @@ export default async function karaoke(view) {
         <span class="kr-avg">${c.votes ? `${c.avg} / 5 · ${c.votes} oy` : 'Henüz oy yok'}</span></section>`
       : `<section class="kr-stage empty-s"><div class="kr-lights"><i></i><i></i><i></i></div>${egi('karaoke', 80, 'kr-mic')}<b>Sahne boş!</b><small>Sıraya ilk sen gir, mikrofon senin olsun.</small></section>`;
     const join = d.myPos ? `<div class="kr-pos"><span>Sıradasın: <b>${d.myPos}.</b></span><button class="btn sm kr-leave">Sıradan çık</button></div>`
-      : d.myTurn ? '' : `<form class="kr-join"><input class="field" name="s" maxlength="80" placeholder="${d.catalog ? 'Şarkı ara ya da adını yaz' : 'Hangi şarkıyı söyleyeceksin?'}" required autocomplete="off"><button class="btn primary">Sıraya gir</button></form>${d.catalog ? '<p class="kr-cat-t">Müziği ve sözleri hazır şarkılar</p><div class="kr-cat"></div>' : ''}`;
+      : d.myTurn ? '' : `<form class="kr-join"><input class="field" name="s" maxlength="80" placeholder="${d.catalog ? 'Şarkı ara ya da adını yaz' : 'Hangi şarkıyı söyleyeceksin?'}" required autocomplete="off"><button class="btn primary">Sıraya gir</button></form>${d.catalog ? '<p class="kr-cat-t">Müziği ve sözleri hazır şarkılar</p><div class="kr-cat"></div>' : ''}<div class="kr-web"></div>`;
     const old = box.querySelector('.kr-join input'); const typed = old?.value || ''; const focused = !!old && document.activeElement === old; // yeniden çizimde yazılan kaybolmasın
     box.innerHTML = `${stage}${join}
       <p class="muted kr-help">Her sahne ${d.turnMinutes} dakika. Sıran gelince 90 saniye içinde sahneye çıkmalısın. Kamera zorunlu değil. 5+ kişiden 4.5 üstü puan alanlar şarkı yarışmasının ön elemesini geçer.</p>
@@ -36,7 +36,7 @@ export default async function karaoke(view) {
       <div class="section-t"><span class="sec-ic">${egi('odul', 24)}Bu haftanın en iyileri</span></div>
       ${d.board.length ? d.board.map((b) => `<a class="list-item kr-b" href="#/u/${esc(b.user.username)}"><span class="kr-n ${b.rank <= 3 ? `r${b.rank}` : ''}">${b.rank}</span>${avatar(b.user, 40, { dot: false })}<div class="grow"><div class="b">${nm(b.user)}</div><div class="sub">${esc(b.song)}</div></div><b class="kr-sc">${icon('star')}${b.avg}</b></a>`).join('') : '<p class="muted" style="margin:4px 16px 30px;font-size:13.5px">Bu hafta henüz en az 3 oy alan bir performans yok.</p>'}`;
     const inp = box.querySelector('.kr-join input'); if (inp) { inp.value = typed; if (focused) { inp.focus(); inp.setSelectionRange(typed.length, typed.length); } }
-    cat();
+    cat(); drawFound();
   };
   // Müziği ve sözleri hazır şarkılar: yazdıkça süzülür, dokununca o şarkıyla sıraya girilir
   let songs = null;
@@ -47,7 +47,19 @@ export default async function karaoke(view) {
     el.innerHTML = list.map((s) => `<button type="button" class="kr-pick" data-id="${esc(s.id)}"><span class="kr-nt">${icon('music')}</span><span class="grow"><b>${esc(s.title)}</b><small>${esc(s.artist)}</small></span>${s.hasAudio ? '<em>Müzik</em>' : ''}${s.hasLyrics ? '<em>Sözler</em>' : ''}</button>`).join('');
     const t = box.querySelector('.kr-cat-t'); if (t) t.hidden = !list.length;
   }
-  box.addEventListener('input', (e) => { if (e.target.closest('.kr-join')) cat(); });
+  // Müzik araması (Spotify bağlıysa oradan): doğru şarkı adı ve sanatçıyla sıraya girilir; sözler buna göre bulunur
+  let seekT = null; let seekN = 0; let found = { q: '', items: [], spotify: false };
+  function drawFound() {
+    const el = box.querySelector('.kr-web'); if (!el) return;
+    el.innerHTML = found.items.length ? `<p class="kr-cat-t">${found.spotify ? 'Spotify’da bulunanlar' : 'Bulunan şarkılar'}</p>${found.items.slice(0, 8).map((m, i) => `<button type="button" class="kr-pick kr-sp" data-i="${i}">${m.cover ? `<img src="${esc(m.cover)}" alt="" loading="lazy">` : `<span class="kr-nt">${icon('music')}</span>`}<span class="grow"><b>${esc(m.title)}</b><small>${esc(m.artist)}</small></span></button>`).join('')}<p class="muted kr-web-n">Bu şarkılarda müziği sahnede telefonundan seçersin; sözler otomatik aranır.</p>` : '';
+  }
+  function seek() {
+    const q = (box.querySelector('.kr-join input')?.value || '').trim(); clearTimeout(seekT);
+    if (q.length < 2) { found = { q: '', items: [], spotify: false }; drawFound(); return; }
+    if (q === found.q) return drawFound();
+    seekT = setTimeout(async () => { const n = ++seekN; try { const r = await api(`/music/search?q=${encodeURIComponent(q)}`); if (n === seekN) { found = { q, items: r.items || [], spotify: !!r.spotify }; drawFound(); } } catch { /* arama yoksa elle yazılır */ } }, 380);
+  }
+  box.addEventListener('input', (e) => { if (e.target.closest('.kr-join')) { cat(); seek(); } });
   const load = async () => { d = await api('/karaoke'); if (d.catalog && !songs) songs = await api('/karaoke/songs').catch(() => []); paint(); };
   box.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -56,6 +68,8 @@ export default async function karaoke(view) {
   });
   box.addEventListener('click', async (e) => {
     try {
+      const sp = e.target.closest('.kr-sp');
+      if (sp) { const m = found.items[+sp.dataset.i]; if (!m) return; d = await api('/karaoke/queue', { body: { song: `${m.title} – ${m.artist}`.slice(0, 80) } }); found = { q: '', items: [], spotify: false }; paint(); toast(d.myTurn ? 'Sıra sende! Sahneye çık.' : `Sıraya girdin: ${d.myPos}.`); return; }
       const pk = e.target.closest('.kr-pick');
       if (pk) { d = await api('/karaoke/queue', { body: { songId: pk.dataset.id } }); paint(); toast(d.myTurn ? 'Sıra sende! Sahneye çık.' : `Sıraya girdin: ${d.myPos}.`); return; }
       const st = e.target.closest('.kr-st');

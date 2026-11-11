@@ -39,10 +39,13 @@ async function giftSheet(hostId) {
 
 const rtcConfig = () => ({ iceServers: state.config?.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] });
 
-export function makePeer(remoteId, onTrack) {
+// tag verilirse sinyaller { [tag]: … } içinde gider: aynı iki kişi arasında ikinci bir bağlantı (düet) kurulabilir
+export function makePeer(remoteId, onTrack, tag) {
   const pc = new RTCPeerConnection(rtcConfig());
   const pending = [];
-  pc.onicecandidate = (e) => { if (e.candidate) state.socket.emit('live:signal', { to: remoteId, data: { candidate: e.candidate } }); };
+  const send = (x) => state.socket.emit('live:signal', { to: remoteId, data: tag ? { [tag]: x } : x });
+  pc.send = send;
+  pc.onicecandidate = (e) => { if (e.candidate) send({ candidate: e.candidate }); };
   if (onTrack) pc.ontrack = onTrack;
   pc.handle = async (data) => {
     if (data.sdp) {
@@ -50,7 +53,7 @@ export function makePeer(remoteId, onTrack) {
       while (pending.length) await pc.addIceCandidate(pending.shift()).catch(() => {});
       if (data.sdp.type === 'offer') {
         await pc.setLocalDescription(await pc.createAnswer());
-        state.socket.emit('live:signal', { to: remoteId, data: { sdp: pc.localDescription } });
+        send({ sdp: pc.localDescription });
       }
     } else if (data.candidate) {
       if (pc.remoteDescription) await pc.addIceCandidate(data.candidate).catch(() => {});
@@ -133,14 +136,17 @@ export function caster(getStream) {
       if (!live) return;
       peers.get(viewerId)?.close();
       const pc = makePeer(viewerId); peers.set(viewerId, pc);
-      const s = getStream(); s.getAudioTracks().forEach((t) => pc.addTrack(t, s));
+      const s = getStream(); s.getAudioTracks().forEach((t) => { pc.addTrack(t, s).ka = true; });
       if (vtrack) pc.vs = pc.addTrack(vtrack, s);
       await offer(viewerId, pc);
     }),
-    on('live:signal', ({ from, data }) => { peers.get(from)?.handle(data).catch(() => {}); }),
-    on('live:viewer-left', ({ viewerId }) => { peers.get(viewerId)?.close(); peers.delete(viewerId); }),
+    on('live:signal', ({ from, data }) => { if (data?.duet) { api2.onDuet?.(from, data.duet); return; } peers.get(from)?.handle(data).catch(() => {}); }),
+    on('live:viewer-left', ({ viewerId }) => { peers.get(viewerId)?.close(); peers.delete(viewerId); api2.onLeft?.(viewerId); }),
   ];
-  return {
+  const api2 = {
+    onDuet: null, onLeft: null, has: (id) => peers.has(id),
+    // Tek bir izleyiciye giden ses izini değiştir (düet konuğu kendi sesini geri duymasın)
+    setAudioFor(id, track) { peers.get(id)?.getSenders().find((x) => x.track?.kind === 'audio' || x.ka)?.replaceTrack(track).catch(() => {}); },
     get on() { return live; },
     start() { live = true; },
     // Görüntü izi: yeni iz (kamera açıldı ya da çevrildi) veya null (kamera kapandı)
@@ -154,6 +160,7 @@ export function caster(getStream) {
     stop() { live = false; peers.forEach((pc) => pc.close()); peers.clear(); },
     off() { offs.forEach((f) => f()); },
   };
+  return api2;
 }
 
 async function host(view) {
@@ -270,6 +277,7 @@ async function watch(view, hostId) {
     if (m.kar && !root.querySelector('.lb .rb')) { // karaoke: dinleyici yayından çıkmadan puan verebilsin
       const b = el(`<button type="button" class="rb" aria-label="Puan ver">${icon('star')}</button>`);
       root.querySelector('.lb .hb')?.before(b);
+      const db = el(`<button type="button" class="db" aria-label="Düet yap">${icon('users')}</button>`); b.before(db); db.onclick = askDuet;
       b.onclick = () => sheet('Performansa puan ver', `<div class="kr-stars big">${[1, 2, 3, 4, 5].map((i) => `<button class="kr-st" data-s="${i}" aria-label="${i} yıldız">★</button>`).join('')}</div><p class="muted" style="text-align:center;margin:10px 0 0;font-size:13px">Puanın şarkı bitince ortalamaya eklenir.</p>`, {
         onMount(sh, close) {
           sh.querySelector('.kr-stars').onclick = async (e) => {
@@ -283,9 +291,26 @@ async function watch(view, hostId) {
   };
   const kTimer = setInterval(tickK, 120);
 
+  // Düet: karaokede dinleyici mikrofonuyla şarkıcıya katılabilir (şarkıcı kabul ederse)
+  let hostSock = null; let dpc = null; let dmic = null; let dwait = false;
+  const tell = (m) => hostSock && state.socket.emit('live:signal', { to: hostSock, data: { duet: m } });
+  const endDuet = (say) => { if (say && (dpc || dwait)) tell({ end: true }); dpc?.close(); dpc = null; dmic?.getTracks().forEach((t) => t.stop()); dmic = null; dwait = false; root.querySelector('.lb .db')?.classList.remove('on'); };
+  async function askDuet() {
+    if (dpc || dwait) { if (confirm('Düetten çıkılsın mı?')) endDuet(true); return; }
+    if (!hostSock) return toast('Yayın bağlantısı kuruluyor, birazdan tekrar dene.');
+    try { dmic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); } catch { return toast('Düet için mikrofon izni gerekiyor.'); }
+    dwait = true; tell({ ask: true, name: state.me.username }); root.querySelector('.lb .db')?.classList.add('on'); toast('Düet isteği gönderildi. Şarkıcının kabul etmesi bekleniyor.');
+  }
+  async function onDuet(m) {
+    if (m.yes && dwait && dmic) {
+      dwait = false; dpc = makePeer(hostSock, null, 'duet'); dmic.getTracks().forEach((t) => dpc.addTrack(t, dmic));
+      try { await dpc.setLocalDescription(await dpc.createOffer()); dpc.send({ sdp: dpc.localDescription }); toast('Düettesin! Kulaklık takarsan sesin daha temiz gider.', { ms: 4500 }); } catch { endDuet(true); toast('Düet bağlantısı kurulamadı.'); }
+    } else if (m.no) { endDuet(false); toast(typeof m.no === 'string' ? m.no : 'Düet isteği kabul edilmedi.'); } else if (m.end) { if (dpc || dwait) toast('Düet bitti.'); endDuet(false); } else dpc?.handle(m).catch(() => {});
+  }
+
   const ended = () => {
     pc?.close(); pc = null;
-    video.srcObject = null; clearInterval(kTimer); kl.hidden = true; root.classList.remove('audio', 'kar');
+    video.srcObject = null; clearInterval(kTimer); kl.hidden = true; root.classList.remove('audio', 'kar'); endDuet(false);
     root.querySelector('.lb')?.remove();
     root.querySelector('.badge-live').hidden = true;
     slot.innerHTML = `<div class="center-msg"><div><img class="av av-56" src="${esc(host_.avatar)}" alt="" style="margin:0 auto 12px"><h2 style="margin:0 0 6px">Canlı yayın sona erdi</h2>
@@ -295,6 +320,7 @@ async function watch(view, hostId) {
 
   const offs = [
     on('live:signal', async ({ from, data }) => {
+      hostSock = from; if (data?.duet) { onDuet(data.duet); return; }
       if (!pc) {
         pc = makePeer(from, (e) => {
           video.srcObject = e.streams[0];
@@ -329,7 +355,7 @@ async function watch(view, hostId) {
     video.addEventListener('click', () => { const t = Date.now(); if (t - last < 300) state.socket.emit('live:heart', { hostId }); last = t; });
   }
   root.querySelector('.x').onclick = () => (history.length > 1 ? history.back() : (location.hash = '#/'));
-  return () => { state.socket.emit('live:leave'); clearInterval(kTimer); pc?.close(); offs.forEach((f) => f()); offChat?.(); };
+  return () => { endDuet(true); state.socket.emit('live:leave'); clearInterval(kTimer); pc?.close(); offs.forEach((f) => f()); offChat?.(); };
 }
 
 export default function live(view, hostId) {
