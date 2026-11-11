@@ -1,0 +1,18 @@
+{
+  "appId": "app.swipeup.ios",
+  "appName": "SwipeUp",
+  "webDir": "www",
+  "server": {
+    "url": "https://swipeup-hh1f.onrender.com",
+    "cleartext": false,
+    "allowNavigation": ["swipeup-hh1f.onrender.com"]
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#000000",
+    "limitsNavigationsToAppBoundDomains": true
+  },
+  "plugins": {
+    "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] }
+  }
+}

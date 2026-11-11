@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hesap silme · SwipeUp</title>
+  <meta name="description" content="SwipeUp hesabını ve verilerini nasıl silebileceğin.">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg: #ffffff; --text: #16161a; --muted: #62626e; --line: #e7e7ee; --soft: #f5f5f8; --uv: #f2435a; --ok: #0b8a5e; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0b0b0e; --text: #f3f3f6; --muted: #a0a0ad; --line: #26262e; --soft: #16161c; --uv: #ff5a6e; --ok: #3dcf97; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    main { max-width: 640px; margin: 0 auto; padding: 40px 16px 64px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 750; text-decoration: none; color: inherit; }
+    .brand img { width: 32px; height: 32px; border-radius: 9px; }
+    h1 { font-family: "Bricolage Grotesque", -apple-system, sans-serif; font-size: clamp(30px, 6vw, 40px); line-height: 1.1; letter-spacing: -.02em; margin: 28px 0 10px; }
+    h2 { font-family: "Bricolage Grotesque", -apple-system, sans-serif; font-size: 21px; margin: 34px 0 8px; }
+    p, li { color: var(--muted); } p b, li b { color: var(--text); }
+    ol { padding-left: 22px; } li { margin: 4px 0; }
+    .card { border: 1px solid var(--line); border-radius: 18px; padding: 20px; background: var(--soft); }
+    label { display: grid; gap: 6px; font-weight: 650; font-size: 14px; margin-bottom: 14px; }
+    input, textarea { font: inherit; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--text); width: 100%; }
+    textarea { min-height: 90px; resize: vertical; }
+    input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 3px solid color-mix(in srgb, var(--uv) 45%, transparent); outline-offset: 2px; }
+    button { font: inherit; font-weight: 750; border: 0; border-radius: 999px; padding: 12px 22px; background: var(--uv); color: #fff; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: default; }
+    .msg { margin: 12px 0 0; font-weight: 650; } .msg.ok { color: var(--ok); } .msg.err { color: var(--uv); }
+    table { width: 100%; border-collapse: collapse; font-size: 14.5px; } td { padding: 9px 0; border-top: 1px solid var(--line); vertical-align: top; color: var(--muted); } td:first-child { color: var(--text); font-weight: 650; width: 42%; padding-right: 12px; }
+    footer { margin-top: 40px; font-size: 13.5px; color: var(--muted); } footer a { color: inherit; }
+  </style>
+</head>
+<body>
+<main>
+  <a class="brand" href="/"><img src="/icons/icon-192.png" alt="">SwipeUp</a>
+  <h1>Hesabını sil</h1>
+  <p>SwipeUp hesabını istediğin zaman silebilirsin. Silinen hesap geri getirilemez.</p>
+
+  <h2>Uygulamadan silme</h2>
+  <ol>
+    <li>SwipeUp’ı aç ve giriş yap.</li>
+    <li><b>Profil</b> sekmesinde sağ üstteki menüden <b>Ayarlar</b>’a gir.</li>
+    <li>En alttaki <b>Hesabımı sil</b>’e dokun ve onayla.</li>
+  </ol>
+
+  <h2>Giriş yapamıyorsan</h2>
+  <p>Aşağıdaki formu doldur. Destek ekibi hesabın sana ait olduğunu yazdığın telefon ya da e-posta üzerinden doğrular ve hesabını 30 gün içinde siler.</p>
+  <form class="card" id="f" novalidate>
+    <label>Kullanıcı adın<input name="username" autocomplete="username" maxlength="40" placeholder="@kullaniciadi" required></label>
+    <label>Sana ulaşabileceğimiz telefon ya da e-posta<input name="contact" autocomplete="email" maxlength="120" required></label>
+    <label>Not (isteğe bağlı)<textarea name="reason" maxlength="600"></textarea></label>
+    <button type="submit">Silme talebi gönder</button>
+    <p class="msg" id="m" role="status" aria-live="polite"></p>
+  </form>
+
+  <h2>Neler silinir, neler saklanır?</h2>
+  <table>
+    <tr><td>Kalıcı olarak silinenler</td><td>Profilin, paylaşımların, eşleşmelerin ve mesajların.</td></tr>
+    <tr><td>Bir süre saklananlar</td><td>Yasal olarak saklamamız gereken ödeme kayıtları, ilgili yasal süre boyunca.</td></tr>
+  </table>
+
+  <footer>Ayrıntılar için <a href="/#/legal/gizlilik">Gizlilik Politikası</a>. · <span lang="en">To delete your SwipeUp account, open Settings → Delete my account, or use the form above.</span></footer>
+</main>
+<script>
+  const f = document.getElementById('f'); const m = document.getElementById('m');
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault(); const b = f.querySelector('button'); m.className = 'msg'; m.textContent = '';
+    const body = { username: f.username.value.trim(), contact: f.contact.value.trim(), reason: f.reason.value.trim() };
+    if (body.username.length < 2 || body.contact.length < 5) { m.className = 'msg err'; m.textContent = 'Kullanıcı adını ve sana ulaşabileceğimiz bir telefon ya da e-posta yaz.'; return; }
+    b.disabled = true;
+    try {
+      const r = await fetch('/api/public/delete-request', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'Talep gönderilemedi. Biraz sonra tekrar dene.');
+      f.reset(); m.className = 'msg ok'; m.textContent = 'Talebin alındı. Bu kullanıcı adıyla bir hesap varsa destek ekibi seninle iletişime geçecek.';
+    } catch (er) { m.className = 'msg err'; m.textContent = er.message; }
+    b.disabled = false;
+  });
+</script>
+</body>
+</html>

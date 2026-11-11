@@ -20,6 +20,22 @@ module.exports = function support(app, ctx) {
     pushAdmins?.({ title: `🎧 Destek #${t.no} · ${u?.name || 'Kullanıcı'}`, body: `${CATS[t.category] || ''}: ${text.slice(0, 140)}`, url: `/admin/#/support/${t.id}`, tag: `support-${t.id}` });
   };
 
+  // ---- Uygulamaya girmeden hesap silme talebi (mağazaların istediği web adresi: /hesap-silme) ----
+  // Kullanıcının var olup olmadığı yanıttan anlaşılmaz; talep yalnızca kullanıcı bulunursa destek kuyruğuna düşer.
+  app.post('/api/public/delete-request', (req, res) => {
+    const b = req.body || {}; const username = clean(b.username, 40).replace(/^@/, '').toLowerCase(); const contact = clean(b.contact, 120); const reason = clean(b.reason, 600);
+    if (username.length < 2 || contact.length < 5) return res.status(400).json({ error: 'Kullanıcı adını ve sana ulaşabileceğimiz bir telefon ya da e-posta yaz.' });
+    if (limited('delreq:' + (req.ip || ''), 5, 3600000)) return res.status(429).json({ error: 'Çok fazla deneme yaptın. Bir saat sonra tekrar dene.' });
+    const u = store.filter('users', (x) => String(x.username || '').toLowerCase() === username)[0];
+    if (u && !store.filter('support', (t) => t.userId === u.id && t.status !== 'closed' && t.webDelete).length) {
+      const t = store.put('support', { id: nanoid(12), no: nextNo(), userId: u.id, category: 'hesap', subject: 'Hesap silme talebi (web formu)', status: 'open', webDelete: true,
+        msgs: [{ id: nanoid(8), from: 'user', text: `Web formundan hesap silme talebi.\nİletişim: ${contact}${reason ? `\nNot: ${reason}` : ''}\n\nKimlik doğrulanmadı: silmeden önce bu iletişim bilgisinin hesaba ait olduğunu kontrol et.`, image: null, at: now() }],
+        at: now(), lastAt: now(), adminUnread: true, userUnread: 0, device: clean(req.headers['user-agent'], 200) });
+      alertAdmins(t, `Hesap silme talebi · @${u.username}`);
+    }
+    res.json({ ok: true });
+  });
+
   // ---- Kullanıcı ----
   app.get('/api/support', auth, (req, res) => {
     res.json({ cats: CATS, items: store.filter('support', (t) => t.userId === req.user.id).sort((a, b) => b.lastAt - a.lastAt).map(summary) });

@@ -1724,6 +1724,18 @@ require('./server/market')(app, featureCtx);
 require('./server/social')(app, featureCtx);
 require('./server/falai')(app, featureCtx);
 require('./server/support')(app, featureCtx);
+// Mağaza uygulamaları için alan adı doğrulaması: Android (Trusted Web Activity) ve iOS evrensel bağlantıları.
+// ANDROID_SHA256: Play Console > Uygulama imzalama sayfasındaki SHA-256 parmak izi (birden fazlaysa virgülle).
+app.get(['/hesap-silme', '/delete-account'], (req, res) => res.sendFile(path.join(__dirname, 'public', 'hesap-silme.html')));
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  const fps = String(process.env.ANDROID_SHA256 || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
+  if (!fps.length) return res.status(404).json([]);
+  res.json([{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: process.env.ANDROID_PACKAGE || 'app.swipeup.twa', sha256_cert_fingerprints: fps } }]);
+});
+app.get('/.well-known/apple-app-site-association', (req, res) => {
+  const team = process.env.APPLE_TEAM_ID; if (!team) return res.status(404).json({});
+  res.type('application/json').send(JSON.stringify({ applinks: { apps: [], details: [{ appIDs: [`${team}.${process.env.IOS_BUNDLE || 'app.swipeup.ios'}`], components: [{ '/': '/*' }] }] } }));
+});
 require('./server/promo')(app, featureCtx);
 require('./server/tags')(app, featureCtx);
 require('./server/wheel')(app, featureCtx);

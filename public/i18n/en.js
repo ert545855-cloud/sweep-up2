@@ -506,6 +506,20 @@ const D = {
   'Bu şarkılarda müziği sahnede telefonundan seçersin; sözler otomatik aranır.': 'For these songs you pick the music from your phone on stage; lyrics are found automatically.',
   'Bu fotoğraf topluluk kurallarına uymuyor (çıplaklık ya da cinsel içerik). Lütfen başka bir fotoğraf seç.': 'This photo breaks the community rules (nudity or sexual content). Please choose another photo.',
   'Yüklediğin bir fotoğraf topluluk kurallarına uymadığı için kaldırıldı.': 'A photo you uploaded was removed because it broke the community rules.',
+  // Bayrak Kapmaca
+  'Bayrak Kapmaca': 'Capture the Flag',
+  'Rakibin bayrağını kap, kendi üssüne getir. Yarı sahanda bayrak taşıyana dokun, bayrağı düşürsün!': 'Grab the other team’s flag and bring it to your base. Touch a flag carrier in your half to make them drop it!',
+  'İki takım: rakip bayrağı kendi üssüne getiren puan alır. Üç kez getiren kazanır.': 'Two teams: bring the enemy flag to your base to score. First to three wins.',
+  'Bayrak sende!': 'You have the flag!',
+  'Kendi üssüne koş.': 'Run to your base.',
+  'Bayrağı düşürdün!': 'You dropped the flag!',
+  'Biraz bekle, sonra yeniden kap.': 'Wait a moment, then grab it again.',
+  'Bayrağı düşürdün 💪': 'You made them drop the flag 💪',
+  'Bayrak bizde! 🎉': 'We scored! 🎉',
+  'Bayrak gitti!': 'They scored!',
+  'Uzatma': 'Overtime',
+  'Bayrağı ilk getiren kazanır. Kimse getiremezse bayrağı üssünden daha uzakta olan takım kaybeder.': 'First capture wins. If nobody scores, the team whose flag is farther from its base loses.',
+  'Bayrak sende, üssüne koş!': 'You have the flag, run to your base!',
 };
 
 // Sayı / isim içeren metinler
@@ -534,6 +548,10 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^Takımın (Pembe|Mavi)\. (Pembe|Mavi) bayrağı kap, üssüne getir!$/, (_, a, b) => `You’re on team ${a === 'Pembe' ? 'Pink' : 'Blue'}. Grab the ${b === 'Pembe' ? 'pink' : 'blue'} flag and bring it home!`],
+  [/^(.+) bayrağı kaptı$/, (_, n) => `${n} grabbed the flag`],
+  [/^(.+) bayrağı düşürdü$/, (_, n) => `${n} dropped the flag`],
+  [/^(Pembe|Mavi) bayrak üssüne döndü$/, (_, t) => `${t === 'Pembe' ? 'Pink' : 'Blue'} flag is back at base`],
   [/^Sesli sohbet açık\. (\d+) oyuncu seni duyuyor\.$/, (_, n) => `Voice chat is on. ${n} ${n === '1' ? 'player hears' : 'players hear'} you.`],
   [/^(Bronz|Gümüş|Altın|Elmas) kademe · (\d+) puan$/, (_, t, n) => `${{ Bronz: 'Bronze', Gümüş: 'Silver', Altın: 'Gold', Elmas: 'Diamond' }[t]} tier · ${n} points`],
   [/^(\d+)\. sıradasın · (\d+) galibiyet$/, (_, r, w) => `You’re #${r} · ${w} ${w === '1' ? 'win' : 'wins'}`],

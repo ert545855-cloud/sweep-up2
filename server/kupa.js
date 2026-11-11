@@ -6,9 +6,9 @@ const { nanoid } = require('nanoid');
 const MAXP = 8; const TICK = 100; const INTRO_MS = 5500; const RESULT_MS = 4500; const WAIT_MS = 12000;
 // Her kupada üç tur çekilir: kalabalık tur → orta tur → final
 // Futbol yalnızca ikinci turda: ilk turdan 8 kişilik kupada 6, 16 kişilik kupada 8 kişi çıkar (3'e 3 ya da 4'e 4).
-const POOL = [['cubuk', 'kuyruk', 'renk', 'bomba', 'sakla', 'sakla', 'doner', 'doner'], ['zemin', 'sumo', 'lav', 'renk', 'bomba', 'kuyruk', 'sakla', 'futbol', 'futbol', 'doner'], ['kosu', 'sumo', 'lav', 'zemin', 'doner']];
-const TITLES = { cubuk: 'Dönen Çubuk', zemin: 'Zemin Çöküyor', kosu: 'Engelli Koşu', kuyruk: 'Kuyruk Kapmaca', sumo: 'Sumo', doner: 'Döner Tabla', renk: 'Renk Zemini', lav: 'Lav Yükseliyor', futbol: 'Dev Top Futbolu', bomba: 'Bomba Elden Ele', sakla: 'Saklambaç' };
-const CAP = { cubuk: 75000, zemin: 60000, kosu: 100000, kuyruk: 45000, sumo: 90000, doner: 80000, renk: 120000, lav: 85000, futbol: 75000, bomba: 150000, sakla: 60000 };
+const POOL = [['cubuk', 'kuyruk', 'renk', 'bomba', 'sakla', 'sakla', 'doner', 'doner'], ['zemin', 'sumo', 'lav', 'renk', 'bomba', 'kuyruk', 'sakla', 'futbol', 'futbol', 'doner', 'bayrak', 'bayrak'], ['kosu', 'sumo', 'lav', 'zemin', 'doner']];
+const TITLES = { cubuk: 'Dönen Çubuk', zemin: 'Zemin Çöküyor', kosu: 'Engelli Koşu', kuyruk: 'Kuyruk Kapmaca', sumo: 'Sumo', doner: 'Döner Tabla', bayrak: 'Bayrak Kapmaca', renk: 'Renk Zemini', lav: 'Lav Yükseliyor', futbol: 'Dev Top Futbolu', bomba: 'Bomba Elden Ele', sakla: 'Saklambaç' };
+const CAP = { cubuk: 75000, zemin: 60000, kosu: 100000, kuyruk: 45000, sumo: 90000, doner: 80000, bayrak: 120000, renk: 120000, lav: 85000, futbol: 75000, bomba: 150000, sakla: 60000 };
 const MODES = Object.entries(TITLES); // [anahtar, ad]: istemcideki oyun seçici için
 if (process.env.KUPA_CAPS) { try { Object.assign(CAP, JSON.parse(process.env.KUPA_CAPS)); } catch { /* yerel deneme için tur süresi */ } }
 const G = 22; const JUMP = 8.5; // istemciyle aynı fizik sabitleri
@@ -28,6 +28,9 @@ const KOSU_OBS = [16, 24, 32, 44, 50, 56, 68, 76, 88, 98]; const KOSU_CP = [0, 6
 // Kuyruk / bomba: çitli yuvarlak alan. Sumo: daralan platform. Renk: 7×7 renkli karo. Lav: sarmal basamaklar. Futbol: duvarlı saha.
 // Kalabalık turlarda (10'dan fazla oyuncu) alanlar büyür: ölçüler odada tutulur (r.R, r.sumo, r.fut).
 const TAG_R = 10; const SUMO = { r0: 9, r1: 1.4, rate: 0.11, from: 4 };
+// Bayrak Kapmaca: iki takım, iki üs. Rakip bayrağı kendi üssüne getiren puan alır; taşıyana dokunan bayrağı düşürür.
+const BAY = { hx: 9, hz: 16, base: 12.5, br: 2.4, grab: 1.15, tag: 1.0, win: 3, back: 12000, safe: 900 }; // taşıyana yalnızca rakip kendi yarı sahasında dokunabilir
+const TEAMS = new Set(['futbol', 'bayrak']);
 // Döner Tabla: hızlanan ve yön değiştiren tabla oyuncuları taşır ve dışarı savurur (istemciyle birebir aynı hesap)
 const DON = { r: 9, hub: 1.6, w0: 0.55, acc: 0.045, flip: 9, ramp: 1.2, k: 0.34 };
 const donW = (c, t) => { if (t <= 0) return 0; const n = Math.floor(t / c.flip); return (n % 2 ? -1 : 1) * (c.w0 + c.acc * t) * Math.min(1, (t - n * c.flip) / c.ramp); };
@@ -149,7 +152,7 @@ module.exports = function kupa(app, ctx) {
   const confOf = (r) => {
     const m = r.mode;
     return m === 'cubuk' ? { r: r.R, bars: BARS } : m === 'zemin' ? { rings: r.hm.rings, hex: HEX, ms: r.tileMs || TILE_MS, tiles: Object.fromEntries(r.tiles || []) } : m === 'kosu' ? { len: TRACK }
-      : m === 'kuyruk' || m === 'bomba' ? { r: r.R, len: CAP[m] / 1000 } : m === 'sumo' ? r.sumo : m === 'doner' ? DON : m === 'renk' ? { ...RENK, seed: r.rk.seed, cyc: r.rk.cyc } : m === 'lav' ? LAV : m === 'futbol' ? { ...r.fut, len: CAP.futbol / 1000 }
+      : m === 'kuyruk' || m === 'bomba' ? { r: r.R, len: CAP[m] / 1000 } : m === 'sumo' ? r.sumo : m === 'doner' ? DON : m === 'bayrak' ? { ...BAY, len: CAP.bayrak / 1000 } : m === 'renk' ? { ...RENK, seed: r.rk.seed, cyc: r.rk.cyc } : m === 'lav' ? LAV : m === 'futbol' ? { ...r.fut, len: CAP.futbol / 1000 }
       : m === 'sakla' ? { ...SAK, walls: SAK_WALLS, ebes: (r.ebes || []).map((e) => [r2(e.x), r2(e.z), r2(e.ry)]) } : null;
   };
   const push = (r) => r.players.forEach((p) => { if (p.uid) ctx.emitTo(p.uid, 'k3', view(r, p.uid)); });
@@ -184,8 +187,8 @@ module.exports = function kupa(app, ctx) {
   function nextRound(r) {
     clear(r); r.round++; r.mode = r.plan[r.round - 1];
     const cont = r.players.filter((p) => !p.out); const n = cont.length; const m = r.mode; const last = r.round >= r.plan.length; const big = n > 10;
-    r.keep = last ? 1 : r.round === 1 ? Math.max(2, Math.ceil(r.n0 * (r.plan[1] !== 'futbol' ? 0.6 : r.n0 > 8 ? 0.5 : 0.75))) : Math.max(2, Math.ceil(r.n0 * 0.35));
-    if (m === 'futbol') r.keep = Math.ceil(n / 2); // kazanan takım tur atlar
+    r.keep = last ? 1 : r.round === 1 ? Math.max(2, Math.ceil(r.n0 * (!TEAMS.has(r.plan[1]) ? 0.6 : r.n0 > 8 ? 0.5 : 0.75))) : Math.max(2, Math.ceil(r.n0 * 0.35));
+    if (TEAMS.has(m)) r.keep = Math.ceil(n / 2); // kazanan takım tur atlar
     if (m === 'kuyruk' && last) r.keep = Math.max(1, Math.round(n * 0.4)); // tek oyunda kuyruğu olanlar kazanır
     r.keep = Math.min(r.keep, Math.max(1, n - 1));
     Object.assign(r, { tiles: new Map(), result: null, finished: [], st: null, ball: null, rk: null, hit: null, ot: 0, deadAt: 0, ebes: null, taken: null, wave: 0,
@@ -198,6 +201,10 @@ module.exports = function kupa(app, ctx) {
       if (m === 'cubuk') { ring(r.R * 0.6); if (B) p.b = { a, r: rnd(3, r.R - 2), da: rnd(-0.12, 0.12), jt: -1, cool: [0, 0], hit: null }; }
       else if (m === 'zemin') { const ti = free[k % free.length]; p.x = TILES[ti].x; p.z = TILES[ti].z; if (B) p.b = { ti, mv: null, next: 0 }; }
       else if (m === 'kosu') { p.x = ((k % 6) - 2.5) * 1.45; p.z = 1.2 + Math.floor(k / 6) * 1.45; /* altışarlı sıra: 16 kişi de pistin başlangıç düzlüğüne (z ≤ 5) sığar */ if (B) p.b = { lane: p.x, sp: rnd(5.0, 6.2), stall: 0, seen: -1, ph: rnd(0, 6) }; }
+      else if (m === 'bayrak') { // takımlar kendi üslerinin önünde dörderli sıra
+        p.team = k % 2; const j = Math.floor(k / 2); p.x = ((j % 4) - 1.5) * 2.4; p.z = (p.team ? -1 : 1) * (BAY.base - 1.6 - Math.floor(j / 4) * 2.2);
+        if (B) p.b = { vx: 0, vz: 0, role: j % 2 ? 'savun' : 'hucum', pace: rnd(0.9, 1.04), off: rnd(-3, 3) }; // takımın yarısı savunur
+      }
       else if (m === 'futbol') { // takımlar sırayla dağıtılır; dörderli sıralar halinde dizilir, her takımın ilk botu kaleci
         p.team = k % 2; const j = Math.floor(k / 2); const size = p.team ? Math.floor(n / 2) : Math.ceil(n / 2);
         p.x = ((j % 4) - (Math.min(4, size) - 1) / 2) * 2.8; p.z = (p.team ? -1 : 1) * (5.5 + Math.floor(j / 4) * 2.6);
@@ -211,6 +218,7 @@ module.exports = function kupa(app, ctx) {
     });
     if (m === 'kuyruk') { cont.slice().sort(() => Math.random() - 0.5).slice(0, r.keep).forEach((p) => { p.tail = true; }); r.st = { tails: r.players.map((p, i) => (p.tail && !p.out ? i : -1)).filter((i) => i >= 0) }; }
     else if (m === 'bomba') r.st = { bombs: [] };
+    else if (m === 'bayrak') r.st = { teams: Object.fromEntries(cont.map((p) => [r.players.indexOf(p), p.team])), score: [0, 0], flags: [flagHome(0), flagHome(1)] };
     else if (m === 'futbol') { r.st = { teams: Object.fromEntries(cont.map((p) => [r.players.indexOf(p), p.team])), score: [0, 0] }; r.ball = { x: 0, z: 0, vx: 0, vz: 0, fr: 0 }; }
     else if (m === 'renk') { const cyc = []; let t = 2.5; for (let k = 0; k < 14; k++) { const th = Math.max(2, 4.2 - 0.22 * k); cyc.push([Math.floor(Math.random() * RENK.cols), r2(t), r2(t + th), r2(t + th + 2)]); t += th + 2.9; } r.rk = { seed: Math.floor(Math.random() * 1e9), cyc, done: -1 }; }
     else if (m === 'sakla') { r.taken = new Set(); const ne = n > 8 ? 2 : 1; r.ebes = Array.from({ length: ne }, (_, i) => ({ x: ne > 1 ? (i ? 0.9 : -0.9) : 0, z: 0, ry: i * Math.PI, mode: 'patrol', path: null, on: 0 })); }
@@ -349,6 +357,7 @@ module.exports = function kupa(app, ctx) {
   function timeUp(r) {
     if (r.mode === 'kosu') return finish(r, alive(r).sort((a, b) => (b.prog || 0) - (a.prog || 0))[0]);
     if (r.mode === 'kuyruk') drop(r, alive(r).filter((p) => !p.tail)); // kuyruğu olanlar tur atlar
+    if (r.mode === 'bayrak') { const [a, b] = r.st.score; if (a === b && !r.ot) { r.ot = now(); r.st.ot = 1; cast(r, 'k3:ev', { t: 'ot' }); push(r); return; } if (a === b && now() - r.ot < 30000) return; return bayEnd(r); }
     if (r.mode === 'futbol') { const [a, b] = r.st.score; if (a === b && !r.ot) { r.ot = now(); r.st.ot = 1; cast(r, 'k3:ev', { t: 'ot' }); return; } if (a === b && now() - r.ot < 30000) return; return futEnd(r); }
     if (!r.single && r.round >= r.plan.length && alive(r).length > 1) { // kupa finalinde tek kazanan: sumoda merkeze en yakın, diğerlerinde kura
       const al = alive(r); const sc = new Map(al.map((p) => [p, r.mode === 'sumo' ? -Math.hypot(p.x, p.z) : Math.random()])); const best = al.slice().sort((a, b) => sc.get(b) - sc.get(a))[0]; drop(r, al.filter((p) => p !== best));
@@ -408,6 +417,59 @@ module.exports = function kupa(app, ctx) {
       else steer(p, tg[0].x, tg[0].z, 5.3, dt);
     }
     if (Math.hypot(p.x, p.z) > R + 0.35) { b.fly = [b.vx * 0.6, 0, b.vz * 0.6]; elim(r, p); }
+  }
+  // ---- Bayrak Kapmaca ----
+  const flagHome = (t) => ({ h: 1, c: null, x: 0, z: (t ? -1 : 1) * BAY.base, at: 0 });
+  const baseZ = (t) => (t ? -1 : 1) * BAY.base;
+  const flagPos = (r, f) => (f.c != null ? r.players[f.c] : f);
+  function bayTick(r) {
+    const F = r.st.flags; const n = now(); const al = alive(r); let ch = false;
+    for (const p of al) {
+      const i = r.players.indexOf(p); const tm = p.team; if (tm == null) continue; const own = F[tm]; const en = F[1 - tm];
+      if (en.c === i) { // taşıyıcı üssüne vardı: puan
+        if (Math.hypot(p.x, p.z - baseZ(tm)) < BAY.br) {
+          r.st.score[tm] += 1; F[1 - tm] = flagHome(1 - tm); cast(r, 'k3:ev', { t: 'cap', i, team: tm, s: r.st.score.slice() }); push(r);
+          if (r.st.score[tm] >= BAY.win || r.ot) return bayEnd(r);
+          ch = false;
+        }
+        continue;
+      }
+      if (own.c == null && !own.h && Math.hypot(p.x - own.x, p.z - own.z) < BAY.grab) { F[tm] = flagHome(tm); cast(r, 'k3:ev', { t: 'ret', i, team: tm }); ch = true; }
+      if (en.c == null && n > (p.fcd || 0) && Math.hypot(p.x - en.x, p.z - en.z) < BAY.grab) { en.c = i; en.h = 0; en.safe = n + BAY.safe; cast(r, 'k3:ev', { t: 'take', i, team: tm }); ch = true; }
+    }
+    for (const tm of [0, 1]) { // tm takımının taşıdığı bayrak: rakip dokunursa düşer
+      const f = F[1 - tm];
+      if (f.c == null) { if (!f.h && n - f.at > BAY.back) { F[1 - tm] = flagHome(1 - tm); cast(r, 'k3:ev', { t: 'ret', i: -1, team: 1 - tm }); ch = true; } continue; }
+      const ci = f.c; const cp = r.players[ci];
+      const inFoeHalf = cp && cp.z * baseZ(1 - tm) > 0; // taşıyıcı hâlâ rakibin yarı sahasında
+      const hit = cp?.alive && inFoeHalf && n > (f.safe || 0) ? al.find((q) => q.team === 1 - tm && Math.hypot(q.x - cp.x, q.z - cp.z) < BAY.tag) : null;
+      if (!cp?.alive || hit) { f.c = null; f.x = Math.max(-BAY.hx + 1, Math.min(BAY.hx - 1, cp?.x ?? 0)); f.z = Math.max(-BAY.hz + 1, Math.min(BAY.hz - 1, cp?.z ?? 0)); f.at = n; if (cp) cp.fcd = n + 2500; cast(r, 'k3:ev', { t: 'drop', i: ci, by: hit ? r.players.indexOf(hit) : -1 }); ch = true; }
+    }
+    if (ch) push(r);
+  }
+  function bayEnd(r) { // fazla puanlı takım kazanır; eşitlikte kendi bayrağı üssünden daha uzakta olan takım kaybeder
+    const [a, b] = r.st.score; let lose;
+    if (a !== b) lose = a > b ? 1 : 0;
+    else { const d = (t) => { const f = r.st.flags[t]; if (f.h) return 0; const q = flagPos(r, f); return Math.hypot(q.x, q.z - baseZ(t)); }; const d0 = d(0); const d1 = d(1); lose = d0 === d1 ? (Math.random() < 0.5 ? 0 : 1) : d0 > d1 ? 0 : 1; }
+    drop(r, alive(r).filter((p) => p.team === lose)); endRound(r);
+  }
+  function botBayrak(r, p, b, t, dt) {
+    const i = r.players.indexOf(p); const tm = p.team; const F = r.st.flags; const own = F[tm]; const en = F[1 - tm]; const sp = 5.5 * b.pace; let tx = p.x; let tz = p.z; let s = sp;
+    const foes = alive(r).filter((q) => q.team !== tm);
+    if (en.c === i) { tx = b.off * 0.4; tz = baseZ(tm); s = sp * 0.88; } // bayrak bende: eve (bayrak ağır, biraz yavaş)
+    else if (b.role === 'savun') {
+      if (own.c != null) { const c = flagPos(r, own); if (c.z * baseZ(tm) > 0) { tx = c.x; tz = c.z; } else { tx = c.x * 0.5; tz = baseZ(tm) * 0.1; } s = sp; } // yarı sahayı geçtiyse kovalamak boşuna
+      else if (!own.h) { tx = own.x; tz = own.z; }
+      else { const intr = foes.map((q) => [q, Math.hypot(q.x - own.x, q.z - own.z)]).filter((x) => x[1] < 6).sort((x, y) => x[1] - y[1])[0];
+        if (intr && t > (b.wake || 0)) { tx = intr[0].x; tz = intr[0].z; s = sp * 0.92; } else { if (!intr) b.wake = t + rnd(0.4, 0.9); const a = t * 0.7 + b.off; tx = Math.cos(a) * 4.5; tz = own.z - baseZ(tm) * 0.3 + Math.sin(a) * 1.5; s = sp * 0.55; } }
+    } else {
+      if (en.c == null) { tx = en.x; tz = en.z; }
+      else { const c = r.players[en.c]; const thr = foes.map((q) => [q, Math.hypot(q.x - c.x, q.z - c.z)]).sort((x, y) => x[1] - y[1])[0]; // arkadaşım taşıyor: ona yaklaşanı kes
+        if (thr && thr[1] < 6) { tx = (thr[0].x + c.x) / 2; tz = (thr[0].z + c.z) / 2; } else { tx = c.x + b.off * 0.5; tz = c.z - baseZ(tm) * 0.12; } }
+      if (own.c != null) { const c = flagPos(r, own); if (Math.hypot(c.x - p.x, c.z - p.z) < 5) { tx = c.x; tz = c.z; } }
+    }
+    steer(p, tx, tz, s, dt);
+    p.x = Math.max(-BAY.hx + 0.4, Math.min(BAY.hx - 0.4, p.x)); p.z = Math.max(-BAY.hz + 0.4, Math.min(BAY.hz - 0.4, p.z));
   }
   function botDoner(r, p, b, t, dt) { // tabla botu taşır ve savurur; bot göbeğe doğru koşar, ara sıra dalar
     const w = donW(DON, t); const rr = Math.hypot(p.x, p.z) || 0.01; const a = w * dt; const cs = Math.cos(a); const sn = Math.sin(a);
@@ -571,8 +633,8 @@ module.exports = function kupa(app, ctx) {
       const push = (0.9 - d) / d / (A.bot && B.bot ? 2 : 1); if (A.bot) { A.x -= dx * push; A.z -= dz * push; } if (B.bot) { B.x += dx * push; B.z += dz * push; }
     }
   }
-  const BOT = { cubuk: botCubuk, zemin: botZemin, kosu: botKosu, kuyruk: botTag, bomba: botTag, sumo: botSumo, doner: botDoner, renk: botRenk, lav: botLav, futbol: botFut, sakla: botSakla };
-  const MODE_TICK = { kuyruk: (r) => { spread(r); tagTick(r); }, bomba: (r) => { spread(r); tagTick(r); }, sumo: sumoTick, doner: (r) => spread(r), renk: renkTick, futbol: (r, t, dt) => { spread(r); futTick(r, t, dt); }, sakla: saklaTick };
+  const BOT = { cubuk: botCubuk, zemin: botZemin, kosu: botKosu, kuyruk: botTag, bomba: botTag, sumo: botSumo, doner: botDoner, bayrak: botBayrak, renk: botRenk, lav: botLav, futbol: botFut, sakla: botSakla };
+  const MODE_TICK = { kuyruk: (r) => { spread(r); tagTick(r); }, bomba: (r) => { spread(r); tagTick(r); }, sumo: sumoTick, doner: (r) => spread(r), bayrak: (r) => { spread(r); bayTick(r); }, renk: renkTick, futbol: (r, t, dt) => { spread(r); futTick(r, t, dt); }, sakla: saklaTick };
 
   function touch(r, i) { if (r.tiles.has(i)) return; const at = now() + (r.tileMs || TILE_MS); r.tiles.set(i, at); cast(r, 'k3:tile', [i, at]); }
   function win(r, p) { if (r.phase !== 'play' || r.mode !== 'kosu') return; cast(r, 'k3:ev', { t: 'fin', i: r.players.indexOf(p) }); finish(r, p); }
