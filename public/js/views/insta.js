@@ -48,7 +48,7 @@ async function scheduled(view) {
     if (!list.length) { box.innerHTML = `<div class="empty"><div class="big">${icon('timer')}</div><h2>Planlı gönderin yok</h2>Gönderi ya da yazı paylaşırken “İleri bir saate planla”yı seç; gönderin o saatte kendiliğinden paylaşılır.<p><a class="btn primary" href="#/create">Gönderi hazırla</a></p></div>`; return; }
     box.innerHTML = `<p class="muted sch-note">Gönderilerin seçtiğin saatte kendiliğinden paylaşılır ve sana bildirim gelir.</p>${list.map((q) => `<article class="sch-it" data-id="${esc(q.id)}">
       ${q.media ? `<img src="${esc(q.media)}" alt="">` : `<span class="sch-tx tbg-${esc(q.bg)}">${esc(q.caption.slice(0, 40))}</span>`}
-      <div class="grow"><b>${fmtWhen(q.publishAt)}</b><p class="ellipsis2">${esc(q.caption || (q.count > 1 ? `${q.count} fotoğraf` : 'Fotoğraf'))}</p>${q.poll ? `<span class="chip">${icon('poll')} Anketli</span>` : ''}</div>
+      <div class="grow"><b>${fmtWhen(q.publishAt)}</b><p class="ellipsis2">${esc(q.caption || (q.count > 1 ? `${q.count} fotoğraf ya da video` : q.video ? 'Video' : 'Fotoğraf'))}</p>${q.poll ? `<span class="chip">${icon('poll')} Anketli</span>` : ''}</div>
       <button class="ib soft sch-m" aria-label="Seçenekler">${icon('more')}</button></article>`).join('')}`;
   };
   box.onclick = (e) => {

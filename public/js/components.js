@@ -13,11 +13,19 @@ function oneMedia(it, p, edit) {
     ? `<video src="${esc(it.media)}" ${it.poster ? `poster="${esc(it.poster)}"` : ''} muted loop playsinline preload="metadata"${st}></video>`
     : `<img src="${esc(it.media)}" alt="${esc(p.caption || 'Gönderi')}" loading="lazy"${st}>`;
 }
+// Gönderideki videolar (Instagram gibi): sessiz başlar, köşedeki düğme ya da tek dokunuş sesi açar; tercih vitrinle ortak
+const sndBtn = (items) => (items.some((it) => it.type === 'video') ? `<button type="button" class="pm-snd" aria-label="Sesi aç/kapat">${icon(state.muted ? 'mute' : 'volume')}</button>` : '');
 export function mediaHtml(p) {
   const items = itemsOf(p);
-  if (items.length === 1) return oneMedia(items[0], p, p.edit);
-  return `<div class="car"><div class="car-track">${items.map((it) => `<div class="car-cell">${oneMedia(it, p)}</div>`).join('')}</div>
-    <span class="car-n">1/${items.length}</span><div class="car-dots">${items.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></div>`;
+  if (items.length === 1) return oneMedia(items[0], p, p.edit) + (p.type === 'reel' ? '' : sndBtn(items));
+  return `<div class="car"><div class="car-track">${items.map((it) => `<div class="car-cell${it.type === 'video' ? ' is-v' : ''}">${oneMedia(it, p)}</div>`).join('')}</div>
+    <span class="car-n">1/${items.length}</span><div class="car-dots">${items.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div></div>${sndBtn(items)}`;
+}
+// Ses tercihini sayfadaki bütün gönderi videolarına uygula
+export function setFeedSound(muted) {
+  state.muted = muted;
+  document.querySelectorAll('.post-media video').forEach((v) => { v.muted = muted; });
+  document.querySelectorAll('.pm-snd').forEach((b) => { b.innerHTML = icon(muted ? 'mute' : 'volume'); });
 }
 // Gönderi kutusunu ilk medyanın oranına göre ayarla (kırpmadan sığdır; 4:5 ile 1.91:1 arası)
 export function fitMedia(box) {
@@ -119,7 +127,7 @@ export function wireCaption(root) {
 export function postCard(p, { full = false } = {}) {
   const text = p.type === 'text';
   const canRepost = p.user.id !== state.me.id && !p.user.private;
-  return `<article class="post" data-post="${esc(p.id)}">
+  return `<article class="post pt-${esc(p.type)}" data-post="${esc(p.id)}">
     ${p.repostedBy ? `<a class="rp-by" href="#/u/${esc(p.repostedBy.username)}">${icon('repost')}<span><b>${esc(p.repostedBy.username)}</b> yeniden paylaştı</span></a>` : ''}
     <header class="post-h">
       <a href="#/u/${esc(p.user.username)}" class="row grow" style="gap:10px">${avatar(p.user, 32, { ring: true })}
@@ -162,10 +170,35 @@ export function wirePost(root, p, onRemove) {
   wireCarousel(mediaBox);
   if (p.type !== 'text') fitMedia(mediaBox);
   if (p.edit) applyEdit(mediaBox.querySelector('video'), p.edit);
+  // Görünen karedeki video (kaydırmalı gönderide o anki hücre)
+  const curVideo = () => {
+    const tr = mediaBox.querySelector('.car-track');
+    if (!tr) return mediaBox.querySelector('video');
+    return tr.children[Math.round(tr.scrollLeft / Math.max(1, tr.clientWidth))]?.querySelector('video') || null;
+  };
+  const toggleSound = () => {
+    const v = curVideo(); if (!v && !mediaBox.querySelector('.pm-snd')) return;
+    setFeedSound(!state.muted);
+    if (v && !state.muted && v.paused) v.play().catch(() => {});
+    const b = mediaBox.querySelector('.pm-snd'); if (b) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
+  };
+  mediaBox.querySelector('.pm-snd')?.addEventListener('click', (e) => { e.stopPropagation(); toggleSound(); });
   onDoubleTap(mediaBox, () => { heartBurst(mediaBox); toggleLike(p, likeBtn, true); }, () => {
-    const v = mediaBox.querySelector('video');
-    if (v) { v.muted = !v.muted; }
+    if (p.type === 'reel') { const v = mediaBox.querySelector('video'); if (v) v.muted = !v.muted; return; }
+    if (curVideo()) toggleSound();
   });
+  // Kaydırınca görünmeyen karedeki video durur, görünen oynar
+  const tr = mediaBox.querySelector('.car-track');
+  if (tr && tr.querySelector('video')) {
+    let t = 0;
+    tr.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(() => {
+      const cv = curVideo();
+      tr.querySelectorAll('video').forEach((v) => { if (v !== cv) v.pause(); });
+      if (cv && mediaBox.getBoundingClientRect().top < innerHeight) { cv.muted = state.muted; cv.play().catch(() => { cv.muted = true; cv.play().catch(() => {}); }); }
+      const b = mediaBox.querySelector('.pm-snd'); if (b) b.hidden = !cv;
+    }, 120); }, { passive: true });
+    const b = mediaBox.querySelector('.pm-snd'); if (b) b.hidden = !curVideo();
+  }
   root.querySelectorAll('.cm, .cm2').forEach((b) => { b.onclick = () => { promoHit(p); openComments(p); }; });
   const rp = root.querySelector('.rp'); if (rp) rp.onclick = () => toggleRepost(p, rp);
   wireCaption(root);
@@ -203,12 +236,12 @@ export function wirePost(root, p, onRemove) {
           if (a === 'rmitem') {
             const tr = mediaBox.querySelector('.car-track');
             const idx = tr ? Math.round(tr.scrollLeft / tr.clientWidth) : 0;
-            if (!confirm(`${idx + 1}. fotoğraf gönderiden kaldırılsın mı?`)) return;
+            if (!confirm(`${idx + 1}. ${p.items?.[idx]?.type === 'video' ? 'video' : 'fotoğraf'} gönderiden kaldırılsın mı?`)) return;
             try {
               const np = await api(`/posts/${p.id}/items/${idx}`, { method: 'DELETE' });
               p.items = np.items; p.media = np.media;
               mediaBox.innerHTML = mediaHtml(p); wireCarousel(mediaBox); fitMedia(mediaBox);
-              toast('Fotoğraf kaldırıldı.');
+              toast('Gönderiden kaldırıldı.');
             } catch (er) { toast(er.message); }
           }
           if (a === 'del') {
@@ -225,7 +258,10 @@ export function wirePost(root, p, onRemove) {
 export function autoplay(root) {
   const io = new IntersectionObserver((entries) => entries.forEach((e) => {
     const v = e.target;
-    if (e.isIntersecting && e.intersectionRatio > 0.6) v.play().catch(() => {}); else v.pause();
+    if (e.isIntersecting && e.intersectionRatio > 0.6) {
+      if (!v.closest('.pt-reel')) v.muted = state.muted; // sessiz/sesli tercihi (vitrin videosunun kendi düzeni var)
+      v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+    } else v.pause();
   }), { threshold: [0, 0.6, 1] });
   root.querySelectorAll('video').forEach((v) => io.observe(v));
   return () => io.disconnect();
@@ -233,10 +269,13 @@ export function autoplay(root) {
 
 export function gridTile(p) {
   if (p.type === 'text') return `<a href="#/p/${esc(p.id)}" class="gt-text tbg-${esc(p.bg || 'g1')}"><span>${esc((p.caption || '').slice(0, 90))}</span></a>`;
-  const vid = p.type === 'reel' || isVideo(p.media);
+  const first = (p.items || [])[0];
+  const vid = p.type === 'reel' || first?.type === 'video' || (!first && isVideo(p.media));
+  const multi = (p.items || []).length > 1;
+  const poster = first?.poster || p.poster;
   const href = p.type === 'reel' ? `#/vitrin/${p.id}` : `#/p/${p.id}`;
   return `<a href="${href}">${vid
-    ? `${p.poster ? `<img src="${esc(p.poster)}" alt="" loading="lazy">` : `<video src="${esc(p.media)}#t=0.5" muted playsinline preload="metadata"></video>`}
-       <span class="badge">${icon('reels')}</span><span class="views">${icon('heart')}${num(p.likeCount)}</span>`
-    : `<img src="${esc(p.media)}" alt="" loading="lazy">${(p.items || []).length > 1 ? `<span class="badge">${icon('copy')}</span>` : ''}`}</a>`;
+    ? `${poster ? `<img src="${esc(poster)}" alt="" loading="lazy">` : `<video src="${esc(first?.media || p.media)}#t=0.5" muted playsinline preload="metadata"></video>`}
+       <span class="badge">${icon(multi ? 'copy' : 'reels')}</span>${p.type === 'reel' ? `<span class="views">${icon('heart')}${num(p.likeCount)}</span>` : ''}`
+    : `<img src="${esc(first?.media || p.media)}" alt="" loading="lazy">${multi ? `<span class="badge">${icon('copy')}</span>` : ''}`}</a>`;
 }

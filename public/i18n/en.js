@@ -533,6 +533,10 @@ const D = {
   'Bedava jeton': 'Free coins',
   'Canlı yayın hediyesi': 'Live stream gift', 'Sohbet hediyesi': 'Chat gift', 'Sohbet serisi ödülü': 'Chat streak reward', 'Giriş serisi ödülü': 'Login streak reward',
   'Seri koruyucu': 'Streak freeze', 'Seviye ödülü': 'Level reward', 'Yarışma ödülü': 'Contest prize', 'Fal paketi': 'Reading pack', 'Kostüm': 'Costume',
+  'Fotoğraf ya da video': 'Photo or video', 'Galeriden seç · en fazla 10 tane, karışık olabilir': 'Pick from your gallery · up to 10, mix and match',
+  'Sadece yazı': 'Text only', 'Fotoğrafsız paylaş · renkli arka plana yaz': 'Post without a photo · write on a colored background',
+  'Fotoğraf ya da video seç': 'Select a photo or video', 'En fazla 10 fotoğraf ya da video': 'Up to 10 photos or videos',
+  'En fazla 10 fotoğraf ya da video ekleyebilirsin.': 'You can add up to 10 photos or videos.', 'Gönderiden kaldırıldı.': 'Removed from post.',
 };
 
 // Sayı / isim içeren metinler
@@ -561,6 +565,9 @@ export const patterns = [
   [/^Burada olanlar · (\d+)$/, (_, n) => `People here · ${n}`],
   [/^(\d+) kişi seni beğendi$/, (_, n) => `${n} people liked you`],
   [/^(\d+) kişi$/, (_, n) => `${n} people`],
+  [/^Gönderideki videolar en çok (\d+) dakika olabilir\. Daha uzun videolar için Vitrin’i kullan\.$/, (_, n) => `Videos in a post can be up to ${n} minutes. Use Showcase for longer videos.`],
+  [/^(\d+)\. (fotoğraf|video) gönderiden kaldırılsın mı\?$/, (_, n, k) => `Remove ${k === 'video' ? 'video' : 'photo'} ${n} from the post?`],
+  [/^(\d+) fotoğraf ya da video$/, (_, n) => `${n} photos or videos`],
   [/^Bu cihazda (\d+) hesap kayıtlı · geçiş yap ya da ekle$/, (_, n) => `${n} accounts saved on this device · switch or add`],
   [/^@(\S+) hesabından çık$/, (_, u) => `Log out of @${u}`],
   [/^@(\S+) hesabından çıkılsın mı\? @(\S+) hesabına geçilecek\.$/, (_, a, b) => `Log out of @${a}? You’ll switch to @${b}.`],

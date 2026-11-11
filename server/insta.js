@@ -193,7 +193,7 @@ module.exports = function insta(app, ctx) {
   app.get('/api/me/scheduled', auth, (req, res) => {
     res.json(store.filter('post_queue', (q) => q.userId === req.user.id).sort((a, b) => a.publishAt - b.publishAt).map((q) => ({
       id: q.id, publishAt: q.publishAt, type: q.body.type, caption: String(q.body.caption || '').slice(0, 300), bg: q.body.bg || 'g1',
-      media: q.body.type === 'text' ? null : (q.body.items || [])[0]?.media || null, count: (q.body.items || []).length, poll: q.body.poll?.options?.length ? { q: q.body.poll.q } : null,
+      media: q.body.type === 'text' ? null : ((f) => (f?.type === 'video' ? f.poster || null : f?.media || null))((q.body.items || [])[0]), video: (q.body.items || [])[0]?.type === 'video', count: (q.body.items || []).length, poll: q.body.poll?.options?.length ? { q: q.body.poll.q } : null,
     })));
   });
   const publishQueued = (q) => {

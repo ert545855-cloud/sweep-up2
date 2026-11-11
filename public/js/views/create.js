@@ -43,6 +43,18 @@ function posterFrom(file, at = 0.5) {
   });
 }
 
+// Video süresi (saniye); okunamazsa null
+function videoDur(file) {
+  return new Promise((resolve) => {
+    const v = document.createElement('video'); v.preload = 'metadata'; v.muted = true;
+    const url = URL.createObjectURL(file); v.src = url;
+    const done = (d) => { URL.revokeObjectURL(url); resolve(d); };
+    v.onloadedmetadata = () => done(Number.isFinite(v.duration) ? v.duration : null);
+    v.onerror = () => done(null); setTimeout(() => done(null), 5000);
+  });
+}
+const POST_VIDEO_MAX = 180; // gönderideki her video en çok 3 dakika
+
 function pickFiles(accept, multiple) {
   return new Promise((resolve) => {
     const inp = document.createElement('input');
@@ -184,11 +196,19 @@ export default function create(view, kind) {
       picker.querySelector('.pk-text').onclick = () => { storyBg = 'g2'; paint(); addSticker('text'); };
       return;
     }
+    if (mode === 'image' && !items.length) {
+      stopAudio();
+      picker.innerHTML = `<div class="pick-two"><button class="pick-empty pk-file"><span class="pk-ic">${icon('image')}</span><b>Fotoğraf ya da video</b><small>Galeriden seç · en fazla 10 tane, karışık olabilir</small></button>
+        <button class="pick-empty pk-text tbg-${postBg}"><span class="pk-ic">${icon('text')}</span><b>Sadece yazı</b><small>Fotoğrafsız paylaş · renkli arka plana yaz</small></button></div>`;
+      picker.querySelector('.pk-file').onclick = choose;
+      picker.querySelector('.pk-text').onclick = () => setMode('text');
+      return;
+    }
     if (!ready()) {
       stopAudio();
       picker.innerHTML = `<button class="pick-empty">${icon(mode === 'reel' ? 'video' : 'image', '', 'style="width:56px;height:56px;margin:0 auto 10px"')}
-        <div class="b" style="color:var(--text)">${{ reel: 'Video seç', story: 'Fotoğraf ya da video seç', image: 'Fotoğraf seç' }[mode]}</div>
-        <div>${{ reel: 'Dikey video önerilir, en fazla 40 MB', story: '24 saat sonra kendiliğinden kaybolur', image: 'En fazla 10 fotoğraf seçebilirsin' }[mode]}</div></button>`;
+        <div class="b" style="color:var(--text)">${{ reel: 'Video seç', story: 'Fotoğraf ya da video seç', image: 'Fotoğraf ya da video seç' }[mode]}</div>
+        <div>${{ reel: 'Dikey video önerilir, en fazla 40 MB', story: '24 saat sonra kendiliğinden kaybolur', image: 'En fazla 10 fotoğraf ya da video' }[mode]}</div></button>`;
       picker.querySelector('.pick-empty').onclick = choose;
       return;
     }
@@ -212,10 +232,15 @@ export default function create(view, kind) {
 
   function paintImages() {
     const it = items[cur];
-    picker.innerHTML = `<img src="${it.url}" alt="Önizleme" class="fit" style="filter:${filterCss(it.filter)}">${items.length > 1 ? `<span class="car-n">${cur + 1}/${items.length}</span>` : ''}`;
-    tools.innerHTML = `<div class="thumbs">${items.map((x, i) => `<button class="th ${i === cur ? 'on' : ''}" data-i="${i}"><img src="${x.url}" style="filter:${filterCss(x.filter)}" alt=""><i data-rm="${i}" aria-label="Kaldır">${icon('close')}</i></button>`).join('')}
-      ${items.length < 10 ? `<button class="th add" aria-label="Fotoğraf ekle">${icon('plus')}</button>` : ''}</div>
-      <div class="tl">Filtre</div>${filterStrip(it.filter, it.url)}`;
+    const thumb = (x) => x.thumbUrl || x.url;
+    picker.innerHTML = `${it.video
+      ? `<video src="${it.url}" class="fit" autoplay muted loop playsinline style="filter:${filterCss(it.filter)}"></video><button type="button" class="pv-snd" aria-label="Sesi aç/kapat">${icon('mute')}</button>`
+      : `<img src="${it.url}" alt="Önizleme" class="fit" style="filter:${filterCss(it.filter)}">`}${items.length > 1 ? `<span class="car-n">${cur + 1}/${items.length}</span>` : ''}`;
+    const pv = picker.querySelector('video');
+    picker.querySelector('.pv-snd')?.addEventListener('click', (e) => { e.stopPropagation(); pv.muted = !pv.muted; e.currentTarget.innerHTML = icon(pv.muted ? 'mute' : 'volume'); if (pv.paused) pv.play().catch(() => {}); });
+    tools.innerHTML = `<div class="thumbs">${items.map((x, i) => `<button class="th ${i === cur ? 'on' : ''}" data-i="${i}"><img src="${thumb(x)}" style="filter:${filterCss(x.filter)}" alt="">${x.video ? `<span class="th-v">${icon('play')}${x.dur ? fmtDur(x.dur) : ''}</span>` : ''}<i data-rm="${i}" aria-label="Kaldır">${icon('close')}</i></button>`).join('')}
+      ${items.length < 10 ? `<button class="th add" aria-label="Fotoğraf ya da video ekle">${icon('plus')}</button>` : ''}</div>
+      <div class="tl">Filtre</div>${filterStrip(it.filter, thumb(it))}`;
     tools.querySelector('.thumbs').onclick = (e) => {
       const rm = e.target.closest('[data-rm]');
       if (rm) { items.splice(+rm.dataset.rm, 1); cur = Math.min(cur, items.length - 1); return paint(); }
@@ -446,7 +471,7 @@ export default function create(view, kind) {
 
   // ---------- Dosya seçimi ----------
   async function choose() {
-    const accept = { reel: 'video/*', story: 'image/*,video/*', image: 'image/*' }[mode];
+    const accept = { reel: 'video/*', story: 'image/*,video/*', image: 'image/*,video/*' }[mode];
     const fs = await pickFiles(accept, mode === 'image');
     if (!fs.length) return;
     if (fs.some((f) => f.size > 40 * 1024 * 1024)) return toast('Dosya en fazla 40 MB olabilir. Daha kısa bir video seç.', { ms: 4500 });
@@ -454,7 +479,12 @@ export default function create(view, kind) {
     const prep = async (f) => {
       try {
         const r = await prepareMedia(f);
-        if (mode === 'image' && isVideoFile(r)) { toast('Gönderiye fotoğraf ekleyebilirsin; video için Vitrin’i seç.'); return null; }
+        if (mode === 'image' && isVideoFile(r)) {
+          const d = await videoDur(r);
+          if (d && d > POST_VIDEO_MAX + 0.5) { toast(`Gönderideki videolar en çok ${POST_VIDEO_MAX / 60} dakika olabilir. Daha uzun videolar için Vitrin’i kullan.`, { ms: 4500 }); return null; }
+          const pf = await posterFrom(r, Math.min(0.5, (d || 1) / 2));
+          return { video: true, file: r, dur: d, poster: pf };
+        }
         return r;
       } catch (e) { toast(e.message || 'Dosya açılamadı.'); return null; }
     };
@@ -464,10 +494,13 @@ export default function create(view, kind) {
     const ready2 = [];
     try { for (const f of (mode === 'image' ? fs : fs.slice(0, 1))) { const r = await prep(f); if (r) ready2.push(r); } } finally { picker.classList.remove('busy'); }
     if (!ready2.length) return;
+    if (mode === 'reel' && ready2[0]?.video) ready2[0] = ready2[0].file;
     if (mode === 'image') {
       const room = 10 - items.length;
-      if (ready2.length > room) toast('En fazla 10 fotoğraf ekleyebilirsin.');
-      items.push(...ready2.slice(0, room).map((f) => ({ file: f, url: URL.createObjectURL(f), filter: '' })));
+      if (ready2.length > room) toast('En fazla 10 fotoğraf ya da video ekleyebilirsin.');
+      items.push(...ready2.slice(0, room).map((f) => (f.video
+        ? { file: f.file, url: URL.createObjectURL(f.file), filter: '', video: true, dur: f.dur, poster: f.poster, thumbUrl: f.poster ? URL.createObjectURL(f.poster) : null }
+        : { file: f, url: URL.createObjectURL(f), filter: '' })));
       cur = items.length - 1;
     } else {
       if (mode === 'reel' && !isVideoFile(ready2[0])) return toast('Vitrin için bir video seç.');
@@ -478,12 +511,19 @@ export default function create(view, kind) {
     paint();
   }
 
-  view.querySelector('.seg').onclick = (e) => {
-    const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return;
+  // Mod değişimi: yazdığın metin gönderi açıklaması ile yazı gönderisi arasında taşınır
+  function setMode(m) {
     if (m === 'live') { location.hash = '#/live'; return; }
-    if (m !== mode) { mode = m; file = null; items = []; stickers = []; stopAudio(); storyFilter = ''; storyBg = null; edit = { start: 0, end: null, speed: 1, filter: '', music: null, muteOriginal: false, stickers: [] }; }
+    if (m !== mode) {
+      if (m === 'text' && !postText.trim() && capEl.value.trim()) postText = capEl.value;
+      if (mode === 'text' && (m === 'image' || m === 'reel') && !capEl.value.trim() && postText.trim()) capEl.value = postText;
+      mode = m; file = null; items = []; stickers = []; stopAudio(); storyFilter = ''; storyBg = null; edit = { start: 0, end: null, speed: 1, filter: '', music: null, muteOriginal: false, stickers: [] };
+    }
     view.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.m === mode));
     paint();
+  }
+  view.querySelector('.seg').onclick = (e) => {
+    const m = e.target.closest('[data-m]')?.dataset.m; if (m) setMode(m);
   };
   swipeFilters(picker, () => (mode === 'image' ? items[cur]?.filter : mode === 'story' ? storyFilter : edit.filter), (f) => {
     if (!ready() || mode === 'text' || (mode === 'story' && !file)) return;
@@ -511,8 +551,15 @@ export default function create(view, kind) {
       if (mode === 'image') {
         const out = [];
         for (let i = 0; i < items.length; i++) {
-          const up = await uploadPrepared(await compressImage(items[i].file), prog(i / items.length, 1 / items.length));
-          out.push({ media: up.url, type: 'image', filter: items[i].filter || null });
+          const it = items[i]; const pr = prog(i / items.length, 1 / items.length);
+          if (it.video) {
+            const poster = it.poster ? (await uploadFile(it.poster)).url : null;
+            const up = await uploadPrepared(it.file, pr);
+            out.push({ media: up.url, type: 'video', poster, filter: it.filter || null });
+          } else {
+            const up = await uploadPrepared(await compressImage(it.file), pr);
+            out.push({ media: up.url, type: 'image', filter: it.filter || null });
+          }
         }
         const p = await api('/posts', { body: { type: 'image', items: out, caption: view.querySelector('.cap').value, ...ex } });
         afterPost(p, 'Gönderi paylaşıldı.');
