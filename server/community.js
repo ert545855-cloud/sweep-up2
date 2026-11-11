@@ -121,10 +121,11 @@ module.exports = function community(app, ctx) {
     const u = store.find('users', (x) => x.username === String(req.params.username).toLowerCase());
     if (!u) return res.status(404).end();
     const color = /^[0-9a-f]{6}$/i.test(req.query.c || '') ? `#${req.query.c}` : '#1a1027';
-    const key = `${u.username}:${color}`;
+    // Adres istemcinin gönderdiği başlıklardan değil, sabit adresten (yoksa bu sunucunun adı, https) kurulur: önbelleğe sahte adres giremez
+    const host = process.env.CANONICAL_URL ? new URL(process.env.CANONICAL_URL).origin : `${process.env.RENDER ? 'https' : req.protocol}://${req.hostname}`;
+    const key = `${host}|${u.username}:${color}`;
     let svg = qrCache.get(key);
     if (!svg) {
-      const host = `${String(req.get('x-forwarded-proto') || req.protocol).split(',')[0]}://${req.get('host')}`;
       svg = await QRCode.toString(`${host}/#/u/${u.username}`, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: color, light: '#0000' } });
       if (qrCache.size > 500) qrCache.clear();
       qrCache.set(key, svg);

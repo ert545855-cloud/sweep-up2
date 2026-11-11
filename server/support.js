@@ -25,7 +25,7 @@ module.exports = function support(app, ctx) {
   app.post('/api/public/delete-request', (req, res) => {
     const b = req.body || {}; const username = clean(b.username, 40).replace(/^@/, '').toLowerCase(); const contact = clean(b.contact, 120); const reason = clean(b.reason, 600);
     if (username.length < 2 || contact.length < 5) return res.status(400).json({ error: 'Kullanıcı adını ve sana ulaşabileceğimiz bir telefon ya da e-posta yaz.' });
-    if (limited('delreq:' + (req.ip || ''), 5, 3600000)) return res.status(429).json({ error: 'Çok fazla deneme yaptın. Bir saat sonra tekrar dene.' });
+    if (limited('delreq:' + (ctx.ipOf ? ctx.ipOf(req) : req.ip || ''), 5, 3600000)) return res.status(429).json({ error: 'Çok fazla deneme yaptın. Bir saat sonra tekrar dene.' });
     const u = store.filter('users', (x) => String(x.username || '').toLowerCase() === username)[0];
     if (u && !store.filter('support', (t) => t.userId === u.id && t.status !== 'closed' && t.webDelete).length) {
       const t = store.put('support', { id: nanoid(12), no: nextNo(), userId: u.id, category: 'hesap', subject: 'Hesap silme talebi (web formu)', status: 'open', webDelete: true,

@@ -751,7 +751,7 @@ VIEWS.admins = async (main) => {
   }; }
   main.querySelector('.pw').onsubmit = async (e) => {
     e.preventDefault(); const f = e.target;
-    try { await api('/me/password', { body: { current: f.c.value, password: f.p.value } }); toast('Şifren değişti.'); f.reset(); } catch (er) { toast(er.message); }
+    try { const r = await api('/me/password', { body: { current: f.c.value, password: f.p.value } }); if (r?.token) { S.token = r.token; localStorage.setItem('su_admin', r.token); } toast('Şifren değişti. Diğer cihazlardaki panel oturumların kapandı.'); f.reset(); } catch (er) { toast(er.message); }
   };
   main.querySelector('.adm-list').onclick = async (e) => {
     const card = e.target.closest('.adm'); if (!card) return; const id = card.dataset.id;

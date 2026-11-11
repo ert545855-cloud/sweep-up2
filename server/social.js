@@ -355,7 +355,7 @@ module.exports = function social(app, ctx) {
     if (u.invitedBy) return res.status(400).json({ error: 'Zaten bir davet koduyla katıldın.' });
     if (now() - (u.createdAt || 0) >= REDEEM_DAYS * DAY) return res.status(400).json({ error: `Davet kodu sadece kayıttan sonraki ${REDEEM_DAYS} gün içinde girilebilir.` });
     if (limited('redeem:' + u.id, 8, 3600000)) return res.status(429).json({ error: 'Çok fazla deneme yaptın, biraz sonra tekrar dene.' });
-    const err = ctx.attachInvite(u, req.body?.code, (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim());
+    const err = ctx.attachInvite(u, req.body?.code, ctx.ipOf(req));
     if (err) return res.status(400).json({ error: err });
     const fresh = user(u.id);
     ctx.checkInviteReward(fresh);

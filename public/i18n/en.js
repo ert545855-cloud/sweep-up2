@@ -537,6 +537,12 @@ const D = {
   'Sadece yazı': 'Text only', 'Fotoğrafsız paylaş · renkli arka plana yaz': 'Post without a photo · write on a colored background',
   'Fotoğraf ya da video seç': 'Select a photo or video', 'En fazla 10 fotoğraf ya da video': 'Up to 10 photos or videos',
   'En fazla 10 fotoğraf ya da video ekleyebilirsin.': 'You can add up to 10 photos or videos.', 'Gönderiden kaldırıldı.': 'Removed from post.',
+  'Diğer cihazlardan çık': 'Log out of other devices', 'Bu telefon dışındaki bütün oturumların kapanır': 'Ends every session except this phone',
+  'Bu cihaz dışındaki bütün oturumların kapatılsın mı? Diğer telefon ve tarayıcılarda yeniden giriş yapman gerekir.': 'End all sessions except this device? You’ll need to log in again on your other phones and browsers.',
+  'Diğer cihazlardaki oturumların kapatıldı.': 'Your sessions on other devices were ended.',
+  'Şifren değişti. Diğer cihazlardaki oturumların kapandı.': 'Your password was changed. Sessions on your other devices were ended.',
+  'Sadece fotoğraf (JPEG, PNG, GIF, WebP), video (MP4, MOV, WebM) veya ses yüklenebilir.': 'Only photos (JPEG, PNG, GIF, WebP), videos (MP4, MOV, WebM) or audio can be uploaded.',
+  'Profil fotoğrafı geçersiz. Galeriden yeniden seç.': 'Invalid profile photo. Pick it again from your gallery.', 'Grup fotoğrafı geçersiz.': 'Invalid group photo.',
 };
 
 // Sayı / isim içeren metinler

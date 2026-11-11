@@ -256,6 +256,15 @@ export function setSession(token, user) {
   remember(token, user); // cihazda kayıtlı hesaplara ekle
   try { sessionStorage.removeItem('su_add'); } catch { /* yok */ }
 }
+// Sunucu yeni oturum anahtarı verdi (şifre değişti / diğer cihazlardan çıkıldı): bu cihaz yeni anahtarla devam eder
+export function adoptToken(token) {
+  if (!token) return;
+  state.token = token;
+  try { localStorage.setItem('su_token', token); } catch { /* yok */ }
+  if (state.me) remember(token, state.me);
+  const s = state.socket;
+  if (s) { s.auth = { ...(s.auth || {}), token }; s.disconnect(); s.connect(); }
+}
 // Çıkış: yalnızca bu hesaptan çıkılır; cihazda başka kayıtlı hesap varsa ona geçilir. all: hepsinden çık.
 // expired: anahtar geçersizleşti (sunucu 401 döndü), bildirim aboneliği sunucuda zaten ulaşılamaz
 let leaving = false;

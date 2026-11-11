@@ -89,4 +89,28 @@ async function normalize(mime, buffer) {
   return { mime: m, buffer };
 }
 
-module.exports = { sniff, normalize, isHeic, heicToJpegSync };
+// Güvenlik: yalnızca baytlarından tanınan fotoğraf / video / ses kabul edilir. Tarayıcının söylediği türe güvenilmez
+// (ör. "image/svg+xml" ya da HTML içeren bir dosya kendi alan adımızdan açılıp betik çalıştıramasın).
+const SAFE = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif',
+  'video/mp4', 'video/quicktime', 'video/webm', 'video/3gpp', 'video/ogg',
+  'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/mpeg', 'audio/ogg', 'audio/opus', 'audio/wav', 'audio/webm', 'audio/flac']);
+// Aynı kap biçimini paylaşan türler: tarayıcının söylediği daha doğruysa o kullanılır (ör. sesli mesaj audio/webm)
+const FAMILY = {
+  'video/mp4': ['video/mp4', 'video/quicktime', 'video/3gpp', 'audio/mp4', 'audio/x-m4a', 'audio/aac'],
+  'video/quicktime': ['video/quicktime', 'video/mp4'],
+  'audio/mp4': ['audio/mp4', 'audio/x-m4a', 'audio/aac', 'video/mp4'],
+  'video/webm': ['video/webm', 'audio/webm'],
+  'audio/ogg': ['audio/ogg', 'audio/opus', 'video/ogg'],
+  'audio/mpeg': ['audio/mpeg', 'audio/aac'],
+};
+function safeType(claimed, buf) {
+  const sniffed = sniff(buf);
+  if (!sniffed) return null;
+  const c = String(claimed || '').split(';')[0].trim().toLowerCase();
+  const t = FAMILY[sniffed]?.includes(c) ? c : sniffed;
+  return SAFE.has(t) ? t : null;
+}
+// Sunarken: betik çalıştıramayan türler (SVG / HTML / XML hariç)
+const isSafeType = (m) => /^(image\/(jpeg|png|gif|webp|avif|heic|heif|bmp)|video\/[\w.+-]+|audio\/[\w.+-]+)$/.test(String(m || '').split(';')[0].trim().toLowerCase());
+
+module.exports = { sniff, normalize, isHeic, heicToJpegSync, safeType, isSafeType };

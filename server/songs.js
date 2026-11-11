@@ -369,12 +369,13 @@ module.exports = function songs(app, ctx) {
   // Yönetimden şarkı ekleme (ör. SwipeUp ekibinin seçtiği şarkılar): önce dosyalar yüklenir
   const multer = require('multer');
   const imagefix = require('./imagefix');
-  const up = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
+  const up = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024, files: 1, fields: 10, parts: 12 } });
   app.post('/api/admin/songs/upload', A.adminAuth, up.single('file'), async (req, res) => {
     try {
       const f = req.file; if (!f) return res.status(400).json({ error: 'Dosya gelmedi.' });
-      const { mime, buffer } = await imagefix.normalize(f.mimetype, f.buffer);
-      if (!/^(image|audio)\//.test(mime)) return res.status(400).json({ error: 'Sadece ses dosyası (MP3, M4A, WAV) ya da kapak görseli yüklenebilir.' });
+      const fixed = await imagefix.normalize(f.mimetype, f.buffer); const { buffer } = fixed;
+      const mime = imagefix.safeType(fixed.mime, buffer); // türü baytlarından belirle (SVG / HTML reddedilir)
+      if (!mime || !/^(image|audio)\//.test(mime)) return res.status(400).json({ error: 'Sadece ses dosyası (MP3, M4A, WAV) ya da kapak görseli yüklenebilir.' });
       const id = nanoid(16);
       const where = await store.saveMedia(id, mime, buffer);
       store.put('media_meta', { id, userId: 'admin:' + req.admin.username, mime, size: buffer.length, where, at: now() });

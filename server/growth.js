@@ -71,7 +71,7 @@ module.exports = function growth(app, ctx) {
 
   // Çoklu hesap: aynı cihaz / aynı ağ
   ctx.onRegister = (u, req) => {
-    const ip = (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+    const ip = ctx.ipOf ? ctx.ipOf(req) : (req.ip || '');
     const dev = String(req.headers['x-device'] || '').replace(/[^a-f0-9]/gi, '').slice(0, 40) || null;
     store.update('users', u.id, { regIp: ip || null, regDevice: dev });
     if (dev) {

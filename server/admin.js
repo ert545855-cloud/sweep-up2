@@ -80,9 +80,9 @@ module.exports = function mountAdmin(app, ctx) {
 
   function adminAuth(req, res, next) {
     try {
-      const { aid } = jwt.verify((req.headers.authorization || '').slice(7), SECRET());
-      const a = store.get('adm_admins', aid);
-      if (!a || a.disabled) throw new Error('x');
+      const p = jwt.verify((req.headers.authorization || '').slice(7), SECRET(), { algorithms: ['HS256'] });
+      const a = store.get('adm_admins', p.aid);
+      if (!a || a.disabled || (p.pv || 0) !== (a.tokenVer || 0)) throw new Error('x'); // şifre değişince eski oturumlar kapanır
       req.admin = a;
     } catch { return res.status(401).json({ error: 'Oturum süresi doldu, tekrar giriş yap.' }); }
     // Yetki kontrolü
@@ -116,16 +116,17 @@ module.exports = function mountAdmin(app, ctx) {
     if (!a || !(await bcrypt.compare(String(req.body?.password || ''), a.passHash))) return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı.' });
     store.update('adm_admins', a.id, { lastLogin: now() });
     audit(a, 'giriş', null, ipOf(req));
-    res.json({ token: jwt.sign({ aid: a.id }, SECRET(), { expiresIn: '12h' }), admin: adminOut(a) });
+    res.json({ token: jwt.sign({ aid: a.id, pv: a.tokenVer || 0 }, SECRET(), { expiresIn: '12h' }), admin: adminOut(a) });
   });
   app.get('/api/admin/me', adminAuth, (req, res) => res.json(adminOut(req.admin)));
   app.post('/api/admin/me/password', adminAuth, async (req, res) => {
     const { current, password } = req.body || {};
     if (!(await bcrypt.compare(String(current || ''), req.admin.passHash))) return res.status(400).json({ error: 'Mevcut şifre hatalı.' });
     if (String(password || '').length < 8) return res.status(400).json({ error: 'Yeni şifre en az 8 karakter olmalı.' });
-    store.update('adm_admins', req.admin.id, { passHash: await bcrypt.hash(password, 10), passChanged: true });
+    const tv = (req.admin.tokenVer || 0) + 1;
+    store.update('adm_admins', req.admin.id, { passHash: await bcrypt.hash(password, 10), passChanged: true, tokenVer: tv });
     audit(req.admin, 'şifre değiştirdi');
-    res.json({ ok: true });
+    res.json({ ok: true, token: jwt.sign({ aid: req.admin.id, pv: tv }, SECRET(), { expiresIn: '12h' }) });
   });
 
   // ---------- Genel bakış ----------
@@ -246,6 +247,7 @@ module.exports = function mountAdmin(app, ctx) {
     if (!u) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
     const temp = crypto.randomBytes(6).toString('base64url');
     store.update('users', u.id, { passHash: await bcrypt.hash(temp, 10), ...(['falci', 'official'].includes(u.role) ? { passChangedByUser: true } : {}) });
+    ctx.revokeSessions?.(u.id); // açık oturumlar kapanır, yeni şifreyle girilir
     audit(req.admin, 'şifre sıfırladı', u.id);
     res.json({ password: temp });
   });
@@ -509,7 +511,7 @@ module.exports = function mountAdmin(app, ctx) {
     if (!a) return res.status(404).json({ error: 'Yönetici bulunamadı.' });
     const password = String(req.body?.password || '');
     if (password.length < 8) return res.status(400).json({ error: 'Şifre en az 8 karakter olmalı.' });
-    store.update('adm_admins', a.id, { passHash: await bcrypt.hash(password, 10), passChanged: true });
+    store.update('adm_admins', a.id, { passHash: await bcrypt.hash(password, 10), passChanged: true, tokenVer: (a.tokenVer || 0) + 1 });
     audit(req.admin, 'yönetici şifresini sıfırladı', null, a.username);
     res.json({ ok: true });
   });

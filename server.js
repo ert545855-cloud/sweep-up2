@@ -50,6 +50,8 @@ const calls = new Map(); // callId -> { id, chatId, from, to, video, state, at, 
 
 const isOnline = (id) => (online.get(id)?.size || 0) > 0;
 const emitTo = (userId, ev, data) => online.get(userId)?.forEach((s) => s.emit(ev, data));
+// Oturumları kapatılan hesabın açık bağlantılarını kes (anahtar yalnız bağlanırken denetleniyor)
+const disconnectUser = (userId) => [...(online.get(userId) || [])].forEach((s) => s.disconnect(true));
 const followOk = (a, b) => { const f = store.get('follows', `${a}_${b}`); return !!f && f.status !== 'pending'; };
 const isPlus = (u) => !!u && (u.plusUntil || 0) > Date.now();
 const priv = (u) => (u && u.privacy) || {};
@@ -85,8 +87,11 @@ const tagsOf = (u) => { const ids = u?.tags || []; if (!ids.length) return []; c
 const shownAge = (u) => (priv(u).hideAge ? null : u.age ?? null);
 function pub(u, viewerId) {
   if (!u) return null;
-  const { passHash, recoveryHash, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, regIp, regDevice, falPacks, closeFriends, xp, level, ...rest } = u;
+  const { passHash, recoveryHash, tokenVer, email, lat, lng, birthdate, coins, earnings, daily, inviteIp, invitedBy, inviteRewarded, refCode, falSub, frames, mkBalance, earnedTotal, regIp, regDevice, falPacks, closeFriends, xp, level, ...rest } = u;
   const self = viewerId === u.id;
+  // Yalnızca hesabın sahibinin görebileceği alanlar (başkasının profiline bakan bunları almaz)
+  if (!self) ['paid', 'plusUntil', 'boostUntil', 'lastFreeBoost', 'lastSwipe', 'viewersSeenAt', 'verifyPose', 'banReason', 'bannedUntil', 'bannedAt', 'status', 'warned',
+    'passChangedByUser', 'prefs', 'consentAt', 'burcWeek', 'autoWeek', 'loginStreak', 'skin', 'logo', 'isBot'].forEach((k) => { delete rest[k]; });
   const hidden = !self && priv(u).hideLastSeen;
   const fdoc = viewerId && !self ? store.get('follows', `${viewerId}_${u.id}`) : null;
   return {
@@ -139,7 +144,10 @@ function postOut(p, viewerId) {
   };
 }
 
-function sign(u) { return jwt.sign({ id: u.id }, JWT_SECRET, { expiresIn: '90d' }); }
+// Oturum anahtarı hesabın oturum sürümünü taşır: şifre değişince / "diğer cihazlardan çık" denince eski anahtarlar geçersiz olur
+function sign(u) { return jwt.sign({ id: u.id, v: u.tokenVer || 0 }, JWT_SECRET, { expiresIn: '90d' }); }
+const tokenOk = (payload, u) => !!u && (payload.v || 0) === (u.tokenVer || 0);
+const bumpTokens = (id) => store.update('users', id, { tokenVer: ((store.get('users', id)?.tokenVer) || 0) + 1 });
 
 // Yasak / askı durumu (yönetim panelinden verilir)
 function banInfo(u) {
@@ -156,9 +164,9 @@ function auth(req, res, next) {
   const token = h.startsWith('Bearer ') ? h.slice(7) : null;
   let u;
   try {
-    const { id } = jwt.verify(token, JWT_SECRET);
-    u = store.get('users', id);
-    if (!u) throw new Error('no user');
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    u = store.get('users', payload.id);
+    if (!tokenOk(payload, u)) throw new Error('no user');
   } catch {
     return res.status(401).json({ error: 'Oturum süresi doldu, tekrar giriş yap.' });
   }
@@ -181,7 +189,18 @@ function limited(key, max, windowMs) {
   return h.length > max;
 }
 setInterval(() => { const t = now(); for (const [k, v] of hits) if (!v.some((x) => t - x < 3600000)) hits.delete(k); }, 600000).unref();
-const ipOf = (req) => (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+// Gerçek istemci IP'si. X-Forwarded-For'un baştaki değerini istemci kendisi yazabilir (hız sınırını aşmak için);
+// Render önündeki Cloudflare gerçek adresi True-Client-IP / CF-Connecting-IP başlığına koyar ve istemcinin gönderdiğinin üstüne yazar.
+const ipOf = (req) => {
+  const h = req.headers || {};
+  if (process.env.RENDER) {
+    const cf = String(h['true-client-ip'] || h['cf-connecting-ip'] || '').trim();
+    if (cf) return cf;
+    const xff = String(h['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (xff.length >= 2) return xff[xff.length - 2]; // [... , istemci, cloudflare]
+  }
+  return String(req.socket?.remoteAddress || req.ip || '').replace(/^::ffff:/, '');
+};
 
 // ================= Bildirimler =================
 async function notify(userId, n) {
@@ -342,7 +361,32 @@ if (process.env.CANONICAL_URL) {
     res.redirect(301, canon.origin + req.originalUrl);
   });
 }
-app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false, crossOriginEmbedderPolicy: false }));
+// İçerik güvenlik politikası: betikler yalnızca bu sunucudan yüklenir, eklenti (object) kapalı, sayfa başka sitelerde çerçeveye alınamaz.
+// Resim / ses / video için https kaynaklarına izin var (GIPHY, Spotify önizlemeleri, harita karoları).
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      mediaSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      connectSrc: ["'self'", 'https:', 'wss:', 'data:', 'blob:'],
+      frameSrc: ["'self'", 'https:'],
+      workerSrc: ["'self'", 'blob:'],
+      manifestSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+    },
+  },
+  crossOriginResourcePolicy: false, crossOriginEmbedderPolicy: false,
+  strictTransportSecurity: process.env.RENDER ? { maxAge: 31536000, includeSubDomains: false } : false,
+}));
+app.disable('x-powered-by');
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
 
@@ -359,11 +403,11 @@ app.get('/api/maintenance', (req, res) => res.json({ maintenance: maintenance() 
 
 const adminApi = require('./server/admin')(app, {
   store, io, emitTo, notify, brief, isOnline, online, lives, removeChat, limited, ipOf,
-  secret: () => JWT_SECRET, endLive: (id) => endLive(id), eco, purgeUser: (id) => purgeUser(id), dropMediaCache: (id) => dropMediaCache(id),
+  secret: () => JWT_SECRET, endLive: (id) => endLive(id), eco, revokeSessions: (id) => { bumpTokens(id); disconnectUser(id); }, purgeUser: (id) => purgeUser(id), dropMediaCache: (id) => dropMediaCache(id),
 });
 app.get('/admin', (req, res, next) => (req.originalUrl.split('?')[0].endsWith('/') ? next() : res.redirect('/admin/')));
 
-app.get('/healthz', (req, res) => res.json({ ok: true, store: store.kind, users: store.all('users').length, online: online.size, mediaMB: +((store.mediaBytes || 0) / 1048576).toFixed(1) }));
+app.get('/healthz', (req, res) => res.json({ ok: true })); // ayrıntı yönetim panelinde; herkese açık sayfada sayı verilmez
 
 // TURN: metered.ca Open Relay (statik kimlik, ücretsiz) — env ile değiştirilebilir
 function iceServers(userId) {
@@ -395,7 +439,7 @@ const appEvent = require('./server/event');
 app.get('/api/event', (req, res) => res.json({ event: appEvent.current(store), now: Date.now() }));
 app.get('/api/config', (req, res) => {
   let uid = null;
-  try { uid = jwt.verify((req.headers.authorization || '').slice(7), JWT_SECRET).id; } catch {}
+  try { const p = jwt.verify((req.headers.authorization || '').slice(7), JWT_SECRET, { algorithms: ['HS256'] }); if (tokenOk(p, store.get('users', p.id))) uid = p.id; } catch {}
   const { id, ...legal } = store.get('settings', 'legal') || {};
   res.json({ vapidPublicKey: VAPID?.publicKey || null, iceServers: iceServers(uid), emailReset: mail.enabled(), legal, version: APP_VERSION, event: appEvent.current(store), now: Date.now(), maintenance: maintenance(), maintPlan: (() => { const p = store.get('settings', 'maint_plan'); return p && !p.started ? { start: p.start, end: p.end || null, message: p.message || '' } : null; })(), features: { market: !!store.get('settings', 'market')?.enabled }, superMsgCoins: eco.get().superMsgCoins, falAi: featureCtx.falAiMode?.() || 'off' });
 });
@@ -479,9 +523,12 @@ app.post('/api/auth/reset', wrap(async (req, res) => {
   const patch = { passHash: await bcrypt.hash(password, 10) };
   let newCode = null;
   if (viaRecovery) { newCode = recoveryCode(); patch.recoveryHash = await bcrypt.hash(newCode, 8); }
+  patch.tokenVer = (u.tokenVer || 0) + 1; // şifre sıfırlandı: başka cihazlardaki oturumlar kapanır
   store.update('users', u.id, patch);
   store.del('resets', u.id);
-  res.json({ token: sign(u), user: pub(u, u.id), recoveryCode: newCode && newCode.match(/.{4}/g).join('-') });
+  disconnectUser(u.id);
+  const fresh = store.get('users', u.id);
+  res.json({ token: sign(fresh), user: pub(fresh, u.id), recoveryCode: newCode && newCode.match(/.{4}/g).join('-') });
 }));
 
 app.post('/api/me/recovery', auth, wrap(async (req, res) => {
@@ -494,9 +541,17 @@ app.post('/api/me/password', auth, wrap(async (req, res) => {
   const { current, password } = req.body || {};
   if (!(await bcrypt.compare(String(current || ''), req.user.passHash))) return res.status(400).json({ error: 'Mevcut şifre hatalı.' });
   if (String(password || '').length < 6) return res.status(400).json({ error: 'Yeni şifre en az 6 karakter olmalı.' });
-  store.update('users', req.user.id, { passHash: await bcrypt.hash(password, 10), ...(['falci', 'official'].includes(req.user.role) ? { passChangedByUser: true } : {}) });
-  res.json({ ok: true });
+  store.update('users', req.user.id, { passHash: await bcrypt.hash(password, 10), tokenVer: (req.user.tokenVer || 0) + 1, ...(['falci', 'official'].includes(req.user.role) ? { passChangedByUser: true } : {}) });
+  disconnectUser(req.user.id); // eski oturumlar kapanır; bu cihaz yeni anahtarla devam eder
+  res.json({ ok: true, token: sign(store.get('users', req.user.id)) });
 }));
+// Diğer cihazlardaki bütün oturumları kapat (bu cihaz yeni anahtarla açık kalır)
+app.post('/api/me/logout-others', auth, (req, res) => {
+  if (limited('lo-oth:' + req.user.id, 10, 3600000)) return res.status(429).json({ error: 'Biraz sonra tekrar dene.' });
+  bumpTokens(req.user.id);
+  disconnectUser(req.user.id);
+  res.json({ ok: true, token: sign(store.get('users', req.user.id)) });
+});
 
 app.get('/api/me', auth, (req, res) => res.json({ ...pub(req.user, req.user.id), ban: banInfo(req.user) }));
 
@@ -521,7 +576,7 @@ app.patch('/api/me', auth, (req, res) => {
   const patch = {};
   if (b.name !== undefined) patch.name = String(b.name).trim().slice(0, 40) || req.user.username;
   if (b.bio !== undefined) patch.bio = moderation.mask(String(b.bio).slice(0, 150));
-  if (b.avatar !== undefined) patch.avatar = String(b.avatar).slice(0, 500);
+  if (b.avatar !== undefined && b.avatar !== req.user.avatar) { if (!okAvatar(b.avatar)) return res.status(400).json({ error: 'Profil fotoğrafı geçersiz. Galeriden yeniden seç.' }); patch.avatar = String(b.avatar); }
   if (b.city !== undefined) patch.city = String(b.city).slice(0, 40);
   if (b.age !== undefined && !req.user.birthdate) patch.age = b.age ? Math.max(18, Math.min(99, parseInt(b.age, 10) || 18)) : null;
   if (b.birthdate !== undefined && !req.user.birthdate) {
@@ -544,7 +599,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (b.gender !== undefined) patch.gender = ['k', 'e', 'd'].includes(b.gender) ? b.gender : null;
   if (b.lookingFor !== undefined) patch.lookingFor = ['k', 'e', 'all'].includes(b.lookingFor) ? b.lookingFor : 'all';
   if (Array.isArray(b.interests)) patch.interests = b.interests.map((s) => String(s).slice(0, 24)).slice(0, 8);
-  if (Array.isArray(b.photos)) patch.photos = b.photos.map(String).slice(0, 6);
+  if (Array.isArray(b.photos)) patch.photos = b.photos.map(String).filter((x) => isMedia(x) || (req.user.photos || []).includes(x)).slice(0, 6); // yeni eklenen yalnız kendi yüklemelerimiz
   if (b.skin !== undefined) patch.skin = ['gunbatimi', 'pembe', 'gece', 'altin'].includes(b.skin) ? b.skin : 'gunbatimi';
   if (b.logo !== undefined) {
     const LOGOS = ['klasik', 'altin', 'neon', 'gece', 'pastel', 'gokkusagi'];
@@ -611,7 +666,7 @@ app.post('/api/push/test', auth, wrap(async (req, res) => {
 }));
 
 // ---------- Medya ----------
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 40 * 1024 * 1024, files: 1, fields: 10, parts: 12 } });
 app.post('/api/upload', auth, upload.single('file'), wrap(async (req, res) => {
   const f = req.file;
   if (!f) return res.status(400).json({ error: 'Dosya gelmedi. Tekrar dene.' });
@@ -622,8 +677,9 @@ app.post('/api/upload', auth, upload.single('file'), wrap(async (req, res) => {
     console.error('[upload] dönüştürülemedi:', f.mimetype, e.message);
     return res.status(415).json({ error: 'Bu fotoğraf biçimi açılamadı. Fotoğrafı JPEG olarak kaydedip tekrar dene (iPhone: Ayarlar → Kamera → Biçimler → En Uyumlu).' });
   }
-  const { mime, buffer } = fixed;
-  if (!/^(image|video|audio)\//.test(mime)) return res.status(400).json({ error: 'Sadece fotoğraf, video veya ses yüklenebilir.' });
+  const { buffer } = fixed;
+  const mime = imagefix.safeType(fixed.mime, buffer); // türü baytlarından belirle; tanınmayan (SVG, HTML vb.) reddedilir
+  if (!mime) return res.status(415).json({ error: 'Sadece fotoğraf (JPEG, PNG, GIF, WebP), video (MP4, MOV, WebM) veya ses yüklenebilir.' });
   // Fotoğraf denetimi: açık cinsel içerik kaydedilmez; sınırdakiler kaydedilir ve yönetimde incelemeye düşer
   const pm = await photomod.check(buffer, mime);
   if (pm.verdict === 'block') { featureCtx.photoFlag?.(req.user.id, pm); return res.status(422).json({ error: 'Bu fotoğraf topluluk kurallarına uymuyor (çıplaklık ya da cinsel içerik). Lütfen başka bir fotoğraf seç.' }); }
@@ -650,18 +706,25 @@ async function getMedia(id) {
   return item;
 }
 app.get('/media/:id', wrap(async (req, res) => {
+  if (!/^[\w-]{6,40}$/.test(req.params.id)) return res.status(404).end();
   const m = await getMedia(req.params.id);
   if (!m) return res.status(404).end();
   const total = m.data.length;
-  res.setHeader('Content-Type', m.mime);
+  // Güvenlik: dosya asla sayfa gibi çalışmasın (eski yüklemelerde güvenli olmayan tür varsa indirme olarak verilir)
+  const safe = imagefix.isSafeType(m.mime);
+  res.setHeader('Content-Type', safe ? m.mime : 'application/octet-stream');
+  if (!safe) res.setHeader('Content-Disposition', 'attachment');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox");
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
   const range = req.headers.range;
   if (range) {
-    const [s, e] = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(s, 10) || 0;
-    const end = e ? Math.min(parseInt(e, 10), total - 1) : total - 1;
-    if (start >= total) { res.status(416).setHeader('Content-Range', `bytes */${total}`); return res.end(); }
+    const mt = /^bytes=(\d*)-(\d*)$/.exec(String(range).trim());
+    let start; let end;
+    if (mt && mt[1] !== '') { start = +mt[1]; end = mt[2] !== '' ? Math.min(+mt[2], total - 1) : total - 1; }
+    else if (mt && mt[2] !== '') { start = Math.max(0, total - +mt[2]); end = total - 1; } // son N bayt
+    if (!mt || (mt[1] === '' && mt[2] === '') || start >= total || end < start) { res.status(416).setHeader('Content-Range', `bytes */${total}`); return res.end(); }
     res.status(206);
     res.setHeader('Content-Range', `bytes ${start}-${end}/${total}`);
     res.setHeader('Content-Length', end - start + 1);
@@ -864,6 +927,7 @@ app.post('/api/posts/:id/like', auth, (req, res) => {
   if (!p) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
   const me = req.user.id;
   const want = req.body?.like ?? !p.likes.includes(me);
+  if (want && (isBlocked(me, p.userId) || !canSee(me, store.get('users', p.userId)))) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
   if (want && !p.likes.includes(me)) {
     p.likes.push(me);
     if (p.userId !== me) featureCtx.likeLog?.(me, p);
@@ -877,7 +941,7 @@ app.post('/api/posts/:id/like', auth, (req, res) => {
 
 app.get('/api/posts/:id/comments', auth, (req, res) => {
   const p = store.get('posts', req.params.id);
-  if (!p) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
+  if (!p || isBlocked(req.user.id, p.userId) || !canSee(req.user.id, store.get('users', p.userId))) return res.status(404).json({ error: 'Gönderi bulunamadı.' });
   res.json(p.comments.filter((c) => !isBlocked(req.user.id, c.userId)).map((c) => ({ ...c, user: brief(store.get('users', c.userId)), replyToUser: c.replyToUserId ? store.get('users', c.replyToUserId)?.username || null : null })));
 });
 
@@ -1432,7 +1496,7 @@ app.patch('/api/groups/:id', auth, (req, res) => {
   if (!c?.isGroup || !c.members.includes(req.user.id)) return res.status(404).json({ error: 'Grup bulunamadı.' });
   const patch = {};
   if (req.body?.name) { patch.name = String(req.body.name).trim().slice(0, 50); }
-  if (req.body?.avatar) patch.avatar = String(req.body.avatar).slice(0, 500);
+  if (req.body?.avatar && req.body.avatar !== c.avatar) { if (!okAvatar(req.body.avatar)) return res.status(400).json({ error: 'Grup fotoğrafı geçersiz.' }); patch.avatar = String(req.body.avatar); }
   store.update('chats', c.id, patch);
   if (patch.name) systemMsg(c, `${req.user.name} grup adını "${patch.name}" yaptı`);
   c.members.forEach((m) => emitTo(m, 'chat:update', { chatId: c.id }));
@@ -1470,6 +1534,8 @@ const FAL_TYPES = { kahve: 'kahve falı', tarot: 'tarot falı', burc: 'burç yor
 const falci = () => store.find('users', (u) => u.role === 'falci');
 const official = () => store.find('users', (u) => u.role === 'official');
 const isMedia = (u) => typeof u === 'string' && /^\/media\/[\w-]+$/.test(u);
+// Profil / grup fotoğrafı: yalnız kendi sunucumuzdaki dosya ya da varsayılan çizim (dışarıdan adres verilip bakanların IP'si toplanamasın)
+function okAvatar(u) { return isMedia(u) || /^https:\/\/api\.dicebear\.com\/9\.x\/[\w-]+\/svg\?[\w=&%.-]{1,200}$/.test(String(u || '')) || /^\/(img|icons)\/[\w./-]+\.(svg|png|jpg|webp)$/.test(String(u || '')); }
 
 app.get('/api/fal/falci', auth, (req, res) => {
   const f = falci();
@@ -1722,7 +1788,7 @@ app.post('/api/admin/push/test', adminApi.adminAuth, wrap(async (req, res) => {
 const photomod = require('./server/photomod');
 const featureCtx = {
   store, io, auth, wrap, eco, notify, emitTo, brief, pub, postOut, chatOut, sendMessage, canSee, priv,
-  isBlocked, limited, isMedia, isGif: (u) => GIF_HOSTS.test(String(u || '')), extractTags, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
+  isBlocked, limited, ipOf, isMedia, isGif: (u) => GIF_HOSTS.test(String(u || '')), extractTags, cardOut, purgeUser, moderation, chatBetween, admin: adminApi,
   online, appEvent, falci, msgOut, falLock, shownAge, tagsOf, dropMediaCache: (id) => dropMediaCache(id), getMedia: (id) => getMedia(id), pushAdmins,
   storyItem, storyVisible, storyAlive, createPost: (u, b) => createPost(u, b), cleanSticker, systemMsg: (c, t) => systemMsg(c, t), groupAvatar,
 };
@@ -1810,9 +1876,9 @@ app.use((err, req, res, next) => {
 io.use((socket, next) => {
   if (maintenance()) return next(new Error('maintenance'));
   try {
-    const { id } = jwt.verify(socket.handshake.auth?.token, JWT_SECRET);
-    const u = store.get('users', id);
-    if (!u) return next(new Error('unauthorized'));
+    const payload = jwt.verify(socket.handshake.auth?.token, JWT_SECRET, { algorithms: ['HS256'] });
+    const id = payload.id; const u = store.get('users', id);
+    if (!tokenOk(payload, u)) return next(new Error('unauthorized'));
     if (banInfo(u)) return next(new Error('banned'));
     socket.data.userId = u.id;
     socket.data.visible = true;
@@ -1969,7 +2035,12 @@ io.on('connection', (socket) => {
   });
   socket.on('call:reject', ({ callId }) => { const c = calls.get(callId); if (c && [c.from, c.to].includes(uid)) finishCall(c, 'rejected'); });
   socket.on('call:end', ({ callId }) => { const c = calls.get(callId); if (c && [c.from, c.to].includes(uid)) finishCall(c, 'ended'); });
-  socket.on('call:signal', ({ to, data }) => { if (typeof to === 'string') io.to(to).emit('call:signal', { from: socket.id, data }); });
+  // WebRTC sinyali yalnız aynı görüşmedeki karşı tarafın bağlantısına iletilir (rastgele odaya / kişiye gönderilemez)
+  socket.on('call:signal', ({ to, data } = {}) => {
+    if (typeof to !== 'string' || to === socket.id || limited('csig:' + socket.id, 600, 60000)) return;
+    const ok = [...calls.values()].some((c) => [c.from, c.to].includes(uid) && [c.callerSocket, c.calleeSocket].includes(socket.id) && [c.callerSocket, c.calleeSocket].includes(to));
+    if (ok) io.to(to).emit('call:signal', { from: socket.id, data });
+  });
 
   // ---- Canlı yayın ----
   socket.on('live:start', ({ title, kar } = {}, ack) => {
@@ -2011,7 +2082,15 @@ io.on('connection', (socket) => {
     io.to(`live:${hostId}`).emit('live:count', { hostId, viewers: l.viewers.size });
   };
   socket.on('live:leave', leave);
-  socket.on('live:signal', ({ to, data }) => { if (typeof to === 'string') io.to(to).emit('live:signal', { from: socket.id, data }); });
+  // Yayın sinyali: yayıncı ↔ o yayını izleyen bağlantı arasında
+  socket.on('live:signal', ({ to, data } = {}) => {
+    if (typeof to !== 'string' || to === socket.id || limited('lsig:' + socket.id, 600, 60000)) return;
+    const mine = lives.get(uid);
+    const asHost = mine && mine.socketId === socket.id && mine.viewers.has(to);
+    const w = socket.data.watching && lives.get(socket.data.watching);
+    const asViewer = w && w.viewers.has(socket.id) && w.socketId === to;
+    if (asHost || asViewer) io.to(to).emit('live:signal', { from: socket.id, data });
+  });
   socket.on('live:comment', ({ hostId, text }) => {
     text = String(text || '').trim().slice(0, 200);
     if (!text || !lives.has(hostId) || limited('lc:' + uid, 20, 30000)) return;

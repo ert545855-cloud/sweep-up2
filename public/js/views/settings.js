@@ -1,7 +1,7 @@
 import { accounts, accountSheet } from '../accounts.js';
 import { icon } from '../icons.js';
 import {
-  state, api, esc, toast, sheet, logout, avatar, refreshBadges, logoMenu,
+  state, api, esc, toast, sheet, logout, avatar, refreshBadges, logoMenu, adoptToken,
 } from '../core.js';
 
 const PRIV = [
@@ -62,6 +62,7 @@ export default function settings(view) {
       <button class="it em">${icon('mail')}<span class="grow">E-posta<div class="sub">${esc(me.email || 'Eklenmedi — şifre sıfırlama için ekle')}</div></span></button>
       <button class="it pw">${icon('lock')}<span class="grow">Şifreyi değiştir</span></button>
       <button class="it rc">${icon('key')}<span class="grow">Yeni kurtarma kodu oluştur<div class="sub">Eski kod geçersiz olur</div></span></button>
+      <button class="it lox">${icon('logout')}<span class="grow">Diğer cihazlardan çık<div class="sub">Bu telefon dışındaki bütün oturumların kapanır</div></span></button>
     </div>
     <div class="group-t">Uygulama</div>
     <div class="group">
@@ -149,9 +150,13 @@ export default function settings(view) {
       <input class="field" name="n" type="password" placeholder="Yeni şifre (en az 6 karakter)" autocomplete="new-password"><button class="btn primary block">Değiştir</button></form>`, {
     onMount(sh, close) {
       const f = sh.querySelector('form');
-      f.onsubmit = async (e) => { e.preventDefault(); try { await api('/me/password', { body: { current: f.c.value, password: f.n.value } }); close(); toast('Şifren değişti.'); } catch (er) { toast(er.message); } };
+      f.onsubmit = async (e) => { e.preventDefault(); try { const r = await api('/me/password', { body: { current: f.c.value, password: f.n.value } }); adoptToken(r.token); close(); toast('Şifren değişti. Diğer cihazlardaki oturumların kapandı.'); } catch (er) { toast(er.message); } };
     },
   });
+  view.querySelector('.lox').onclick = async () => {
+    if (!confirm('Bu cihaz dışındaki bütün oturumların kapatılsın mı? Diğer telefon ve tarayıcılarda yeniden giriş yapman gerekir.')) return;
+    try { const r = await api('/me/logout-others', { body: {} }); adoptToken(r.token); toast('Diğer cihazlardaki oturumların kapatıldı.'); } catch (er) { toast(er.message); }
+  };
   view.querySelector('.rc').onclick = async () => {
     if (!confirm('Yeni kurtarma kodu oluşturulsun mu? Eski kod çalışmayacak.')) return;
     const r = await api('/me/recovery', { body: {} });
