@@ -34,6 +34,18 @@ async function check(buffer, mime) {
 
 module.exports = function photomod(app, ctx) {
   console.log(enabled() ? '[fotoğraf denetimi] Sightengine açık' : '[fotoğraf denetimi] kapalı (SIGHTENGINE_USER / SIGHTENGINE_SECRET yok)');
+  // Açılış kontrolü: anahtarın geçerli olduğunu görmek için uygulamanın kendi simgesi bir kez taranır (1 tarama harcar)
+  const site = process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL;
+  if (enabled() && site && !process.env.SIGHTENGINE_URL) {
+    const tm = setTimeout(async () => {
+      try {
+        const q = new URLSearchParams({ models: 'nudity-2.1', api_user: process.env.SIGHTENGINE_USER, api_secret: process.env.SIGHTENGINE_SECRET, url: `${site.replace(/\/$/, '')}/icons/icon-512.png` });
+        const r = await fetch(`https://api.sightengine.com/1.0/check.json?${q}`, { signal: AbortSignal.timeout(12000) }); const j = await r.json().catch(() => null);
+        if (j?.status === 'success') { stats.verified = true; console.log(`[fotoğraf denetimi] anahtar doğrulandı (deneme taraması: ${j.nudity?.none >= 0.5 ? 'temiz' : 'incelemeli'})`); }
+        else { stats.verified = false; stats.lastError = String(j?.error?.message || `HTTP ${r.status}`).slice(0, 160); console.error('[fotoğraf denetimi] anahtar doğrulanamadı:', stats.lastError); }
+      } catch (e) { console.error('[fotoğraf denetimi] açılış kontrolü yapılamadı:', e.message); }
+    }, 20000); tm.unref?.();
+  }
   const { store, notify } = ctx; const A = ctx.admin; const now = () => Date.now();
   const brief = (id) => { const u = store.get('users', id); return u ? { id: u.id, username: u.username, avatar: u.avatar } : null; };
   // Yükleme sırasında çağrılır
