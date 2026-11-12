@@ -9,6 +9,26 @@ const SPOTS = { coop: [[0.1, 0.55], [0.6, 0.2], [0.55, 0.7], [-0.25, 0.75]], cow
 const fmt = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); if (s < 60) return `${s} sn`; const m = Math.floor(s / 60); if (m < 60) return `${m} dk${s % 60 && m < 10 ? ` ${s % 60} sn` : ''}`; const h = Math.floor(m / 60); return `${h} sa${m % 60 ? ` ${m % 60} dk` : ''}`; };
 const rnd = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
 
+// ---- sesler: dosya yok, kısa tonlar tarayıcıda üretilir ----
+let AC = null; let muted = false; try { muted = localStorage.getItem('sf_mute') === '1'; } catch { /* yok say */ }
+function tone(f0, f1, dur, type = 'sine', vol = 0.16, delay = 0) {
+  if (muted) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume();
+    const t = AC.currentTime + delay; const o = AC.createOscillator(); const gn = AC.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(vol, t + 0.012); gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(gn).connect(AC.destination); o.start(t); o.stop(t + dur + 0.03);
+  } catch { /* ses açılamadıysa sessiz devam */ }
+}
+const SFX = {
+  pop: (n = 1) => { const k = Math.min(n, 10); tone(480 + k * 45, 760 + k * 60, 0.09, 'triangle', 0.18); },
+  plant: () => tone(230, 140, 0.11, 'sine', 0.22), tap: () => tone(420, 310, 0.05, 'sine', 0.1), take: () => tone(620, 990, 0.13, 'triangle', 0.16),
+  coin: () => { tone(1320, 1320, 0.07, 'square', 0.05); tone(1760, 1760, 0.17, 'square', 0.05, 0.07); },
+  water: () => tone(950, 380, 0.16, 'sine', 0.15), err: () => tone(190, 140, 0.15, 'sawtooth', 0.05),
+  level: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.24, 'triangle', 0.16, i * 0.11)),
+};
+
 let ART = null; let A = null;
 function loadArt(onp) {
   if (ART) return ART;
@@ -45,14 +65,15 @@ export default async function farm(view, who) {
 
   root.innerHTML = `<canvas class="sf-cv"></canvas>
     <div class="sf-top"><button class="sf-rb" data-a="back" aria-label="Geri">${icon('back')}</button>
-      ${visit ? `<div class="sf-who"><img src="${esc(visit.avatar)}" alt=""><span><b>${esc(visit.name || visit.username)}</b><small>Seviye ${F.lvl} çiftlik</small></span></div><span class="sf-grow"></span><div class="sf-pill"><i class="sf-dropi"></i><b class="sf-helps"></b></div>`
+      ${visit ? `<div class="sf-who"><img src="${esc(visit.avatar)}" alt=""><span><b>${esc(visit.name || visit.username)}</b><small>Seviye ${F.lvl} çiftlik</small></span></div><span class="sf-grow"></span><div class="sf-pill"><i class="sf-dropi"></i><b class="sf-helps"></b></div><button class="sf-rb sf-sndb" data-a="snd" aria-label="Ses">${icon(muted ? 'mute' : 'volume')}</button>`
     : `<div class="sf-lv"><span class="sf-star">${STAR}<b class="sf-lvn"></b></span><div class="sf-xp"><i></i><small></small></div></div><span class="sf-grow"></span>
       <div class="sf-pill sf-coin">${spr('i_coin', 24)}<b></b></div><button class="sf-pill sf-barnp" data-a="barn">${spr('barn', 28)}<b></b></button>`}</div>
     ${visit ? '' : `<div class="sf-side">
       <button data-a="orders">${spr('board', 40)}<small>Sipariş</small><em class="sf-badge" hidden></em></button>
       <button data-a="shop">${spr('bakery', 44)}<small>Market</small></button>
       <button data-a="nb">${spr('house', 42)}<small>Komşular</small></button>
-      <button data-a="edit">${icon('edit')}<small>Düzenle</small></button></div>`}
+      <button data-a="edit">${icon('edit')}<small>Düzenle</small></button>
+      <button data-a="set">${icon('settings')}<small>Ayarlar</small></button></div>`}
     <div class="sf-bot"></div><div class="sf-layer"></div><div class="sf-over"></div>`;
   const cv = root.querySelector('.sf-cv'); const g = cv.getContext('2d');
   const bot = root.querySelector('.sf-bot'); const layer = root.querySelector('.sf-layer'); const over = root.querySelector('.sf-over');
@@ -185,13 +206,17 @@ export default async function farm(view, who) {
     for (const f of r.fx || []) {
       if (f.t === 'item') { const c = centerOf(f.at); if (c) lastPos = c; fxs.push({ gx: lastPos[0], gy: lastPos[1], k: `i_${f.k}`, n: f.n, t0: T + i++ * 90 }); }
       if (f.t === 'xp') fxs.push({ gx: lastPos[0] + 0.35, gy: lastPos[1] - 0.35, k: 'xp', n: f.n, t0: T + 160 + i++ * 90 });
-      if (f.t === 'coins') { const b = F.objs.find((x) => x.t === 'board'); const c = visit || !b ? lastPos : [b.x + 0.5, b.y + 0.5]; fxs.push({ gx: c[0], gy: c[1], k: 'i_coin', n: f.n, t0: T + i++ * 90 }); root.querySelector('.sf-coin')?.classList.add('bump'); setTimeout(() => root.querySelector('.sf-coin')?.classList.remove('bump'), 500); }
-      if (f.t === 'lvl') levelUp(f);
+      if (f.t === 'coins') { const b = F.objs.find((x) => x.t === 'board'); const c = visit || !b ? lastPos : [b.x + 0.5, b.y + 0.5]; fxs.push({ gx: c[0], gy: c[1], k: 'i_coin', n: f.n, t0: T + i++ * 90 }); SFX.coin(); root.querySelector('.sf-coin')?.classList.add('bump'); setTimeout(() => root.querySelector('.sf-coin')?.classList.remove('bump'), 500); }
+      if (f.t === 'lvl') { levelUp(f); SFX.level(); }
     }
     hud(); panel?.paint(); paintBot();
   }
   const act = (a, body = {}) => (chain = chain.then(async () => {
-    try { const r = await api('/farm/act', { body: { a, ...body } }); apply(r); return r; } catch (e) { if (e.data?.farm) apply({ farm: e.data.farm }); toast(e.message); return null; }
+    try {
+      const r = await api('/farm/act', { body: { a, ...body } }); apply(r);
+      if (a === 'take' || a === 'collect') SFX.take(); else if (a === 'buy' || a === 'move' || a === 'feed' || a === 'craft' || a === 'animal') SFX.plant();
+      return r;
+    } catch (e) { if (e.data?.farm) apply({ farm: e.data.farm }); SFX.err(); toast(e.message); return null; }
   }));
   const reload = async () => { if (visit) return; try { const r = await api('/farm'); apply({ farm: r.farm }); } catch { /* sonraki denemede */ } };
 
@@ -273,6 +298,10 @@ export default async function farm(view, who) {
       <h3 class="sf-h">En iyi çiftçiler</h3>${ps.nb.top.map((r, i) => row(r).replace('<img', `<i class="sf-rank">${i + 1}</i><img`)).join('')}
       <p class="sf-note">Komşunun çiftliğinde büyüyen ekinleri sulayabilirsin: ekin daha çabuk olgunlaşır, sen de altın ve deneyim kazanırsın. Günde ${cfg.HELPS} yardım hakkın var.</p>`;
   };
+  const setBody = () => `<div class="sf-set">
+      <button class="sf-tg ${muted ? '' : 'on'}" data-a="snd"><span><b>Oyun sesleri</b><small>Hasat, altın ve seviye sesleri</small></span><i></i></button>
+      <button class="sf-tg ${F.notif ? 'on' : ''}" data-a="notif"><span><b>Tarla hazır bildirimi</b><small>Ekinlerin olgunlaşınca haber verir, günde en çok 2 kez</small></span><i></i></button></div>
+    <p class="sf-note">Bildirimin telefonuna gelmesi için SwipeUp bildirimlerine izin vermiş olman gerekir.</p>`;
   function levelUp(f) {
     over.innerHTML = `<div class="sf-lvl"><div class="sf-lvc"><span class="sf-bigstar">${STAR}<b>${f.lvl}</b></span><h2>Seviye ${f.lvl}!</h2><p class="sf-lvr">${spr('i_coin', 22)} +${f.coins} altın</p>
       ${(f.unlock || []).length ? `<div class="sf-unl"><small>Yeni açılanlar</small><div>${f.unlock.map((u) => `<span>${spr(u.k, 54)}<em>${esc(u.name)}</em></span>`).join('')}</div></div>` : ''}<button class="sf-btn" data-a="lvlok">Harika!</button></div></div>`;
@@ -296,6 +325,9 @@ export default async function farm(view, who) {
     shop() { ps = {}; openPanel('Market', shopBody); },
     nb() { ps = {}; openPanel('Komşular', nbBody); api('/farm/neighbors').then((r) => { ps.nb = r; panel?.paint(); }).catch((e) => toast(e.message)); },
     edit() { mode = mode?.k === 'edit' ? null : { k: 'edit' }; paintBot(); },
+    set() { ps = {}; openPanel('Ayarlar', setBody); },
+    snd() { muted = !muted; try { localStorage.setItem('sf_mute', muted ? '1' : '0'); } catch { /* yok say */ } if (!muted) SFX.pop(3); const b = root.querySelector('.sf-sndb'); if (b) b.innerHTML = icon(muted ? 'mute' : 'volume'); panel?.paint(); },
+    notif() { act('notif', { on: !F.notif }); },
     mode0() { mode = null; paintBot(); },
     seed(d) { mode = { k: 'plant', crop: d.k }; paintBot(); },
     deliver(d) { act('order', { id: d.id }); }, skip(d) { act('skip', { id: d.id }); },
@@ -343,11 +375,11 @@ export default async function farm(view, who) {
     if (mode?.k === 'place') return;
     if (mode?.k === 'edit') { if (o) { pops.set(o.id, T); startPlace(o.t, o.id); } return; }
     if (!o) { if (mode?.k === 'plant') { mode = null; paintBot(); } return; }
-    pops.set(o.id, T); const Ty = cfg.TYPES[o.t];
+    pops.set(o.id, T); SFX.tap(); const Ty = cfg.TYPES[o.t];
     if (visit) {
       if (o.t === 'plot' && o.crop && !cropReady(o, now)) {
         if (o.h) { toast('Bu ekin zaten sulanmış.'); return; }
-        chain = chain.then(() => api(`/farm/of/${visit.id}/help`, { body: { id: o.id } }).then((r) => { lastPos = centerOf(o.id) || lastPos; apply(r); }).catch((e) => toast(e.message)));
+        chain = chain.then(() => api(`/farm/of/${visit.id}/help`, { body: { id: o.id } }).then((r) => { lastPos = centerOf(o.id) || lastPos; SFX.water(); apply(r); }).catch((e) => toast(e.message)));
       }
       return;
     }
@@ -360,8 +392,8 @@ export default async function farm(view, who) {
   const pos = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   const swipeOn = (o) => { // kaydırırken üzerinden geçilen tarlayı işleme kat
     if (!o || o.t !== 'plot' || drag.ids.has(o.id)) return;
-    if (drag.k === 'harvest' && cropReady(o, tnow())) { drag.ids.add(o.id); pendH.add(o.id); pops.set(o.id, T); }
-    if (drag.k === 'plant' && !o.crop && !pendP.has(o.id)) { const c = cfg.CROPS[mode.crop]; if (F.coins < c.seed * (drag.ids.size + 1)) return; drag.ids.add(o.id); pendP.set(o.id, mode.crop); pops.set(o.id, T); }
+    if (drag.k === 'harvest' && cropReady(o, tnow())) { drag.ids.add(o.id); pendH.add(o.id); pops.set(o.id, T); SFX.pop(drag.ids.size); }
+    if (drag.k === 'plant' && !o.crop && !pendP.has(o.id)) { const c = cfg.CROPS[mode.crop]; if (F.coins < c.seed * (drag.ids.size + 1)) return; drag.ids.add(o.id); pendP.set(o.id, mode.crop); pops.set(o.id, T); SFX.plant(); }
   };
   cv.addEventListener('pointerdown', (e) => {
     cv.setPointerCapture?.(e.pointerId); const [sx, sy] = pos(e); ptr.set(e.pointerId, [sx, sy]);

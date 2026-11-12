@@ -5,7 +5,7 @@ import {
 import { notifSettings } from './profile.js';
 
 const href = notifHref;
-const sysIcon = (t) => ({ announce: 'bell', warning: 'flag', report: 'check', order: 'coin', verify: 'shield' }[t] || 'heart');
+const sysIcon = (t) => ({ announce: 'bell', warning: 'flag', report: 'check', order: 'coin', verify: 'shield', farm: 'sun' }[t] || 'heart');
 
 export default async function notifications(view) {
   view.innerHTML = `<header class="topbar bordered">
