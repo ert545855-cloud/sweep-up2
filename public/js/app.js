@@ -62,6 +62,7 @@ const routes = [
   [/^\/seviye$/, 'level', { tabs: false }],
   [/^\/haftanin-enleri$/, 'best', { tab: 'home' }],
   [/^\/oyunlar$/, 'games', { tab: 'home' }],
+  [/^\/farm(?:\/([\w.-]+))?$/, 'farm', { tabs: false }],
   [/^\/oyun\/okey\/([\w-]+)$/, 'okey', { tabs: false, dark: true }],
   [/^\/oyun\/cizbil\/([\w-]+)$/, 'cizbil', { tabs: false }],
   [/^\/oyun\/kupa\/([\w-]+)$/, 'kupa', { tabs: false, dark: true }],
