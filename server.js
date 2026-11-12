@@ -1998,6 +1998,7 @@ require('./server/games')(app, featureCtx); // oyun salonu: Okey, Çiz Bil
 require('./server/playkit')(app, featureCtx); // oyun altyapısı + server/play/*.js oyunları
 require('./server/minigames')(app, featureCtx); // sohbet içi mini oyunlar: XOX, Dört Taş, TKM, Amiral Battı
 require('./server/kupa')(app, featureCtx); // Parti Kupası (3D)
+require('./server/farm')(app, featureCtx); // SwipeFarm: çiftlik oyunu
 photomod(app, featureCtx); // fotoğraf denetimi (Sightengine)
 require('./server/engage')(app, featureCtx); // seriler, kulüpler, günün sorusu, seçki, karaoke… (en son yüklenir)
 gameOut = featureCtx.gameOut;
@@ -2326,6 +2327,7 @@ function purgeUser(id) {
   store.filter('posts', (p) => p.likes.includes(id) || p.comments.some((c) => c.userId === id))
     .forEach((p) => store.update('posts', p.id, { likes: p.likes.filter((x) => x !== id), comments: p.comments.filter((c) => c.userId !== id) }));
   store.filter('stories', (s) => s.userId === id).forEach((s) => store.del('stories', s.id));
+  if (store.get('farms', id)) store.del('farms', id); // SwipeFarm çiftliği
   ['highlights', 'notes', 'post_queue'].forEach((c) => store.filter(c, (x) => x.userId === id).forEach((x) => store.del(c, x.id)));
   ['follows', 'swipes', 'blocks'].forEach((c) => store.filter(c, (x) => x.from === id || x.to === id).forEach((x) => store.del(c, x.id)));
   store.filter('matches', (m) => m.users.includes(id)).forEach((m) => store.del('matches', m.id));

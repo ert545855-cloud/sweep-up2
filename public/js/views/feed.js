@@ -9,7 +9,7 @@ import { egi } from '../eg-icons.js';
 
 // Ana sayfa kısayolları: [ikon, adres, etiket, falcıya da görünür]
 const SHORTCUTS = [
-  ['seri', '#/seriler', 'Serin'], ['okey', '#/oyunlar', 'Oyunlar'], ['etkinlik', '#/etkinlikler', 'Etkinlikler'], ['enler', '#/haftanin-enleri', 'Haftanın enleri', true], ['genel', '#/genel', 'Genel sohbet', true], ['soru', '#/soru', 'Günün sorusu'], ['kulup', '#/kulupler', 'Kulüpler'],
+  ['seri', '#/seriler', 'Serin'], ['okey', '#/oyunlar', 'Oyunlar'], ['farm', '#/farm', 'SwipeFarm'], ['etkinlik', '#/etkinlikler', 'Etkinlikler'], ['enler', '#/haftanin-enleri', 'Haftanın enleri', true], ['genel', '#/genel', 'Genel sohbet', true], ['soru', '#/soru', 'Günün sorusu'], ['kulup', '#/kulupler', 'Kulüpler'],
   ['odalar', '#/odalar', 'Odalar', true], ['hizli', '#/hizli', 'Hızlı tanış'], ['mekan', '#/mekan', 'Mekandayım'], ['karaoke', '#/karaoke', 'Karaoke'], ['burc', '#/burc', 'Burç kartın'], ['seviye', '#/seviye', 'Seviyen'],
 ];
 const RAIL = ['quests', 'wheel', 'contest', 'song'];
@@ -28,7 +28,7 @@ export default async function feed(view) {
     <div class="event-slot"></div>
     <section class="promo-rail" aria-label="Senin için"><div class="pr-track"></div><div class="pr-dots" aria-hidden="true"></div></section>
     <a class="fal-hero" href="#/fal"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
-    <nav class="sc-row" aria-label="Kısayollar">${SHORTCUTS.filter((x) => state.me.role !== 'falci' || x[3]).map(([k, href, label]) => `<a class="sc" href="${href}">${egi(k, 54, 'sc-ic')}${k === 'seri' ? `<b class="sc-n">${state.me.loginStreak?.count || 0}</b>` : ''}<small>${label}</small></a>`).join('')}</nav>
+    <nav class="sc-row" aria-label="Kısayollar">${SHORTCUTS.filter((x) => state.me.role !== 'falci' || x[3]).map(([k, href, label]) => `<a class="sc" href="${href}">${k === 'farm' ? '<img class="egi sc-ic" src="/img/farm/icon.webp" width="54" height="54" alt="" decoding="async">' : egi(k, 54, 'sc-ic')}${k === 'seri' ? `<b class="sc-n">${state.me.loginStreak?.count || 0}</b>` : ''}<small>${label}</small></a>`).join('')}</nav>
     <div class="vn-friends"></div>
     ${state.config?.features?.market ? `<a class="mk-entry" href="#/market"><span class="mk-ei">${icon('bag')}</span><span class="grow"><b>SwipeUp Store</b><small>İkinci el al, sat · komisyon yok · güvenli ödeme</small></span><span class="go-chip">Göz at</span></a>` : ''}
     <div class="push-slot"></div>

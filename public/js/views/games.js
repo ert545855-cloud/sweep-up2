@@ -28,7 +28,7 @@ const ic = (g, n) => egi(g.icon || g.k, n);
 
 export default async function games(view) {
   view.innerHTML = `<header class="topbar bordered"><button class="ib" data-back="#/" aria-label="Geri">${icon('back')}</button><div class="center">Oyunlar</div><span class="ib"></span></header>
-    <div class="gm-page"><div class="gm-cur-list"></div><div class="gm-cats"><div class="spinner"></div></div>
+    <div class="gm-page"><div class="gm-cur-list"></div><a class="sf-card" href="#/farm"><span><b>SwipeFarm</b><small>Kendi çiftliğini kur: ek, biç, üret, siparişleri yetiştir, komşularına yardım et.</small><em>Çiftliğe git</em></span><img src="/img/farm/hero.webp" alt="" loading="lazy"></a><div class="gm-cats"><div class="spinner"></div></div>
     <section class="gm-mini"><h2 class="gm-ch">Sohbette oyna</h2><p class="muted">Eşleştiğin ya da mesajlaştığın biriyle sohbetteki <b>+</b> menüsünden başlat.</p>
       <div class="gm-mrow">${MINI.map(([k, n]) => `<span class="gm-mi">${egi(k, 44)}<small>${n}</small></span>`).join('')}</div><a class="btn block" href="#/chats">${icon('comment')} Sohbetlere git</a></section>
     <p class="muted gm-note">Oyunlar eğlence içindir; jeton ya da para ile oynanmaz. Oynadıkça seviye puanı kazanırsın.</p></div>`;
