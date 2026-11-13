@@ -747,7 +747,8 @@ ${meta}</div>`;
       <button data-a="compat">${egi('uyum', 28)}<span class="grow">Uyum testi<div class="sub muted" style="font-size:12.5px">10 soru, sonucu Falcı Teyze yorumlar</div></span></button>
       <button data-a="ideas">${egi('mekan', 28)}<span class="grow">Buluşma fikirleri<div class="sub muted" style="font-size:12.5px">Ortak ilgi alanlarınıza göre öneriler</div></span></button>
       <button data-a="st">💡<span class="grow">Ne yazsam?<div class="sub muted" style="font-size:12.5px">Sohbeti başlatacak öneriler</div></span></button>
-      <button data-a="gift">${egi('hediye', 28)}<span class="grow">Hediye gönder<div class="sub muted" style="font-size:12.5px">Gül, yüzük ve daha fazlası jetonla</div></span></button>`}
+      <button data-a="gift">${egi('hediye', 28)}<span class="grow">Hediye gönder<div class="sub muted" style="font-size:12.5px">Gül, yüzük ve daha fazlası jetonla</div></span></button>
+      <button data-a="farm"><img src="/img/farm/icon.webp" width="28" height="28" alt="" style="border-radius:8px"><span class="grow">Çiftliğime davet et<div class="sub muted" style="font-size:12.5px">SwipeFarm: ilk ziyarette ikinize de hediye</div></span></button>`}
       <button data-a="loc">${icon('mapPin')}Konum gönder</button>
       <button data-a="ttl">${icon('timer')}<span class="grow">Kaybolan mesajlar</span><span class="muted">${ttlLabel(ttl)}</span></button></div>`, {
       onMount(sh, close) {
@@ -764,6 +765,7 @@ ${meta}</div>`;
           if (a === 'ideas') ideasSheet();
           if (a === 'st') startersSheet();
           if (a === 'gift') giftSheet();
+          if (a === 'farm') api(`/farm/invite/${other.id}`, { body: {} }).then(() => toast('Çiftlik davetin gönderildi.')).catch((er) => toast(er.message));
         };
       },
     });

@@ -2,6 +2,7 @@
 // sahne tek bir tuvale çizilir, bütün kurallar ve süreler sunucudadır (server/farm.js).
 import { icon } from '../icons.js';
 import { api, esc, state, uploadFile } from '../core.js';
+import { AV, loadArt, lazyMini } from '../farmart.js';
 
 const HW = 136 * Math.SQRT1_2; const HH = HW / 2; // bir karenin yarı genişliği / yüksekliği (görsel pikseli)
 const STAR = '<svg class="sf-st" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.4 5.9 20.8l1.4-6.8L2.2 9.3l6.9-.8z" fill="#ffd23f" stroke="#c98a12" stroke-width="1.6" stroke-linejoin="round"/></svg>';
@@ -30,20 +31,39 @@ const SFX = {
   level: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.24, 'triangle', 0.16, i * 0.11)),
 };
 
-let ART = null; let A = null;
-const AV = '?v=3'; // görsel paketi sürümü: atlas ile resimler tarayıcı önbelleğinde birbirinden kopmasın
-function loadArt(onp) {
-  if (ART) return ART;
-  let n = 0; const step = () => onp?.(++n / 4);
-  const img = (name) => new Promise((res, rej) => { const i = new Image(); i.onload = () => { step(); res(i); }; i.onerror = () => rej(new Error('Oyun görselleri yüklenemedi. Bağlantını kontrol et.')); i.src = `/img/farm/${name}.webp${AV}`; });
-  ART = Promise.all([fetch(`/img/farm/atlas.json${AV}`).then((r) => r.json()).then((j) => { step(); return j; }), img('obj'), img('item'), img('grass')])
-    .then(([atlas, obj, item, grass]) => ({ atlas, obj, item, grass })).catch((e) => { ART = null; throw e; });
-  return ART;
+// ---- arka plan müziği: dosya yok, sakin bir pentatonik ezgi tarayıcıda üretilir ----
+let music = true; try { music = localStorage.getItem('sf_music') !== '0'; } catch { /* yok say */ }
+const MUS = { on: false, t: 0, timer: 0, bus: null, step: 0, note: 4 };
+const SCALE = [196, 220, 247, 294, 330, 392, 440, 494, 587, 659]; // Sol pentatonik
+const CHORDS = [[98, 147, 196], [110, 165, 220], [82, 123, 165], [98, 147, 247]];
+function musicTick() {
+  if (!MUS.on || !AC) return;
+  const t0 = Math.max(AC.currentTime + 0.05, MUS.t); const bar = 4.8; const ch = CHORDS[MUS.step % CHORDS.length];
+  ch.forEach((f) => { const o = AC.createOscillator(); const gn = AC.createGain(); o.type = 'sine'; o.frequency.value = f; gn.gain.setValueAtTime(0.0001, t0); gn.gain.linearRampToValueAtTime(0.05, t0 + 1.2); gn.gain.linearRampToValueAtTime(0.0001, t0 + bar + 0.6); o.connect(gn).connect(MUS.bus); o.start(t0); o.stop(t0 + bar + 0.7); });
+  for (let i = 0; i < 8; i++) { if (Math.random() < 0.38) continue; MUS.note = Math.min(SCALE.length - 1, Math.max(0, MUS.note + [-2, -1, -1, 0, 1, 1, 2][Math.floor(Math.random() * 7)])); const t = t0 + i * (bar / 8) + Math.random() * 0.03;
+    const o = AC.createOscillator(); const gn = AC.createGain(); o.type = 'triangle'; o.frequency.value = SCALE[MUS.note]; gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(0.06, t + 0.02); gn.gain.exponentialRampToValueAtTime(0.0001, t + 1.1); o.connect(gn).connect(MUS.bus); o.start(t); o.stop(t + 1.2); }
+  MUS.step += 1; MUS.t = t0 + bar; MUS.timer = setTimeout(musicTick, Math.max(200, (MUS.t - AC.currentTime - 0.6) * 1000));
 }
+function musicStart() {
+  if (!music || MUS.on) return;
+  try { AC = AC || new (window.AudioContext || window.webkitAudioContext)(); if (AC.state === 'suspended') AC.resume(); } catch { return; }
+  MUS.bus = AC.createGain(); MUS.bus.gain.value = 0.9; const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400; MUS.bus.connect(lp).connect(AC.destination);
+  MUS.on = true; MUS.t = 0; musicTick();
+}
+function musicStop() { if (!MUS.on) return; MUS.on = false; clearTimeout(MUS.timer); try { const b = MUS.bus; b.gain.setTargetAtTime(0.0001, AC.currentTime, 0.4); setTimeout(() => b.disconnect(), 1500); } catch { /* yok say */ } }
+
+let A = null;
 function useCss() { if (document.getElementById('sf-css')) return; const l = document.createElement('link'); l.id = 'sf-css'; l.rel = 'stylesheet'; l.href = `/css/farm.css${AV}`; document.head.append(l); }
-// atlastaki bir görseli DOM'da göster
-const spr = (k, size = 40) => { const a = A.atlas[k]; if (!a) return ''; const im = A[a[0]]; const s = size / Math.max(a[3], a[4]); const r = (v) => Math.round(v * 10) / 10;
-  return `<i class="sf-sp" style="width:${r(a[3] * s)}px;height:${r(a[4] * s)}px;background:url(/img/farm/${a[0]}.webp${AV}) ${r(-a[1] * s)}px ${r(-a[2] * s)}px/${r(im.width * s)}px ${r(im.height * s)}px"></i>`; };
+// atlastaki bir görseli DOM'da göster. "i_g_" ile başlayanlar altın yıldızlı ürünlerdir: aynı görsel, üstünde yıldız.
+const spr = (k0, size = 40) => { const gold = k0.startsWith('i_g_'); const k = gold ? `i_${k0.slice(4)}` : k0; const a = A.atlas[k]; if (!a) return ''; const im = A[a[0]]; const s = size / Math.max(a[3], a[4]); const r = (v) => Math.round(v * 10) / 10;
+  return `<i class="sf-sp${gold ? ' gold' : ''}" style="width:${r(a[3] * s)}px;height:${r(a[4] * s)}px;background:url(/img/farm/${a[0]}.webp${AV}) ${r(-a[1] * s)}px ${r(-a[2] * s)}px/${r(im.width * s)}px ${r(im.height * s)}px"></i>`; };
+const WXI = { // hava durumu simgeleri
+  sun: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="#ffc933" stroke="#e09a12" stroke-width="1.4"/><g stroke="#ffb520" stroke-width="2" stroke-linecap="round"><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></g></svg>',
+  cloud: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="16" cy="9" r="3.6" fill="#ffc933"/><path d="M6.5 19a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.6 1.5A3.3 3.3 0 0 1 17 19z" fill="#fff" stroke="#9fb3c2" stroke-width="1.4"/></svg>',
+  rain: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 14.5a4 4 0 0 1-.4-8 5.5 5.5 0 0 1 10.6 1.5 3.3 3.3 0 0 1 .3 6.5z" fill="#e8eef4" stroke="#8aa0b4" stroke-width="1.4"/><g stroke="#3aa8ee" stroke-width="2" stroke-linecap="round"><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/></g></svg>',
+  hot: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="#ff8a2a" stroke="#e0541a" stroke-width="1.4"/><g stroke="#ff6a1a" stroke-width="2" stroke-linecap="round"><path d="M12 1.8v2.4M12 19.8v2.4M1.8 12h2.4M19.8 12h2.4M4.8 4.8l1.7 1.7M17.5 17.5l1.7 1.7M4.8 19.2l1.7-1.7M17.5 6.5l1.7-1.7"/></g></svg>',
+};
+const WXT = { sun: 'Güneşli bir gün. Ekinler normal hızında büyür.', cloud: 'Hava bulutlu. Ekinler normal hızında büyür.', rain: 'Yağmur yağıyor: şimdi ekilen ekinler %25 daha hızlı büyür, büyüyen ekinler kendiliğinden sulanır.', hot: 'Hava çok sıcak: şimdi ekilen ekinler susar. Sulamazsan %40 yavaş büyürler.' };
 
 export default async function farm(view, who) {
   useCss();
@@ -70,15 +90,19 @@ export default async function farm(view, who) {
   const tnow = () => Date.now() + skew;
   const inv = () => (visit ? F.myInv : F.inv) || {};
   const rushCost = (ms) => Math.min(cfg.RUSH_MAX, Math.max(1, Math.ceil(ms / (cfg.RUSH_MIN * 60000))));
-  const invN = () => Object.values(inv()).reduce((a, b) => a + b, 0);
   const hasAll = (items) => Object.entries(items).every(([k, n]) => (inv()[k] || 0) >= n);
-  const cropReady = (o, now) => !!o.crop && now - o.at >= cfg.CROPS[o.crop].t;
+  const cropT = (o) => cfg.CROPS[o.crop].t * (o.k || 1);
+  const cropReady = (o, now) => !!o.crop && now - o.at >= cropT(o);
+  const ik = (k) => `i_${k}`; // ürün görseli (altın ürünler "i_g_..." olarak yıldızlı gösterilir)
+  const iname = (k) => cfg.ITEMS[k]?.[0] || k;
 
   root.innerHTML = `<canvas class="sf-cv"></canvas>
     <div class="sf-top"><button class="sf-rb" data-a="back" aria-label="Geri">${icon('back')}</button>
-      ${visit ? `<div class="sf-who"><img src="${esc(visit.avatar)}" alt=""><span><b>${esc(visit.name || visit.username)}</b><small>Seviye ${F.lvl} çiftlik</small></span></div><span class="sf-grow"></span><div class="sf-pill"><i class="sf-dropi"></i><b class="sf-helps"></b></div><div class="sf-pill sf-coin">${spr('i_coin', 24)}<b></b></div><button class="sf-rb sf-sndb" data-a="snd" aria-label="Ses">${icon(muted ? 'mute' : 'volume')}</button>`
-    : `<div class="sf-lv"><span class="sf-star">${STAR}<b class="sf-lvn"></b></span><div class="sf-xp"><i></i><small></small></div></div><span class="sf-grow"></span>
-      <button class="sf-pill sf-jet" data-a="jet">${spr('i_jeton', 24)}<b></b></button><div class="sf-pill sf-coin">${spr('i_coin', 24)}<b></b></div><button class="sf-pill sf-barnp" data-a="barn">${spr('barn', 28)}<b></b></button><button class="sf-rb" data-a="set" aria-label="Ayarlar">${icon('settings')}</button>`}</div>
+      ${visit ? `<div class="sf-who"><img src="${esc(visit.avatar)}" alt=""><span><b>${esc(visit.name || visit.username)}</b><small>Seviye ${F.lvl} çiftlik</small></span></div><span class="sf-grow"></span><div class="sf-peers"></div><button class="sf-pill sf-wx" data-a="wx"></button><div class="sf-pill"><i class="sf-dropi"></i><b class="sf-helps"></b></div><div class="sf-pill sf-coin">${spr('i_coin', 24)}<b></b></div><button class="sf-rb sf-sndb" data-a="snd" aria-label="Ses">${icon(muted ? 'mute' : 'volume')}</button>`
+    : `<div class="sf-lv"><span class="sf-star">${STAR}<b class="sf-lvn"></b></span><div class="sf-xp"><i></i><small></small></div></div><span class="sf-grow"></span><div class="sf-peers"></div>
+      <button class="sf-pill sf-wx" data-a="wx"></button><button class="sf-pill sf-jet" data-a="jet">${spr('i_jeton', 24)}<b></b></button><div class="sf-pill sf-coin">${spr('i_coin', 24)}<b></b></div><button class="sf-pill sf-barnp" data-a="barn">${spr('barn', 28)}<b></b></button><button class="sf-rb" data-a="set" aria-label="Ayarlar">${icon('settings')}</button>`}</div>
+    <button class="sf-rb sf-emob" data-a="emo" aria-label="İfade gönder">${icon('smile')}</button><div class="sf-emos" hidden>${cfg.EMOTES.map((e, i) => `<button data-a="emote" data-i="${i}">${esc(e)}</button>`).join('')}</div>
+    <div class="sf-tut" hidden></div>
     ${visit ? `<div class="sf-side sf-sideL">
       <button data-a="vbook">${spr('i_book', 34)}<small>Defter</small></button>
       <button data-a="vpair" class="sf-vpair">${spr('i_heart', 30)}<small>Çift</small><em class="sf-badge" data-b="vpair" hidden>!</em></button>
@@ -160,8 +184,18 @@ export default async function farm(view, who) {
     amb = { night: h >= 12 ? ramp(h, 19, 21.5) : 1 - ramp(h, 5, 7), warm: h >= 12 ? ramp(h, 16.5, 19) * (1 - ramp(h, 19.5, 21.5)) : ramp(h, 5, 6.5) * (1 - ramp(h, 6.5, 8.5)), season: m === 11 || m < 2 ? 'winter' : m < 5 ? 'spring' : m < 8 ? '' : 'autumn' };
   }
   calcAmb();
-  let mode = null; // null | {k:'plant',crop} | {k:'place',t,id,x,y} | {k:'edit'}
-  const pops = new Map(); const pendH = new Set(); const pendP = new Map(); let fxs = []; let info = null; let bubbles = [];
+  let mode = null; // null | {k:'plant',crop} | {k:'tool',tool:'water'|'fert'} | {k:'place',t,id,x,y} | {k:'edit'}
+  const pops = new Map(); const pendH = new Set(); const pendP = new Map(); const pendW = new Set(); const pendF = new Set(); let fxs = []; let info = null; let bubbles = [];
+  const tutOn = () => !visit && F.tut != null && F.tut < cfg.TUT_N;
+  // kasaba ziyaretçileri: kapıdan girer, sipariş panosunun önünde bekler
+  const gate = [N / 2, N + 0.6];
+  const visSpot = (v, i) => { const b = F.objs.find((x) => x.t === 'board') || F.objs.find((x) => x.t === 'house'); const bx = b ? b.x + 0.5 : N / 2; const by = b ? b.y + 1.6 : N / 2;
+    const c = [[0.2, 0.3], [1.1, 0.1], [-0.6, 0.7], [0.6, 1.1]][(i + (v.sx || 0)) % 4]; let x = bx + c[0]; let y = by + c[1];
+    for (let k = 0; k < 6 && blocked(x, y); k++) { x += 0.5; y += 0.35; } return [Math.min(N - 0.4, Math.max(0.4, x)), Math.min(N - 0.4, Math.max(0.4, y))]; };
+  let npcHit = []; // ekrandaki ziyaretçiler (dokunma için)
+  // canlı ziyaret: aynı çiftlikteki diğer çiftçiler
+  const peers = new Map(); let meW = null; let myEmo = null; // meW: ziyaretteyken kendi çiftçin, myEmo: kendi çiftliğindeyken gönderdiğin ifade
+  if (visit) { meW = { id: 'me', x: gate[0], y: N - 0.4, tx: man.x + 0.9, ty: man.y + 0.4, walk: true, fit: F.myFit || 'a', user: state.me || {} }; if (blocked(meW.tx, meW.ty)) { meW.tx = gate[0]; meW.ty = N - 1.6; } }
   const pat = g.createPattern(A.grass, 'repeat');
   const free = (t, x, y, skip) => { const Ty = cfg.TYPES[t]; if (x < 0 || y < 0 || x + Ty.w > N || y + Ty.h > N) return false;
     return !F.objs.some((o) => o.id !== skip && x < o.x + cfg.TYPES[o.t].w && o.x < x + Ty.w && y < o.y + cfg.TYPES[o.t].h && o.y < y + Ty.h); };
@@ -172,7 +206,14 @@ export default async function farm(view, who) {
     g.drawImage(A[a[0]], a[1], a[2], a[3], a[4], sx - a[5] * z * kx, sy - a[6] * z * ky, a[3] * z * kx, a[4] * z * ky);
     if (alpha !== 1) g.globalAlpha = 1;
   }
-  function ico(k, x, y, s, alpha = 1) { const a = A.atlas[k]; if (!a) return; const f = s / Math.max(a[3], a[4]); g.globalAlpha = alpha; g.drawImage(A[a[0]], a[1], a[2], a[3], a[4], x - (a[3] * f) / 2, y - (a[4] * f) / 2, a[3] * f, a[4] * f); g.globalAlpha = 1; }
+  function ico(k0, x, y, s, alpha = 1) { const gold = k0.startsWith('i_g_'); const k = gold ? `i_${k0.slice(4)}` : k0; const a = A.atlas[k]; if (!a) return; const f = s / Math.max(a[3], a[4]); g.globalAlpha = alpha; g.drawImage(A[a[0]], a[1], a[2], a[3], a[4], x - (a[3] * f) / 2, y - (a[4] * f) / 2, a[3] * f, a[4] * f); g.globalAlpha = 1;
+    if (gold) { g.globalAlpha = alpha; star(x + s * 0.34, y - s * 0.32, s * 0.24); g.globalAlpha = 1; } }
+  // canlı ziyaret: çiftçinin üstünde ifade balonu
+  function emoteAt(p, sx, sy) { if (!p.emo || T - p.emoT > 3200) return; const txt = cfg.EMOTES[p.emo - 1]; if (!txt) return; const k = Math.min(1, (T - p.emoT) / 160); const fade = T - p.emoT > 2700 ? 1 - (T - p.emoT - 2700) / 500 : 1;
+    g.save(); g.globalAlpha = Math.max(0, fade); const big = [...txt].length <= 2; g.font = big ? '26px system-ui, sans-serif' : '800 13px "Bricolage Grotesque", system-ui, sans-serif'; const w = Math.max(38, g.measureText(txt).width + 22); const h = big ? 38 : 30; const y = sy - h / 2 - (1 - k) * 8;
+    g.fillStyle = '#fffdf3'; g.shadowColor = 'rgba(40,25,10,.3)'; g.shadowBlur = 8; g.beginPath(); if (g.roundRect) g.roundRect(sx - w / 2, y - h / 2, w, h, h / 2); else g.rect(sx - w / 2, y - h / 2, w, h); g.fill(); g.shadowBlur = 0; g.beginPath(); g.moveTo(sx - 6, y + h / 2 - 1); g.lineTo(sx, y + h / 2 + 7); g.lineTo(sx + 6, y + h / 2 - 1); g.fill();
+    g.fillStyle = '#3a220c'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, sx, y + 1); g.restore(); }
+  function walkTo(w, dt, v) { if (!w.walk) return; const dx = w.tx - w.x; const dy = w.ty - w.y; const d = Math.hypot(dx, dy); const st = dt * v; if (d <= st) { w.x = w.tx; w.y = w.ty; w.walk = false; } else { w.x += (dx / d) * st; w.y += (dy / d) * st; } }
   function drop(x, y, r) { g.save(); g.fillStyle = '#3aa8ee'; g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y - r * 1.5); g.bezierCurveTo(x + r * 1.3, y, x + r, y + r, x, y + r); g.bezierCurveTo(x - r, y + r, x - r * 1.3, y, x, y - r * 1.5); g.fill(); g.stroke(); g.fillStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.arc(x - r * 0.3, y + r * 0.2, r * 0.22, 0, 7); g.fill(); g.restore(); }
   function star(x, y, r) { g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5; const rr = i % 2 ? r * 0.46 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fillStyle = '#ffd23f'; g.strokeStyle = '#b97a0c'; g.lineWidth = 1.5; g.lineJoin = 'round'; g.stroke(); g.fill(); }
   function label(txt, x, y, size = 13, fill = '#fff') { g.font = `800 ${size}px "Bricolage Grotesque", system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.strokeStyle = 'rgba(58,34,12,.9)'; g.lineWidth = size * 0.3; g.strokeText(txt, x, y); g.fillStyle = fill; g.fillText(txt, x, y); }
@@ -182,6 +223,7 @@ export default async function farm(view, who) {
     g.beginPath(); g.arc(sx, y, r, 0, 7); g.fill(); g.beginPath(); g.moveTo(sx - s * 0.2, y + s * 0.5); g.lineTo(sx, y + s * 0.9); g.lineTo(sx + s * 0.2, y + s * 0.5); g.fill(); g.restore();
     if (o.p != null) { g.lineWidth = 3.5; g.lineCap = 'round'; g.strokeStyle = '#eadfc6'; g.beginPath(); g.arc(sx, y, r - 2.5, 0, 7); g.stroke(); g.strokeStyle = '#62b63f'; g.beginPath(); g.arc(sx, y, r - 2.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, Math.max(0.02, o.p))); g.stroke(); }
     if (k === 'drop') drop(sx, y, s * 0.26); else if (o.text) label(o.text, sx, y + 1, s * 0.5, '#fff'); else ico(k, sx, y, s * 0.8, o.dim ? 0.5 : 1);
+    if (o.cnt > 1) label(`×${o.cnt}`, sx + r * 0.75, y + r * 0.62, s * 0.36, '#fff');
   }
   function diamond(x0, y0, x1, y1) { g.beginPath(); [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].forEach(([a, b], i) => { const [sx, sy] = toScr(a, b); if (i) g.lineTo(sx, sy); else g.moveTo(sx, sy); }); g.closePath(); }
 
@@ -193,11 +235,16 @@ export default async function farm(view, who) {
     if (pop != null) { const p = (T - pop) / 340; if (p >= 1) pops.delete(o.id); else k = 1 + 0.17 * Math.sin(p * Math.PI) * (1 - p * 0.4); }
     if (Ty.kind === 'plot') {
       const crop = pendH.has(o.id) ? null : pendP.get(o.id) || o.crop; let key = 'plot'; let ready = false;
-      if (crop) { const p = pendP.has(o.id) ? 0 : (now - o.at) / cfg.CROPS[crop].t; ready = p >= 1; key = ready ? `${crop}_3` : p >= 0.4 ? `${crop}_2` : 'sprout'; }
+      if (crop) { const p = pendP.has(o.id) ? 0 : (now - o.at) / (pendP.has(o.id) ? 1 : cropT(o)); ready = p >= 1; key = ready ? `${crop}_3` : p >= 0.4 ? `${crop}_2` : 'sprout'; }
+      if (tutOn() && ((F.tut === 0 && ready) || (F.tut === 1 && !crop))) { const pu = 0.5 + 0.5 * Math.sin(T / 260); diamond(o.x + 0.06, o.y + 0.06, o.x + 0.94, o.y + 0.94); g.strokeStyle = `rgba(255,236,120,${0.5 + pu * 0.5})`; g.lineWidth = 3 + pu * 2; g.stroke(); }
       sp(key, sx, sy, k, k * (ready ? 1 + Math.sin(T / 420 + o.x * 1.7 + o.y) * 0.03 : 1));
-      if (crop && !ready && o.h) drop(sx + 62 * z, sy - 34 * z, 4 + 4 * z);
-      if (visit && crop && !ready && !o.h && F.helpsLeft > 0) bubbles.push([sx, sy - 46 * z, 'drop', {}]);
-      if (info && info.id === o.id && crop && !ready) bubbles.push([sx, sy - 60 * z, null, { info: `${cfg.CROPS[crop].name} · ${fmt(cfg.CROPS[crop].t - (now - o.at))}` }]);
+      const grow = crop && !ready && !pendP.has(o.id);
+      if (grow && (o.h || o.w || pendW.has(o.id)) && !o.dry) drop(sx + 62 * z, sy - 34 * z, 4 + 4 * z);
+      if (grow && (o.f || pendF.has(o.id))) { const tw = 0.6 + 0.4 * Math.sin(T / 300 + o.x); g.globalAlpha = tw; star(sx - 58 * z, sy - 30 * z, 5 + 5 * z); g.globalAlpha = 1; }
+      if (ready && o.f) { const tw = 0.6 + 0.4 * Math.sin(T / 240 + o.y); g.globalAlpha = tw; star(sx + 40 * z, sy - 70 * z, 6 + 6 * z); g.globalAlpha = 1; }
+      if (visit && grow && !o.h && F.helpsLeft > 0) bubbles.push([sx, sy - 46 * z, 'drop', { bg: o.dry ? '#ffe2c8' : undefined }]);
+      else if (!visit && grow && o.dry && !pendW.has(o.id)) bubbles.push([sx, sy - 46 * z, 'drop', { bg: '#ffe2c8' }]);
+      if (info && info.id === o.id && grow) bubbles.push([sx, sy - 60 * z, null, { info: `${cfg.CROPS[crop].name} · ${fmt(cropT(o) - (now - o.at))}${o.dry ? ' · susuz' : ''}` }]);
       return;
     }
     sp(o.t, sx, sy, k);
@@ -221,7 +268,12 @@ export default async function farm(view, who) {
 
   let raf = 0; let last = 0;
   function frame(ts) {
-    raf = requestAnimationFrame(frame); if (ts - last < 30 || !W) return; { const dt = Math.min(120, ts - last); stepW(man, dt, 0.0011); if (F.pet) stepW(petW, dt, 0.0017); } last = ts; T = ts; const now = tnow(); const z = cam.z;
+    raf = requestAnimationFrame(frame); if (ts - last < 30 || !W) return;
+    { const dt = Math.min(120, ts - last); const op = visit ? [...peers.values()].find((p) => p.owner) : null;
+      if (op) { man.x += (op.x - man.x) * Math.min(1, dt / 400); man.y += (op.y - man.y) * Math.min(1, dt / 400); man.go = Math.hypot(op.x - man.x, op.y - man.y) > 0.05; } else stepW(man, dt, 0.0011);
+      if (F.pet) stepW(petW, dt, 0.0017); if (meW) walkTo(meW, dt, 0.0016);
+      for (const p of peers.values()) { if (p.owner && visit) continue; const d = Math.hypot(p.x - p.dx, p.y - p.dy); p.go = d > 0.05; const s = Math.min(1, dt / 350); p.dx += (p.x - p.dx) * s; p.dy += (p.y - p.dy) * s; } }
+    last = ts; T = ts; const now = tnow(); const z = cam.z;
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.imageSmoothingQuality = 'high';
     const [ox, oy] = toScr(0, 0); const c = (6 / 512) * z;
     pat.setTransform(new DOMMatrix([HW * c, HH * c, -HW * c, HH * c, ox, oy])); g.fillStyle = pat; g.fillRect(0, 0, W, H);
@@ -229,12 +281,21 @@ export default async function farm(view, who) {
     if (amb.season === 'winter') { g.fillStyle = 'rgba(238,246,255,.34)'; g.fillRect(0, 0, W, H); } else if (amb.season === 'autumn') { g.fillStyle = 'rgba(204,132,36,.14)'; g.fillRect(0, 0, W, H); }
     diamond(0, 0, N, N); g.fillStyle = 'rgba(255,248,190,.07)'; g.fill();
     if (mode?.k === 'place' || mode?.k === 'edit') { g.strokeStyle = 'rgba(255,255,255,.2)'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i <= N; i++) { let [a, b] = toScr(i, 0); g.moveTo(a, b); [a, b] = toScr(i, N); g.lineTo(a, b); [a, b] = toScr(0, i); g.moveTo(a, b); [a, b] = toScr(N, i); g.lineTo(a, b); } g.stroke(); }
-    bubbles = []; lights = [];
+    bubbles = []; lights = []; npcHit = [];
     const list = [[man.x + man.y, 'man', null]]; if (F.pet) list.push([petW.x + petW.y, 'pet', null]);
     for (const r of ring) list.push([r.gx + r.gy, r, null]);
     for (const o of F.objs) { const Ty = cfg.TYPES[o.t]; list.push([o.x + o.y + (Ty.w + Ty.h) / 2, null, o]); }
+    (F.vis || []).forEach((v, i) => { if (v.until <= now) return; const [x, y] = visSpot(v, i); const p = Math.min(1, Math.max(0, (now - v.at) / 5000)); const e = 1 - (1 - p) ** 2;
+      const vx = gate[0] + (x - gate[0]) * e; const vy = gate[1] + (y - gate[1]) * e; list.push([vx + vy, { npc: v, x: vx, y: vy, walking: p < 1 }, null]); });
+    for (const p of peers.values()) { if (p.owner && visit) continue; list.push([p.dx + p.dy, { peer: p }, null]); }
+    if (meW) list.push([meW.x + meW.y, { peer: meW }, null]);
     list.sort((p, q) => p[0] - q[0]);
-    for (const [, r, o] of list) { if (o) drawObj(o, now); else if (r === 'man') { const [sx, sy] = toScr(man.x, man.y); sp(F.fit && F.fit !== 'a' ? `farmer_${F.fit}` : 'farmer', sx, sy - (man.go ? Math.abs(Math.sin(T / 110)) * 5 * z : 0)); }
+    for (const [, r, o] of list) { if (o) drawObj(o, now); else if (r === 'man') { const [sx, sy] = toScr(man.x, man.y); sp(F.fit && F.fit !== 'a' ? `farmer_${F.fit}` : 'farmer', sx, sy - (man.go ? Math.abs(Math.sin(T / 110)) * 5 * z : 0)); man.sx = sx; man.sy = sy;
+        const op = [...peers.values()].find((p) => p.owner); if (visit && op) { label(op.user.name || op.user.username, sx, sy - 128 * z - 8, 12); emoteAt(op, sx, sy - 128 * z - 28); } else if (!visit && myEmo) emoteAt(myEmo, sx, sy - 128 * z - 14); }
+      else if (r.npc) { const v = r.npc; const [sx, sy] = toScr(r.x, r.y); sp(v.look, sx, sy - (r.walking ? Math.abs(Math.sin(T / 120)) * 5 * z : Math.abs(Math.sin(T / 900 + v.sx)) * 1.5 * z)); npcHit.push([sx, sy - 50 * z, v]);
+        if (!r.walking) { const enough = (inv()[v.k] || 0) >= v.n; bubbles.push([sx, sy - 118 * z, ik(v.k), { dim: !visit && !enough, cnt: v.n, gold: v.k.startsWith('g_') }]); } }
+      else if (r.peer) { const p = r.peer; const x = p === meW ? p.x : p.dx; const y = p === meW ? p.y : p.dy; const [sx, sy] = toScr(x, y); sp(p.fit && p.fit !== 'a' ? `farmer_${p.fit}` : 'farmer', sx, sy - ((p.go || p.walk) ? Math.abs(Math.sin(T / 110)) * 5 * z : 0));
+        label(p === meW ? 'Sen' : (p.user.name || p.user.username), sx, sy - 128 * z - 8, 12, p === meW ? '#ffe98a' : '#fff'); emoteAt(p, sx, sy - 128 * z - 28); }
       else if (r === 'pet') { const [sx, sy] = toScr(petW.x, petW.y); sp(F.pet.t, sx, sy - (petW.go ? Math.abs(Math.sin(T / 80)) * 4 * z : 0)); petW.sx = sx; petW.sy = sy - 30 * z;
         if (!visit && (!F.pet.fed || now - F.pet.fed >= cfg.PET_T)) bubbles.push([sx, sy - 62 * z, F.pet.fed ? 'i_gift' : `i_${cfg.PETS[F.pet.t].food[0]}`, {}]); } else { const [sx, sy] = toScr(r.gx, r.gy); if (sx > -200 && sx < W + 200 && sy > -80 && sy < H + 200) sp(r.k, sx, sy); } }
     if (mode?.k === 'place') { // yerleştirilen şey: yeşil/kırmızı zemin + yarı saydam görsel
@@ -249,6 +310,11 @@ export default async function farm(view, who) {
     if (amb.season) { const win = amb.season === 'winter'; const n = win ? 46 : 16; // kar, yaprak ya da çiçek yaprağı
       for (let i = 0; i < n; i++) { const v = 0.5 + rnd(i, 3); const x = (((rnd(i, 1) * W + T * 0.012 * v + Math.sin(T / 900 + i) * 14) % W) + W) % W; const y = (rnd(i, 2) * H + T * (win ? 0.035 : 0.05) * v) % H;
         if (win) { g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(x, y, 1.4 + rnd(i, 4) * 1.8, 0, 7); g.fill(); } else { g.save(); g.translate(x, y); g.rotate(T / 500 + i); g.fillStyle = amb.season === 'spring' ? 'rgba(255,170,200,.9)' : ['#e8892b', '#d4572a', '#e9b23a'][i % 3]; g.beginPath(); g.ellipse(0, 0, 5, 2.6, 0, 0, 7); g.fill(); g.restore(); } } }
+    const wx = F.wx?.k; // hava durumu: yağmur çizgileri, bulut gölgesi, sıcak hava
+    if (wx === 'rain') { g.fillStyle = 'rgba(40,70,110,.16)'; g.fillRect(0, 0, W, H); g.strokeStyle = 'rgba(210,230,255,.55)'; g.lineWidth = 1.3; g.beginPath();
+      for (let i = 0; i < 90; i++) { const v = 0.7 + rnd(i, 7) * 0.6; const x = ((rnd(i, 5) * W - T * 0.12 * v) % W + W) % W; const y = (rnd(i, 6) * H + T * 0.9 * v) % (H + 40) - 20; g.moveTo(x, y); g.lineTo(x - 4, y + 14); } g.stroke(); }
+    else if (wx === 'cloud') { g.fillStyle = 'rgba(70,85,100,.1)'; g.fillRect(0, 0, W, H); for (let i = 0; i < 3; i++) { const x = ((rnd(i, 9) * W + T * 0.012) % (W + 600)) - 300; const y = rnd(i, 8) * H; const gr = g.createRadialGradient(x, y, 0, x, y, 260); gr.addColorStop(0, 'rgba(30,45,60,.16)'); gr.addColorStop(1, 'rgba(30,45,60,0)'); g.fillStyle = gr; g.fillRect(x - 260, y - 260, 520, 520); } }
+    else if (wx === 'hot') { const pu = 0.5 + 0.5 * Math.sin(T / 1400); g.fillStyle = `rgba(255,150,40,${0.08 + pu * 0.05})`; g.fillRect(0, 0, W, H); const gr = g.createRadialGradient(W * 0.9, -40, 0, W * 0.9, -40, H * 0.9); gr.addColorStop(0, 'rgba(255,230,140,.35)'); gr.addColorStop(1, 'rgba(255,230,140,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
     for (const [sx, sy, k, o] of bubbles) {
       if (o.info) { g.font = '800 12px "Bricolage Grotesque", system-ui, sans-serif'; const w = g.measureText(o.info).width + 18; g.fillStyle = 'rgba(58,34,12,.88)'; g.beginPath(); g.arc(sx - w / 2 + 12, sy - 12, 12, Math.PI / 2, Math.PI * 1.5); g.arc(sx + w / 2 - 12, sy - 12, 12, -Math.PI / 2, Math.PI / 2); g.closePath(); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(o.info, sx, sy - 11.5); } else bubble(sx, sy, k, o);
     }
@@ -278,30 +344,68 @@ export default async function farm(view, who) {
   const act = (a, body = {}) => (chain = chain.then(async () => {
     try {
       const r = await api('/farm/act', { body: { a, ...body } }); apply(r);
-      if (a === 'take' || a === 'collect' || a === 'pick') SFX.take(); else if (a === 'buy' || a === 'move' || a === 'feed' || a === 'craft' || a === 'animal') SFX.plant();
+      if (a === 'take' || a === 'collect' || a === 'pick' || a === 'collectAll') SFX.take(); else if (a === 'buy' || a === 'move' || a === 'feed' || a === 'craft' || a === 'animal' || a === 'plantAll' || a === 'fert') SFX.plant(); else if (a === 'water') SFX.water();
+      if (a === 'harvest' || a === 'collectAll') tutEv('harvest'); if (a === 'plant' || a === 'plantAll') tutEv('plant');
+      if (r.served) toast(`${r.served.who} ${r.served.fast ? 'çok memnun kaldı' : 'memnun kaldı'}: ${r.served.coins} altın + ${r.served.tip} bahşiş${r.served.seed ? `, üstelik ${iname(`s_${r.served.seed}`).toLocaleLowerCase('tr-TR')} hediye etti` : ''}.`);
+      if (r.collected?.full) toast('Bazı ürünler depoya sığmadı. Depolarını büyütebilirsin.');
       return r;
     } catch (e) { if (e.data?.farm) apply({ farm: e.data.farm }); SFX.err(); toast(e.message); return null; }
   }));
   const vcall = (path, body, after) => (chain = chain.then(() => api(`/farm/of/${visit.id}/${path}`, { body }).then((r) => { apply(r); after?.(r); }).catch((e) => { SFX.err(); toast(e.message); })));
-  const reload = async () => { if (visit) return; try { const r = await api('/farm'); apply({ farm: r.farm }); } catch { /* sonraki denemede */ } };
+  const reload = async () => { try { const r = await api(visit ? `/farm/of/${encodeURIComponent(visit.id)}` : '/farm'); apply({ farm: r.farm }); } catch { /* sonraki denemede */ } };
+  // ---------- canlı ziyaret ----------
+  const sock = state.socket; const owner = visit ? visit.id : state.me?.id;
+  const addPeer = (p) => { const old = peers.get(p.id); peers.set(p.id, { ...p, dx: old?.dx ?? p.x, dy: old?.dy ?? p.y }); };
+  const LV = {
+    'farm:peers': (list) => { peers.clear(); (list || []).forEach(addPeer); const o = (list || []).find((p) => p.owner); if (visit && o) toast(`${o.user.name || o.user.username} şu an çiftliğinde. El sallayabilirsin.`); paintPeers(); },
+    'farm:peer': (p) => { const was = peers.has(p.id); addPeer(p); paintPeers(); if (was) return; SFX.pop(2);
+      toast(visit ? (p.owner ? `${p.user.name || p.user.username} çiftliğine geldi.` : `${p.user.name || p.user.username} de bu çiftliği geziyor.`) : `${p.user.name || p.user.username} çiftliğine geldi. El salla!`); },
+    'farm:pos': ({ id, x, y }) => { const p = peers.get(id); if (p) { p.x = x; p.y = y; } },
+    'farm:emote': ({ id, e }) => { const p = peers.get(id); if (!p) return; p.emo = e + 1; p.emoT = T; SFX.pop(3); },
+    'farm:gone': ({ id }) => { peers.delete(id); paintPeers(); },
+  };
+  const joinLive = () => { const w = meW || man; sock?.emit('farm:join', { owner, x: w.x, y: w.y }); };
+  if (sock && owner) { Object.entries(LV).forEach(([ev, fn]) => sock.on(ev, fn)); sock.on('connect', joinLive); joinLive(); }
+  let lastSent = '';
+  const posT = setInterval(() => { const w = meW || man; const k = `${w.x.toFixed(2)},${w.y.toFixed(2)}`; if (sock?.connected && k !== lastSent) { lastSent = k; sock.emit('farm:pos', { x: w.x, y: w.y }); } }, 450);
+  const unLive = () => { clearInterval(posT); if (!sock) return; Object.entries(LV).forEach(([ev, fn]) => sock.off(ev, fn)); sock.off('connect', joinLive); sock.emit('farm:leave'); };
 
   // ---------- üst bilgi ----------
   const badge = (k, v) => { const b = root.querySelector(`[data-b="${k}"]`); if (!b) return; b.hidden = !v; if (typeof v === 'number') b.textContent = v; };
+  let wxKey = '';
   function hud() {
+    const w = F.wx; if (w) { const k = `${w.k}${fmt(w.until - tnow())}`; if (k !== wxKey) { wxKey = k; const el = root.querySelector('.sf-wx'); el.innerHTML = `${WXI[w.k]}<b>${esc(cfg.WX[w.k])}</b>`; el.className = `sf-pill sf-wx ${w.k}`; el.title = `${cfg.WX[w.k]} · ${fmt(w.until - tnow())} sonra ${cfg.WX[w.next].toLocaleLowerCase('tr-TR')}`; } }
+    paintPeers();
     if (visit) { root.querySelector('.sf-helps').textContent = `${F.helpsLeft}/${cfg.HELPS}`; root.querySelector('.sf-coin b').textContent = (F.myCoins || 0).toLocaleString('tr-TR'); badge('vstall', (F.stall || []).length); root.querySelector('.sf-vcoop').hidden = !F.canCoop;
       root.querySelector('.sf-vpair').hidden = !F.pair; badge('vpair', !!F.pair && !F.pair.me); root.querySelector('.sf-vboat').hidden = !F.boat || !!F.boat.sent; badge('vboat', F.boat ? F.boat.crates.filter((c) => !c.done).length : 0); return; }
     root.querySelector('.sf-lvn').textContent = F.lvl; root.querySelector('.sf-xp i').style.width = `${Math.min(100, (F.xp / F.need) * 100)}%`; root.querySelector('.sf-xp small').textContent = `${F.xp}/${F.need}`;
     root.querySelector('.sf-coin b').textContent = F.coins.toLocaleString('tr-TR'); root.querySelector('.sf-jet b').textContent = (F.jeton || 0).toLocaleString('tr-TR');
-    const n = invN(); const bp = root.querySelector('.sf-barnp'); bp.querySelector('b').textContent = `${n}/${F.cap}`; bp.classList.toggle('full', n >= F.cap - 1);
-    badge('orders', F.orders.filter((x) => !x.wait && hasAll(x.need)).length);
+    const B = F.stores?.barn || { used: 0, cap: F.cap }; const full = Object.values(F.stores || {}).some((s) => s && s.used >= s.cap - 1);
+    const bp = root.querySelector('.sf-barnp'); bp.querySelector('b').textContent = `${B.used}/${B.cap}`; bp.classList.toggle('full', full);
+    badge('orders', F.orders.filter((x) => !x.wait && hasAll(x.need)).length + (F.vis || []).filter((v) => v.until > tnow() && hasAll({ [v.k]: v.n })).length);
     const qd = F.quests.list.every((x) => x.got >= x.n) && !F.quests.claimed; const ev = F.event && F.event.steps.some((x) => !x.got && F.event.pts >= x.pts);
     badge('hubG', qd || !!F.daily?.can || F.wheel.n === 0 || F.ach.some((x) => x.got >= x.n && !x.claimed) || !!ev);
     badge('hubS', !!F.coop && Object.entries(F.coop.need).some(([k, v]) => (F.coop.got[k] || 0) < v && inv()[k] > 0));
     root.querySelector('.sf-boatb').hidden = !F.boat; badge('boat', !!F.boat && !F.boat.sent && F.boat.crates.every((c) => c.done));
   }
+  let peersKey = '';
+  function paintPeers() { // üst çubukta şu an çiftlikte olanlar
+    const list = [...peers.values()].filter((p) => !p.owner || visit); const eb = root.querySelector('.sf-emob'); if (eb) eb.hidden = !visit && !list.length;
+    const k = list.map((p) => p.id).join(); if (k === peersKey) return; peersKey = k;
+    const el = root.querySelector('.sf-peers'); if (!el) return;
+    el.innerHTML = list.length ? `${list.slice(0, 4).map((p) => `<img src="${esc(p.user.avatar)}" alt="" title="${esc(p.user.name || p.user.username)}${p.owner ? ' · çiftliğin sahibi' : ''}" class="${p.owner ? 'own' : ''}">`).join('')}${list.length > 4 ? `<b>+${list.length - 4}</b>` : ''}<small>burada</small>` : '';
+  }
+  // bekleyen işler: "Hepsini topla" düğmesi için
+  function readyCount(now) {
+    let n = 0;
+    for (const o of F.objs) { if (o.t === 'plot' && cropReady(o, now)) n++; else if (cfg.PROD[o.t] && now - (o.at || 0) >= cfg.PROD[o.t].t) n++; }
+    Object.entries(cfg.PENS).forEach(([p, P]) => { (F.pens[p] || []).forEach((a) => { if (a.at && now - a.at >= P.t) n++; }); });
+    Object.values(F.q || {}).forEach((q) => { q.forEach((x) => { if (x.end <= now) n++; }); });
+    return n;
+  }
   function hintText() {
-    if (visit) return F.helpsLeft > 0 ? 'Büyüyen ekinlere dokunup sula. Sen de altın ve deneyim kazanırsın.' : 'Bugünlük yardım hakkın bitti. Yarın yine uğra.';
-    if (F.lvl > 3) return ''; const now = tnow(); const plots = F.objs.filter((o) => o.t === 'plot');
+    if (visit) return F.helpsLeft > 0 ? 'Büyüyen ekinlere dokunup sula. Boş bir yere dokunursan çiftçin oraya yürür.' : 'Bugünlük yardım hakkın bitti. Boş bir yere dokunursan çiftçin oraya yürür.';
+    if (F.lvl > 3 || tutOn()) return ''; const now = tnow(); const plots = F.objs.filter((o) => o.t === 'plot');
     if (plots.some((o) => cropReady(o, now))) return 'Olgun ekinlerin üzerinde parmağını kaydır, hasat et.';
     if (plots.some((o) => !o.crop)) return 'Boş tarlaya dokun, ekin seç ve kaydırarak ek.';
     if (F.orders.some((o) => !o.wait && hasAll(o.need))) return 'Hazır siparişin var. Sipariş panosuna dokun.';
@@ -310,50 +414,81 @@ export default async function farm(view, who) {
   let botKey = '';
   function paintBot() {
     let html = ''; let key = '';
-    if (mode?.k === 'plant') {
-      key = `p${mode.crop}${F.lvl}${F.coins}`;
-      html = `<div class="sf-seeds"><div class="sf-sh"><span>Ekin seç, sonra boş tarlaların üzerinde parmağını kaydır</span><button class="sf-x" data-a="mode0" aria-label="Kapat">${icon('close')}</button></div><div class="sf-sl">${Object.entries(cfg.CROPS).map(([k, c]) => {
-        const lock = c.lvl > F.lvl; return `<button class="sf-seed ${mode.crop === k ? 'on' : ''} ${lock ? 'lock' : ''}" data-a="seed" data-k="${k}" ${lock ? 'disabled' : ''}>${spr(`i_${k}`, 40)}<b>${esc(c.name)}</b><small>${lock ? `Seviye ${c.lvl}` : `${fmt(c.t)}${c.seed ? ` · ${c.seed} altın` : ''}`}</small></button>`; }).join('')}</div></div>`;
+    if (mode?.k === 'plant' || mode?.k === 'tool') {
+      const fert = inv().fert || 0; const tool = mode.k === 'tool' ? mode.tool : null;
+      key = `p${mode.crop}${tool}${F.lvl}${F.coins}${fert}${cfg.RARE.map((k) => inv()[`s_${k}`] || 0).join()}${F.wx?.k}`;
+      const wxk = F.wx?.k; const wxn = wxk === 'rain' ? ' · yağmur: %25 hızlı' : wxk === 'hot' ? ' · sıcak: sulamayı unutma' : '';
+      html = `<div class="sf-seeds"><div class="sf-sh"><span>${tool === 'water' ? 'Büyüyen ekinlerin üzerinde parmağını kaydır, sula' : tool === 'fert' ? 'Büyüyen ekinlere gübre ver: altın yıldızlı çıkarlar' : `Ekin seç, sonra boş tarlaların üzerinde parmağını kaydır${wxn}`}</span><button class="sf-x" data-a="mode0" aria-label="Kapat">${icon('close')}</button></div><div class="sf-sl">
+        <button class="sf-seed tool ${tool === 'water' ? 'on' : ''}" data-a="tool" data-k="water">${spr('i_can', 40)}<b>Sula</b><small>Altın ürün şansı</small></button>
+        <button class="sf-seed tool ${tool === 'fert' ? 'on' : ''} ${fert ? '' : 'lock'}" data-a="tool" data-k="fert">${spr('i_fert', 40)}<b>Gübre</b><small>${fert ? `${fert} torba` : 'Kompostta üret'}</small></button>
+        ${Object.entries(cfg.CROPS).map(([k, c]) => {
+        const lock = c.lvl > F.lvl; const sn = c.rare ? inv()[`s_${k}`] || 0 : 0; const dis = lock || (c.rare && !sn);
+        return `<button class="sf-seed ${mode.crop === k && !tool ? 'on' : ''} ${dis ? 'lock' : ''} ${c.rare ? 'rare' : ''}" data-a="seed" data-k="${k}" ${dis ? 'disabled' : ''}>${spr(`i_${k}`, 40)}<b>${esc(c.name)}</b><small>${lock ? `Seviye ${c.lvl}` : c.rare ? (sn ? `${fmt(c.t)} · ${sn} tohum` : 'Tohum yok · takas et') : `${fmt(c.t)}${c.seed ? ` · ${c.seed} altın` : ''}`}</small></button>`; }).join('')}</div></div>`;
     } else if (mode?.k === 'place') {
       const Ty = cfg.TYPES[mode.t]; const canRm = mode.id && (Ty.kind === 'decor' || Ty.kind === 'plot' || Ty.kind === 'prod'); key = `l${mode.t}${mode.id || ''}`;
       html = `<div class="sf-place"><button class="sf-btn ghost" data-a="placeNo">Vazgeç</button><span class="sf-pl">${esc(Ty.name)}${mode.id ? '' : mode.stock ? '<small>Koleksiyondan</small>' : Ty.gem ? `<small>${spr('i_jeton', 14)} ${Ty.gem} jeton</small>` : `<small>${spr('i_coin', 14)} ${Ty.cost}</small>`}<em>Sürükleyerek yerini seç</em></span>${canRm ? `<button class="sf-btn red" data-a="placeRm">Kaldır</button>` : ''}<button class="sf-btn" data-a="placeOk">${mode.id ? 'Taşı' : 'Yerleştir'}</button></div>`;
     } else if (mode?.k === 'edit') { key = 'e'; html = `<div class="sf-place"><span class="sf-pl">Düzenleme modu<em>Taşımak ya da kaldırmak için bir şeye dokun</em></span><button class="sf-btn" data-a="mode0">Bitti</button></div>`;
     } else {
-      const o = !visit && info ? F.objs.find((x) => x.id === info.id && x.t === 'plot' && x.crop) : null; const left = o ? cfg.CROPS[o.crop].t - (tnow() - o.at) : 0;
-      if (o && left > 0) { key = `r${o.id}${fmt(left)}`; html = `<div class="sf-place"><span class="sf-pl">${esc(cfg.CROPS[o.crop].name)}<em>${fmt(left)} sonra olgunlaşır</em></span><button class="sf-btn sm violet" data-a="rush" data-id="${o.id}">Hızlandır · ${spr('i_jeton', 16)} ${rushCost(left)}</button></div>`; }
-      else { const h = hintText(); key = `h${h}`; html = h ? `<div class="sf-hint">${esc(h)}</div>` : ''; }
+      const o = !visit && info ? F.objs.find((x) => x.id === info.id && x.t === 'plot' && x.crop) : null; const left = o ? cropT(o) - (tnow() - o.at) : 0;
+      if (o && left > 0) { const fert = inv().fert || 0; key = `r${o.id}${fmt(left)}${o.w}${o.f}${fert}`;
+        html = `<div class="sf-place"><span class="sf-pl">${esc(cfg.CROPS[o.crop].name)}<em>${fmt(left)} sonra olgunlaşır${o.dry ? ' · susuz, sula' : o.f ? ' · gübreli: altın çıkacak' : o.w ? ' · sulandı' : ''}</em></span>
+          ${o.w ? '' : `<button class="sf-btn sm" data-a="water1" data-id="${o.id}">${spr('i_can', 18)} Sula</button>`}${o.f || !fert ? '' : `<button class="sf-btn sm gold" data-a="fert1" data-id="${o.id}">${spr('i_fert', 18)} Gübrele</button>`}
+          <button class="sf-btn sm violet" data-a="rush" data-id="${o.id}">Hızlandır · ${spr('i_jeton', 16)} ${rushCost(left)}</button></div>`; }
+      else {
+        const h = hintText(); const now = tnow(); const rc = visit || tutOn() ? 0 : readyCount(now); const empty = visit ? 0 : F.objs.filter((x) => x.t === 'plot' && !x.crop).length;
+        const dry = visit ? 0 : F.objs.filter((x) => x.t === 'plot' && x.dry && !cropReady(x, now)).length;
+        let crop = 'wheat'; try { const c = localStorage.getItem('sf_crop'); if (cfg.CROPS[c] && cfg.CROPS[c].lvl <= F.lvl && !cfg.CROPS[c].rare) crop = c; } catch { /* yok say */ }
+        const bulk = !visit && !tutOn() && (rc || dry || (empty && F.lvl >= 2)) ? `<div class="sf-bulk">${rc ? `<button class="sf-btn sm gold" data-a="collectAll">Hepsini topla · ${rc}</button>` : ''}${dry ? `<button class="sf-btn sm" data-a="waterAll">${spr('i_can', 18)} Hepsini sula · ${dry}</button>` : ''}${empty && F.lvl >= 2 ? `<button class="sf-btn sm" data-a="plantAll" data-k="${crop}">${spr(`i_${crop}`, 18)} Hepsine ek · ${empty}</button>` : ''}</div>` : '';
+        key = `h${h}${rc}${dry}${empty}${crop}`; html = `${bulk}${h ? `<div class="sf-hint">${esc(h)}</div>` : ''}`;
+      }
     }
     if (key !== botKey) { botKey = key; bot.innerHTML = html; }
   }
 
   // ---------- paneller ----------
   let panel = null; let ps = {};
-  const closePanel = () => { panel = null; layer.innerHTML = ''; };
+  const closePanel = () => { panel = null; layer.innerHTML = ''; paintTut(); };
   function openPanel(title, body, live) {
     layer.innerHTML = `<div class="sf-dim" data-a="close"></div><section class="sf-panel"><header class="sf-ph"><b>${esc(title)}</b><button class="sf-x" data-a="close" aria-label="Kapat">${icon('close')}</button></header><div class="sf-pb"></div></section>`;
-    const el = layer.querySelector('.sf-pb'); panel = { live, paint() { const st = el.scrollTop; el.innerHTML = body(); el.scrollTop = st; } }; panel.paint();
+    const el = layer.querySelector('.sf-pb'); tutKey = 'x'; root.querySelector('.sf-tut').hidden = true; root.querySelectorAll('.sf-tut-hl').forEach((x) => x.classList.remove('sf-tut-hl')); panel = { live, paint() { const st = el.scrollTop; minis.clear(); el.innerHTML = body(); el.scrollTop = st; el.querySelectorAll('canvas[data-mini]').forEach((c) => { const s = minis.get(c.dataset.mini); if (s) lazyMini(c, s); }); } }; panel.paint();
   }
   const needs = (items) => Object.entries(items).map(([k, n]) => { const h = inv()[k] || 0; return `<span class="sf-need ${h >= n ? 'ok' : 'no'}">${spr(`i_${k}`, 26)}<b>${Math.min(h, 99)}/${n}</b></span>`; }).join('');
-  const ordersBody = () => `<div class="sf-ords">${F.orders.map((o) => (o.wait ? `<div class="sf-ord wait"><span>Yeni sipariş yolda</span><b>${fmt(o.wait - tnow())}</b></div>`
+  const visRow = (v) => { const now = tnow(); const fast = now - v.at <= cfg.VIS_FAST; const ok = hasAll({ [v.k]: v.n });
+    return `<div class="sf-vis"><span class="sf-vav">${spr(v.look, 50)}</span><div class="sf-ri"><b>${esc(v.who)}</b><small>${v.n} ${esc(iname(v.k).toLocaleLowerCase('tr-TR'))} istiyor · ${fmt(v.until - now)} sonra gider</small>
+      <div class="sf-on">${needs({ [v.k]: v.n })}<span class="sf-pay">${spr('i_coin', 18)}<b>${v.coins}</b>${fast ? `<em class="tip">+ bahşiş · ${fmt(v.at + cfg.VIS_FAST - now)}</em>` : '<em>+ küçük bahşiş</em>'}</span></div></div>
+      <div class="sf-va"><button class="sf-btn sm" data-a="serve" data-id="${v.id}" ${ok ? '' : 'disabled'}>Ver</button><button class="sf-btn sm ghost" data-a="shoo" data-id="${v.id}">Uğurla</button></div></div>`; };
+  const visList = () => (F.vis || []).filter((v) => v.until > tnow());
+  const ordersBody = () => `${visList().length ? `<h3 class="sf-h">Kasaba ziyaretçileri</h3><div class="sf-recs">${visList().map(visRow).join('')}</div><p class="sf-note">Ziyaretçiye istediğini ${Math.round(cfg.VIS_FAST / 60000)} dakika içinde verirsen çok memnun kalır, büyük bahşiş bırakır; bazen nadir tohum da hediye eder.</p><h3 class="sf-h">Sipariş panosu</h3>` : ''}
+    <div class="sf-ords">${F.orders.map((o) => (o.wait ? `<div class="sf-ord wait"><span>Yeni sipariş yolda</span><b>${fmt(o.wait - tnow())}</b></div>`
     : `<div class="sf-ord"><div class="sf-ow">${esc(o.who)}</div><div class="sf-on">${needs(o.need)}</div><div class="sf-or"><span>${spr('i_coin', 20)}<b>${o.coins}</b></span><span>${STAR}<b>${o.xp}</b></span></div>
       <div class="sf-oa"><button class="sf-btn sm ghost" data-a="skip" data-id="${o.id}">Geç</button><button class="sf-btn sm" data-a="deliver" data-id="${o.id}" ${hasAll(o.need) ? '' : 'disabled'}>Teslim et</button></div></div>`)).join('')}</div>
     <p class="sf-note">Siparişi teslim edince altın ve deneyim kazanırsın. Geçtiğin siparişin yerine 3 dakikada yenisi gelir.</p>`;
+  // depolar: ambar, silo (ekinler) ve kiler (işlenmiş ürünler). Silo ya da kiler yoksa o ürünler ambarda durur.
+  const SNAME = { barn: 'Ambar', silo: 'Silo', cellar: 'Kiler', seed: 'Tohumlar' };
+  const storeOf = (k) => { const c = cfg.CAT[k]; if (c === null) return 'seed'; return c !== 'barn' && !F.stores?.[c] ? 'barn' : c || 'barn'; };
   const barnBody = () => {
-    const used = invN(); const items = Object.entries(inv()); const sel = ps.sel && inv()[ps.sel] ? ps.sel : null; if (sel) ps.n = Math.min(Math.max(1, ps.n || 1), inv()[sel]);
-    return `<div class="sf-cap"><div class="sf-capb"><i style="width:${Math.min(100, (used / F.cap) * 100)}%"></i><b>${used}/${F.cap}</b></div><button class="sf-btn sm gold" data-a="barnUp">Büyüt · ${spr('i_coin', 14)} ${F.capUp}</button></div>
-      ${items.length ? `<div class="sf-inv">${items.map(([k, n]) => `<button class="sf-it ${sel === k ? 'on' : ''}" data-a="sel" data-k="${k}">${spr(`i_${k}`, 44)}<b>${n}</b><small>${esc(cfg.ITEMS[k][0])}</small></button>`).join('')}</div>` : '<p class="sf-empty">Ambarın boş. Ekin biç, ürün topla.</p>'}
-      ${sel ? `<div class="sf-sell"><span class="sf-pl">${esc(cfg.ITEMS[sel][0])}<small>tanesi ${cfg.ITEMS[sel][1]} altın</small></span><div class="sf-stp"><button data-a="sellN" data-d="-1" aria-label="Azalt">−</button><b>${ps.n}</b><button data-a="sellN" data-d="1" aria-label="Artır">+</button><button data-a="sellN" data-d="999">Hepsi</button></div><button class="sf-btn gold" data-a="sellDo">Sat · ${spr('i_coin', 16)} ${ps.n * cfg.ITEMS[sel][1]}</button></div>`
-    : items.length ? '<p class="sf-note">Satmak için bir ürüne dokun. Siparişler pazardan daha çok kazandırır.</p>' : ''}`;
+    const S = F.stores || { barn: { used: 0, cap: F.cap, up: F.capUp } }; const tabs = ['barn', 'silo', 'cellar', 'seed'].filter((s) => s === 'barn' || (s === 'seed' ? Object.keys(inv()).some((k) => k.startsWith('s_')) : true));
+    const cur = tabs.includes(ps.st) ? ps.st : 'barn'; const items = Object.entries(inv()).filter(([k]) => storeOf(k) === cur).sort((a, b) => (cfg.CAT[a[0]] === 'silo') - (cfg.CAT[b[0]] === 'silo') || a[0].localeCompare(b[0]));
+    const sel = ps.sel && inv()[ps.sel] && storeOf(ps.sel) === cur ? ps.sel : null; if (sel) ps.n = Math.min(Math.max(1, ps.n || 1), inv()[sel]);
+    const st = S[cur]; const lv = cur === 'silo' ? cfg.TYPES.silo : cur === 'cellar' ? cfg.TYPES.cellar : null;
+    const head = cur === 'seed' ? `<p class="sf-note top">Nadir tohumlar yer kaplamaz. Senin yörenin tohumu ${esc(iname(`s_${F.home}`))}; diğerlerini komşularınla takas edebilirsin.</p>`
+      : st ? `<div class="sf-cap"><div class="sf-capb"><i style="width:${Math.min(100, (st.used / st.cap) * 100)}%"></i><b>${st.used}/${st.cap}</b></div><button class="sf-btn sm gold" data-a="storeUp" data-s="${cur}" ${F.coins >= st.up ? '' : 'disabled'}>Büyüt · ${spr('i_coin', 14)} ${st.up}</button></div>`
+        : `<div class="sf-exp">${spr(cur, 46)}<span class="sf-pl">${SNAME[cur]} henüz yok<small>${cur === 'silo' ? 'Ekinlerin siloda ayrı durur, ambarda yer açılır.' : 'İşlenmiş ürünlerin kilerde ayrı durur, ambarda yer açılır.'}${lv.lvl > F.lvl ? ` Seviye ${lv.lvl} gerekli.` : ''}</small></span><button class="sf-btn sm" data-a="placeT" data-t="${cur}" ${lv.lvl > F.lvl || F.coins < lv.cost ? 'disabled' : ''}>Kur · ${spr('i_coin', 14)} ${lv.cost}</button></div>`;
+    const where = cur === 'barn' ? (S.silo ? (S.cellar ? '' : ' İşlenmiş ürünler kiler kurulana kadar burada.') : ' Silo kurulana kadar ekinler de burada.') : '';
+    return `<div class="sf-tabs top">${tabs.map((s) => `<button class="${cur === s ? 'on' : ''}" data-a="stab" data-k="${s}">${SNAME[s]}${S[s] ? ` · ${S[s].used}/${S[s].cap}` : ''}</button>`).join('')}</div>${head}
+      ${items.length ? `<div class="sf-inv">${items.map(([k, n]) => `<button class="sf-it ${sel === k ? 'on' : ''}" data-a="sel" data-k="${k}">${spr(ik(k), 44)}<b>${n}</b><small>${esc(iname(k))}</small></button>`).join('')}</div>` : `<p class="sf-empty">${cur === 'barn' ? 'Ambarın boş. Ekin biç, ürün topla.' : st || cur === 'seed' ? 'Burası şimdilik boş.' : ''}</p>`}
+      ${sel ? `<div class="sf-sell"><span class="sf-pl">${esc(iname(sel))}<small>tanesi ${cfg.ITEMS[sel][1]} altın</small></span><div class="sf-stp"><button data-a="sellN" data-d="-1" aria-label="Azalt">−</button><b>${ps.n}</b><button data-a="sellN" data-d="1" aria-label="Artır">+</button><button data-a="sellN" data-d="999">Hepsi</button></div><button class="sf-btn gold" data-a="sellDo">Sat · ${spr('i_coin', 16)} ${ps.n * cfg.ITEMS[sel][1]}</button></div>`
+    : items.length ? `<p class="sf-note">Satmak için bir ürüne dokun. Siparişler ve kasaba ziyaretçileri pazardan daha çok kazandırır. Altın yıldızlı ürünler daha pahalıdır.${where}</p>` : ''}`;
   };
   const shopBody = () => {
     const cnt = (t) => F.objs.filter((o) => o.t === t).length; const st = F.stock || {};
-    const tile = ([t, Ty]) => { const have = st[t] || 0; const lock = Ty.lvl > F.lvl; const own = (Ty.kind === 'build' || Ty.kind === 'pen') && cnt(t) > 0; const lim = t === 'plot' ? F.maxPlots : Ty.max; const full = lim != null && cnt(t) >= lim; const dis = !have && (lock || own || full || !!Ty.special);
+    const tile = ([t, Ty]) => { const have = st[t] || 0; const lock = Ty.lvl > F.lvl; const own = (Ty.kind === 'build' || Ty.kind === 'pen' || Ty.kind === 'store') && cnt(t) > 0; const lim = t === 'plot' ? F.maxPlots : Ty.max; const full = lim != null && cnt(t) >= lim; const dis = !have && (lock || own || full || !!Ty.special);
       return `<button class="sf-shop ${dis ? 'dis' : ''}" data-a="shop" data-t="${t}" ${dis ? 'disabled' : ''}><span class="sf-shi">${spr(t, 58)}</span><b>${esc(Ty.name)}</b>${have ? `<small class="ok">Yerleştir · ${have}</small>` : Ty.special ? `<small class="lk">${esc(Ty.special)}</small>` : lock ? `<small class="lk">Seviye ${Ty.lvl}</small>` : own ? '<small class="lk">Kuruldu</small>' : full ? `<small class="lk">${cnt(t)}/${lim}</small>` : Ty.gem ? `<small class="jt">${spr('i_jeton', 15)} ${Ty.gem}</small>` : `<small>${spr('i_coin', 14)} ${Ty.cost}</small>`}</button>`; };
     const E = Object.entries(cfg.TYPES).filter(([, v]) => v.kind !== 'fixed'); const ex = F.exp; const sec = (title, f) => `<h3 class="sf-h">${title}</h3><div class="sf-shopg">${E.filter(([, v]) => f(v)).map(tile).join('')}</div>`;
     return `${ex ? `<div class="sf-exp">${spr('fence_x', 44)}<span class="sf-pl">Araziyi genişlet<small>${ex.n}×${ex.n} kare${ex.lvl > F.lvl ? ` · Seviye ${ex.lvl} gerekli` : ''}</small></span><button class="sf-btn sm gold" data-a="expand" ${ex.lvl > F.lvl || F.coins < ex.cost ? 'disabled' : ''}>${spr('i_coin', 14)} ${ex.cost}</button></div>` : ''}
       ${sec('Tarla ve üretim', (v) => v.kind !== 'decor')}${sec('Süsler', (v) => v.kind === 'decor' && !v.gem && !v.special)}${sec('Jetonla alınan özel süsler', (v) => !!v.gem)}
       <h3 class="sf-h">Evcil hayvan</h3><div class="sf-shopg">${Object.entries(cfg.PETS).map(([k, P]) => { const on = F.pet?.t === k; const lock = P.lvl > F.lvl; return `<button class="sf-shop ${lock ? 'dis' : ''}" data-a="petBuy" data-t="${k}" ${lock || on ? 'disabled' : ''}><span class="sf-shi">${spr(k, 54)}</span><b>${esc(P.name)}</b>${on ? '<small class="ok">Seninle</small>' : lock ? `<small class="lk">Seviye ${P.lvl}</small>` : `<small>${spr('i_coin', 14)} ${P.cost}</small>`}</button>`; }).join('')}</div>
-      <h3 class="sf-h">Çiftçi kıyafeti</h3><div class="sf-shopg">${Object.entries(cfg.FITS).map(([k, X]) => { const on = (F.fit || 'a') === k; const own = F.fits[k]; return `<button class="sf-shop" data-a="fit" data-k="${k}" ${on ? 'disabled' : ''}><span class="sf-shi">${spr(k === 'a' ? 'farmer' : `farmer_${k}`, 56)}</span><b>${esc(X.name)}</b>${on ? '<small class="ok">Üzerinde</small>' : own ? '<small class="ok">Giy</small>' : X.gem ? `<small class="jt">${spr('i_jeton', 15)} ${X.gem}</small>` : `<small>${spr('i_coin', 14)} ${X.cost}</small>`}</button>`; }).join('')}</div>
+      <h3 class="sf-h">Çiftçi kıyafeti</h3><div class="sf-shopg">${Object.entries(cfg.FITS).map(([k, X]) => { const on = (F.fit || 'a') === k; const own = F.fits[k]; const plusLock = X.plus && !F.plus; return `<button class="sf-shop ${X.plus ? 'plus' : ''}" data-a="${plusLock ? 'plusInfo' : 'fit'}" data-k="${k}" ${on ? 'disabled' : ''}><span class="sf-shi">${spr(k === 'a' ? 'farmer' : `farmer_${k}`, 56)}</span><b>${esc(X.name)}</b>${on ? '<small class="ok">Üzerinde</small>' : X.plus ? `<small class="pl">${plusLock ? 'SwipeUp+ özel' : 'SwipeUp+ · Giy'}</small>` : own ? '<small class="ok">Giy</small>' : X.gem ? `<small class="jt">${spr('i_jeton', 15)} ${X.gem}</small>` : `<small>${spr('i_coin', 14)} ${X.cost}</small>`}</button>`; }).join('')}</div>
       ${sec('Koleksiyon', (v) => !!v.special)}
       <p class="sf-note">Koleksiyon parçaları satın alınmaz, etkinliklerle kazanılır. Jetonlu süsler yalnızca görünüş içindir; oyunda öne geçirmez.</p>`;
   };
@@ -403,12 +538,12 @@ export default async function farm(view, who) {
       ${!list ? '<div class="spinner"></div>' : list.length ? list.map((r) => `<div class="sf-nb"><img src="${esc(r.user.avatar)}" alt=""><span class="sf-grow"><b>${esc(r.user.name || r.user.username)}</b><small>Seviye ${r.lvl}</small></span><button class="sf-btn sm" data-a="coopStart" data-u="${esc(r.user.id)}">Davet et</button></div>`).join('') : '<p class="sf-empty">Ortak sipariş için takip ettiğin birinin çiftliği olmalı. Arkadaşlarını oyuna çağır.</p>'}`; };
   const stallBody = () => { const st = F.stall || []; const sel = ps.sel && inv()[ps.sel] ? ps.sel : null; const base = sel ? cfg.ITEMS[sel][1] : 0;
     if (sel) { ps.n = Math.min(Math.max(1, ps.n || 1), 10, inv()[sel]); ps.price = Math.min(ps.n * base * 2, Math.max(1, ps.price || ps.n * base)); }
-    return `<div class="sf-q">${Array.from({ length: cfg.STALL_SLOTS }, (_, i) => { const x = st[i]; return x ? `<button class="sf-slot run" data-a="stallCancel" data-id="${x.id}">${spr(`i_${x.k}`, 32)}<small>×${x.n} · ${x.price}</small></button>` : '<div class="sf-slot"><small>Boş</small></div>'; }).join('')}</div>
-      ${st.length >= cfg.STALL_SLOTS ? '' : Object.keys(inv()).length ? `<h3 class="sf-h">Satışa koyacağın ürünü seç</h3><div class="sf-inv">${grid(sel)}</div>
+    return `<div class="sf-q">${Array.from({ length: F.stallSlots || cfg.STALL_SLOTS }, (_, i) => { const x = st[i]; return x ? `<button class="sf-slot run" data-a="stallCancel" data-id="${x.id}">${spr(`i_${x.k}`, 32)}<small>×${x.n} · ${x.price}</small></button>` : '<div class="sf-slot"><small>Boş</small></div>'; }).join('')}</div>
+      ${st.length >= (F.stallSlots || cfg.STALL_SLOTS) ? '' : Object.keys(inv()).length ? `<h3 class="sf-h">Satışa koyacağın ürünü seç</h3><div class="sf-inv">${grid(sel)}</div>
         ${sel ? `<div class="sf-sell two"><span class="sf-pl">${esc(cfg.ITEMS[sel][0])}<small>pazarda tanesi ${base} altın</small></span><div class="sf-stp"><button data-a="stN" data-d="-1" aria-label="Azalt">−</button><b>${ps.n}</b><button data-a="stN" data-d="1" aria-label="Artır">+</button></div>
           <span class="sf-pl">Fiyatın<small>en çok ${ps.n * base * 2} altın</small></span><div class="sf-stp"><button data-a="stP" data-d="-1" aria-label="Azalt">−</button><b>${ps.price}</b><button data-a="stP" data-d="1" aria-label="Artır">+</button></div>
           <button class="sf-btn gold" data-a="stallPut">Tezgâha koy · ${spr('i_coin', 16)} ${ps.price}</button></div>` : ''}` : '<p class="sf-empty">Ambarın boş. Önce ürün topla.</p>'}
-      <p class="sf-note">Tezgâhındaki ürünleri çiftliğini gezen komşuların satın alır, altını sana gelir. Geri almak için tezgâhtaki ürüne dokun.</p>`; };
+      <p class="sf-note">Tezgâhındaki ürünleri çiftliğini gezen komşuların satın alır, altını sana gelir. Geri almak için tezgâhtaki ürüne dokun.${F.plus ? ' SwipeUp+ üyesi olduğun için tezgâhında 2 ek yer var.' : ' SwipeUp+ üyelerinin tezgâhında 2 ek yer olur.'}</p>`; };
   const vstallBody = () => { const st = F.stall || [];
     return st.length ? `<div class="sf-recs">${st.map((x) => `<div class="sf-rec">${spr(`i_${x.k}`, 44)}<div class="sf-ri"><b>${esc(cfg.ITEMS[x.k][0])} ×${x.n}</b><small>pazar değeri ${x.n * cfg.ITEMS[x.k][1]} altın</small></div><button class="sf-btn sm gold" data-a="vbuy" data-id="${x.id}" ${F.myCoins >= x.price ? '' : 'disabled'}>${spr('i_coin', 14)} ${x.price}</button></div>`).join('')}</div><p class="sf-note">Aldığın ürün ambarına gider.</p>` : '<p class="sf-empty">Tezgâh şu an boş.</p>'; };
   const giftBody = () => { if (F.gifted) return '<p class="sf-empty">Bugünkü hediyeni gönderdin. Yarın yine gönderebilirsin.</p>';
@@ -417,17 +552,17 @@ export default async function farm(view, who) {
       ${sel ? `<div class="sf-sell"><span class="sf-pl">${esc(cfg.ITEMS[sel][0])}<small>en çok 3 tane</small></span><div class="sf-stp"><button data-a="gN" data-d="-1" aria-label="Azalt">−</button><b>${ps.n}</b><button data-a="gN" data-d="1" aria-label="Artır">+</button></div><button class="sf-btn" data-a="giftSend">Hediyeyi gönder</button></div>` : ''}
       <p class="sf-note">Günde bir hediye gönderebilirsin. Yazışıyorsanız hediyen sohbetinize de düşer.</p>`; };
   const bar = (got, n) => `<div class="sf-capb sm"><i style="width:${Math.min(100, (got / n) * 100)}%"></i><b>${got}/${n}</b></div>`;
-  const prize = (P, sz = 22) => `${P.coins ? `${spr('i_coin', sz)}<b>${P.coins}</b>` : ''}${P.item ? `${spr(`i_${P.item[0]}`, sz)}<b>×${P.item[1]}</b>` : ''}${P.xp ? `${STAR}<b>${P.xp}</b>` : ''}`;
+  const prize = (P, sz = 22) => `${P.coins ? `${spr('i_coin', sz)}<b>${P.coins}</b>` : ''}${P.item ? `${spr(`i_${P.item[0]}`, sz)}<b>×${P.item[1]}</b>` : ''}${P.xp ? `${STAR}<b>${P.xp}</b>` : ''}${P.seed ? `${spr(`i_s_${F.home || 'lavender'}`, sz)}<b>×${P.seed}</b>` : ''}`;
   const questsBody = () => { const Q = F.quests; const all = Q.list.every((x) => x.got >= x.n);
     return `<div class="sf-recs">${Q.list.map((x) => `<div class="sf-rec ${x.got >= x.n ? 'fin' : ''}"><div class="sf-ri"><b>${esc(cfg.QUESTS[x.k])}</b>${bar(x.got, x.n)}</div>${x.got >= x.n ? '<small class="ok">Tamam</small>' : ''}</div>`).join('')}
       <div class="sf-rec chest">${spr('i_chest', 46)}<div class="sf-ri"><b>Görev sandığı</b><small class="sf-on"><span>${spr('i_coin', 16)} ${Q.coins}</span><span>${STAR} ${Q.xp}</span></small></div><button class="sf-btn sm gold" data-a="questClaim" ${all && !Q.claimed ? '' : 'disabled'}>${Q.claimed ? 'Açıldı' : 'Sandığı aç'}</button></div></div>
       <p class="sf-note">Görevler her gün yenilenir. Üçünü de bitirince sandık açılır.</p>`; };
   const achBody = () => `<div class="sf-recs">${[...F.ach].sort((x, y) => (y.got >= y.n && !y.claimed) - (x.got >= x.n && !x.claimed) || x.claimed - y.claimed).map((x) => { const done = x.got >= x.n; return `<div class="sf-rec ${done ? '' : 'lock'} ${x.claimed ? 'fin' : ''}">${spr('i_medal', 40)}<div class="sf-ri"><b>${esc(x.name)}</b><small>${esc(x.desc)}</small>${x.claimed ? '' : bar(x.got, x.n)}</div>${x.claimed ? '<small class="ok">Rozet alındı</small>' : `<button class="sf-btn sm gold" data-a="achClaim" data-k="${x.k}" ${done ? '' : 'disabled'}>${spr('i_coin', 14)} ${x.coins}</button>`}</div>`; }).join('')}</div>
     <p class="sf-note">Aldığın rozetlerin sayısı SwipeUp profilinde çiftlik düğmende görünür.</p>`;
-  const wheelBody = () => { const n = F.wheel.n; const W8 = cfg.WHEEL;
+  const wheelBody = () => { const n = F.wheel.n; const W8 = cfg.WHEEL; const fr = F.wheel.free || 1;
     return `<div class="sf-wh"><div class="sf-wheel"><i style="transform:rotate(${ps.deg || 0}deg)">${W8.map((P, i) => `<span style="transform:rotate(${i * 45 + 22.5}deg) translateY(-66px)">${prize(P, 24)}</span>`).join('')}</i><em></em></div>
-      <div class="sf-whr"><b>Şans çarkı</b><small>Her gün bir çevirme ücretsiz. İkinci çevirme ${cfg.SPIN_GEM} jeton.</small>
-      <button class="sf-btn ${n === 1 ? 'violet' : 'gold'}" data-a="spin" ${n >= 2 || ps.spinning ? 'disabled' : ''}>${n === 0 ? 'Ücretsiz çevir' : n === 1 ? `Tekrar çevir · ${spr('i_jeton', 16)} ${cfg.SPIN_GEM}` : 'Yarın yine gel'}</button></div></div>`; };
+      <div class="sf-whr"><b>Şans çarkı</b><small>${fr > 1 ? `SwipeUp+ üyesi olarak her gün ${fr} çevirme ücretsiz.` : 'Her gün bir çevirme ücretsiz. SwipeUp+ üyelerine bir çevirme daha ücretsiz.'} Sonraki çevirme ${cfg.SPIN_GEM} jeton.</small>
+      <button class="sf-btn ${n === fr ? 'violet' : 'gold'}" data-a="spin" ${n > fr || ps.spinning ? 'disabled' : ''}>${n < fr ? (n ? 'Ücretsiz çevir (SwipeUp+)' : 'Ücretsiz çevir') : n === fr ? `Tekrar çevir · ${spr('i_jeton', 16)} ${cfg.SPIN_GEM}` : 'Yarın yine gel'}</button></div></div>`; };
   const eventBody = () => { const E = F.event; if (!E) return '<p class="sf-empty">Şu an şenlik yok.</p>';
     return `<div class="sf-rk"><span><b>${esc(E.name)}</b> · bitmesine ${fmtD(E.ends - tnow())}</span><span>Şenlik puanın <b>${E.pts}</b></span></div>
       <div class="sf-recs">${E.steps.map((x, i) => `<div class="sf-rec ${x.got ? 'fin' : ''}">${x.decor ? spr(x.decor, 46) : spr('i_coin', 40)}<div class="sf-ri"><b>${x.decor ? esc(cfg.TYPES[x.decor].name) : `${x.coins} altın`}</b>${x.got ? '' : bar(Math.min(E.pts, x.pts), x.pts)}</div>${x.got ? '<small class="ok">Alındı</small>' : `<button class="sf-btn sm gold" data-a="evClaim" data-i="${i}" ${E.pts >= x.pts ? '' : 'disabled'}>Al</button>`}</div>`).join('')}</div>
@@ -443,6 +578,44 @@ export default async function farm(view, who) {
       <p class="sf-note">Kulüp üyelerinin o hafta kazandığı deneyim ortak hedefe sayılır. Hedef dolunca en az 30 deneyim kazanmış her üye ödülünü alır. Pazartesi sıfırlanır.</p>` : '<p class="sf-empty">Henüz bir kulübe üye değilsin. SwipeUp\'ta bir kulübe katıl, kulüp çiftliği burada açılsın.</p>'; };
   const pairsBody = () => { const L = ps.pairs; if (!L) return '<div class="spinner"></div>';
     return L.length ? `${L.map((r) => `<a class="sf-nb" href="#/farm/${esc(r.user.id)}"><img src="${esc(r.user.avatar)}" alt=""><span class="sf-grow"><b>${esc(r.user.name || r.user.username)}</b>${bar(r.pair.g, r.pair.max)}</span>${r.pair.me ? '<small class="ok">Bugün suladın</small>' : '<span class="sf-btn sm">Sula</span>'}</a>`).join('')}<p class="sf-note">Eşleştiğin kişiyle ortak ağacınızı her gün sulayın. Aynı gün ikiniz de sularsanız iki kat büyür; 5, 15 ve 30. adımda ikinize de ödül var.</p>` : '<p class="sf-empty">Çift bahçesi, eşleştiğin ve çiftliği olan kişilerle açılır.</p>'; };
+  // küçük çiftlik görüntüleri (yarışma): panel her çizildiğinde yeniden bağlanır
+  const minis = new Map(); const mini = (key, snap, cls = '') => { minis.set(key, snap); return `<canvas class="sf-mini ${cls}" data-mini="${esc(key)}" aria-hidden="true"></canvas>`; };
+  const ago2 = (t) => { const m = Math.round((tnow() - t) / 60000); return m < 60 ? `${Math.max(1, m)} dk önce` : m < 1440 ? `${Math.round(m / 60)} sa önce` : `${Math.round(m / 1440)} gün önce`; };
+  const contestBody = () => { const C = ps.contest; if (!C) return '<div class="spinner"></div>';
+    const who = (u) => `<img src="${esc(u.avatar)}" alt=""><b>${esc(u.name || u.username)}</b>`;
+    return `<div class="sf-ct"><span class="sf-ctl">Bu haftanın teması</span><b class="sf-ctt">${esc(C.theme)}</b><span>Bitmesine <b>${fmtD(C.ends - tnow())}</b> · ${C.count} çiftlik katıldı</span></div>
+      <div class="sf-prz">${C.prize.map((pz, i) => `<span><i class="sf-rank r${i + 1}">${i + 1}</i>${spr('i_coin', 16)}<b>${pz}</b>${spr('rosette', 26)}</span>`).join('')}</div>
+      ${C.mine ? `<div class="sf-ce mine">${mini('mine', C.mine.snap)}<div class="sf-cei"><b>Senin çiftliğin</b><small>${C.mine.votes} oy</small><button class="sf-btn sm" data-a="cEnter" ${ps.busy ? 'disabled' : ''}>Görüntüyü güncelle</button></div></div>`
+        : C.myLvl >= C.lvl ? `<div class="sf-exp">${spr('rosette', 46)}<span class="sf-pl">Çiftliğinle katıl<small>Çiftliğinin şu anki hâli yarışmaya girer. Hafta boyunca güncelleyebilirsin.</small></span><button class="sf-btn sm gold" data-a="cEnter" ${ps.busy ? 'disabled' : ''}>Katıl</button></div>`
+          : `<p class="sf-note top">Yarışmaya ${C.lvl}. seviyeden sonra katılabilirsin. Şimdiden oy verebilirsin.</p>`}
+      <h3 class="sf-h">Oy ver · ${C.votesLeft} oyun kaldı</h3>
+      ${C.list.length ? `<div class="sf-ceg">${C.list.map((e) => `<div class="sf-ce">${mini(e.id, e.snap)}<div class="sf-cei"><a class="sf-cu" href="#/farm/${esc(e.user.id)}">${who(e.user)}</a><small>${e.votes} oy</small><button class="sf-btn sm ${e.voted ? 'ghost' : 'gold'}" data-a="cVote" data-id="${esc(e.id)}" ${e.voted || !C.votesLeft ? 'disabled' : ''}>${e.voted ? 'Oy verdin' : 'Oy ver'}</button></div></div>`).join('')}</div>` : '<p class="sf-empty">Bu hafta henüz başka katılan yok. İlk sen katıl, arkadaşlarını çağır.</p>'}
+      ${C.last?.top?.length ? `<h3 class="sf-h">Geçen hafta · ${esc(C.last.theme)}</h3>${C.last.top.map((x) => `<a class="sf-nb" href="#/farm/${esc(x.user.id)}"><i class="sf-rank r${x.rank}">${x.rank}</i><img src="${esc(x.user.avatar)}" alt=""><span class="sf-grow"><b>${esc(x.user.name || x.user.username)}</b><small>${x.votes} oy</small></span>${spr('rosette', 30)}</a>`).join('')}` : ''}
+      <p class="sf-note">Her hafta yeni bir tema var. Herkesin haftada ${cfg.CONTEST_VOTES} oyu olur, kendi çiftliğine oy veremezsin. Pazartesi en çok oy alan üç çiftlik altın ve koleksiyonluk yarışma kurdelesi kazanır.</p>`; };
+  const SEEDS = cfg.RARE.map((k) => `s_${k}`);
+  const tradeBody = () => { const TR = ps.trades; if (!TR) return '<div class="spinner"></div>'; const t = ps.tr || (ps.tr = { gn: 1, wn: 1 });
+    const open = TR.list.filter((x) => x.st === 'open'); const inc = open.filter((x) => !x.mine); const outg = open.filter((x) => x.mine); const old = TR.list.filter((x) => x.st !== 'open').slice(0, 6);
+    const pair = (x) => `<span class="sf-tp">${spr(ik(x.give.k), 26)}<b>×${x.give.n}</b><em>⇄</em>${spr(ik(x.want.k), 26)}<b>×${x.want.n}</b></span>`;
+    const ST = { done: 'Takas yapıldı', declined: 'Geri çevrildi', cancelled: 'Geri çekildi', expired: 'Süresi doldu' };
+    const nbs = ps.nb ? ps.nb.following.filter((r) => r.user.id !== state.me?.id) : null; const lvl5 = (F.lvl || 0) >= cfg.CROPS.lavender.lvl;
+    return `<div class="sf-seedrow">${SEEDS.map((k) => `<span class="sf-sd ${k === `s_${F.home}` ? 'home' : ''}">${spr(ik(k), 40)}<b>${inv()[k] || 0}</b><small>${esc(cfg.CROPS[k.slice(2)].name)}${k === `s_${F.home}` ? ' · yören' : ''}</small></span>`).join('')}</div>
+      ${inc.length ? `<h3 class="sf-h">Sana gelen teklifler</h3>${inc.map((x) => `<div class="sf-nb sf-tr"><img src="${esc(x.user.avatar)}" alt=""><span class="sf-grow"><b>${esc(x.user.name || x.user.username)}</b>${pair(x)}<small>Sen ${x.want.n} ${esc(iname(x.want.k).toLocaleLowerCase('tr-TR'))} verirsin, ${x.give.n} ${esc(iname(x.give.k).toLocaleLowerCase('tr-TR'))} alırsın</small></span><span class="sf-va"><button class="sf-btn sm gold" data-a="trAcc" data-id="${x.id}" ${(inv()[x.want.k] || 0) >= x.want.n ? '' : 'disabled'}>Kabul et</button><button class="sf-btn sm ghost" data-a="trDec" data-id="${x.id}">Geri çevir</button></span></div>`).join('')}` : ''}
+      ${outg.length ? `<h3 class="sf-h">Gönderdiğin teklifler</h3>${outg.map((x) => `<div class="sf-nb sf-tr"><img src="${esc(x.user.avatar)}" alt=""><span class="sf-grow"><b>${esc(x.user.name || x.user.username)}</b>${pair(x)}<small>${fmtD(x.end - tnow())} içinde cevap bekleniyor</small></span><button class="sf-btn sm ghost" data-a="trCan" data-id="${x.id}">Geri çek</button></div>`).join('')}` : ''}
+      <h3 class="sf-h">Yeni takas teklifi</h3>
+      ${!lvl5 ? `<p class="sf-empty">Nadir tohumlar ${cfg.CROPS.lavender.lvl}. seviyede açılır.</p>` : !nbs ? '<div class="spinner"></div>' : !nbs.length ? '<p class="sf-empty">Takas için takip ettiğin birinin çiftliği olmalı.</p>' : `
+        <div class="sf-trf"><small>Kiminle?</small><div class="sf-chips">${nbs.slice(0, 20).map((r) => `<button class="${t.to === r.user.id ? 'on' : ''}" data-a="trTo" data-u="${esc(r.user.id)}"><img src="${esc(r.user.avatar)}" alt="">${esc(r.user.name || r.user.username)}</button>`).join('')}</div>
+        <small>Vereceğin</small><div class="sf-chips">${SEEDS.map((k) => `<button class="${t.give === k ? 'on' : ''}" data-a="trG" data-k="${k}" ${(inv()[k] || 0) ? '' : 'disabled'}>${spr(ik(k), 22)}${esc(cfg.CROPS[k.slice(2)].name)} · ${inv()[k] || 0}</button>`).join('')}</div>
+        <small>İstediğin</small><div class="sf-chips">${SEEDS.map((k) => `<button class="${t.want === k ? 'on' : ''}" data-a="trW" data-k="${k}" ${t.give === k ? 'disabled' : ''}>${spr(ik(k), 22)}${esc(cfg.CROPS[k.slice(2)].name)}</button>`).join('')}</div>
+        <div class="sf-sell two"><span class="sf-pl">Vereceğin<small>en çok 5</small></span><div class="sf-stp"><button data-a="trN" data-k="gn" data-d="-1" aria-label="Azalt">−</button><b>${t.gn}</b><button data-a="trN" data-k="gn" data-d="1" aria-label="Artır">+</button></div>
+          <span class="sf-pl">İstediğin<small>en çok 5</small></span><div class="sf-stp"><button data-a="trN" data-k="wn" data-d="-1" aria-label="Azalt">−</button><b>${t.wn}</b><button data-a="trN" data-k="wn" data-d="1" aria-label="Artır">+</button></div>
+          <button class="sf-btn gold" data-a="trSend" ${t.to && t.give && t.want && (inv()[t.give] || 0) >= t.gn && !ps.busy ? '' : 'disabled'}>Teklifi gönder</button></div></div>`}
+      ${old.length ? `<h3 class="sf-h">Son takaslar</h3>${old.map((x) => `<div class="sf-nb sf-tr dim"><img src="${esc(x.user.avatar)}" alt=""><span class="sf-grow"><b>${esc(x.user.name || x.user.username)}</b>${pair(x)}</span><small class="lk">${ST[x.st] || ''}</small></div>`).join('')}` : ''}
+      <p class="sf-note">Herkesin yöresinde bir nadir tohum yetişir: senin yören ${esc(cfg.CROPS[F.home]?.name || '')}. Diğer nadir tohumları komşularınla takas ederek bulursun. Teklif ettiğin tohumlar cevap gelene kadar emanette bekler; ${3} gün içinde cevap gelmezse ambarına döner.</p>`; };
+  const inviteBody = () => { const I = ps.inv; if (!I) return '<div class="spinner"></div>';
+    return `<div class="sf-exp">${spr('swing', 52)}<span class="sf-pl">Arkadaşını davet et<small>Davetinle SwipeUp'a katılan arkadaşın çiftliğinde ${I.lvl}. seviyeye ulaşınca ikinize de ${I.coins} altın ve koleksiyonluk salıncak.</small></span><button class="sf-btn sm gold" data-a="invShare">Davet et</button></div>
+      ${I.by ? `<h3 class="sf-h">Seni davet eden</h3><div class="sf-nb"><img src="${esc(I.by.user.avatar)}" alt=""><span class="sf-grow"><b>${esc(I.by.user.name || I.by.user.username)}</b><small>${I.mine ? 'Ödülünüzü aldınız' : `Sen ${I.lvl}. seviyeye ulaşınca ikinize de ödül`}</small></span>${I.mine ? '<small class="ok">Alındı</small>' : ''}</div>` : ''}
+      <h3 class="sf-h">Davet ettiklerin</h3>
+      ${I.list.length ? I.list.map((r) => `<a class="sf-nb" href="#/farm/${esc(r.user.id)}"><img src="${esc(r.user.avatar)}" alt=""><span class="sf-grow"><b>${esc(r.user.name || r.user.username)}</b>${r.done ? '<small>Ödülünüzü aldınız</small>' : r.lvl ? bar(Math.min(r.lvl, I.lvl), I.lvl) : '<small>Henüz çiftlik kurmadı</small>'}</span>${r.done ? '<small class="ok">Alındı</small>' : `<small class="lk">Seviye ${r.lvl}</small>`}</a>`).join('') : '<p class="sf-empty">Henüz davetinle gelen kimse yok.</p>'}`; };
   const vpairBody = () => { const P = F.pair; const nx = cfg.PAIR_STEPS.find((x) => x.g > P.g);
     return `<div class="sf-pair"><span class="sf-decs" style="transform:scale(${(0.55 + 0.45 * (P.g / P.max)).toFixed(2)})">${spr('lovetree', 96)}</span><div class="sf-ri"><b>Çift bahçesi</b>${bar(P.g, P.max)}<small>${P.me ? 'Bugün suladın.' : 'Bugün henüz sulamadın.'} ${P.them ? 'O da suladı.' : 'O henüz sulamadı.'}</small>
       ${nx ? `<small class="sf-on"><span>${nx.g}. adım: ${spr('i_coin', 16)} ${nx.coins}</span>${nx.decor ? `<span>${spr(nx.decor, 22)} ${esc(cfg.TYPES[nx.decor].name)}</span>` : ''}</small>` : '<small class="ok">Ağacınız tam büyüdü</small>'}
@@ -456,11 +629,13 @@ export default async function farm(view, who) {
   const petBody = () => { const P = cfg.PETS[F.pet.t]; const fed = F.pet.fed; const left = fed ? cfg.PET_T - (tnow() - fed) : 0;
     return `<div class="sf-pair"><span class="sf-decs">${spr(F.pet.t, 84)}</span><div class="sf-ri"><b>${esc(P.name)}</b>${!fed ? `<small>Karnı aç. Besle, çiftlikte dolaşıp sana küçük bir hediye bulsun.</small><div class="sf-row">${P.food.map((k) => `<button class="sf-btn sm" data-a="petFeed" data-k="${k}" ${inv()[k] > 0 ? '' : 'disabled'}>${spr(`i_${k}`, 18)} ${esc(cfg.ITEMS[k][0])} · ${inv()[k] || 0}</button>`).join('')}</div>` : left > 0 ? `<small>Karnı tok, etrafı kolaçan ediyor. ${fmt(left)} sonra bir şey bulur.</small>` : `<small>Bir şey buldu!</small><button class="sf-btn gold" data-a="petTake">${spr('i_gift', 18)} Hediyeyi al</button>`}</div></div>`; };
   const TABS = { G: () => [['quests', 'Görevler', questsBody], ['daily', 'Giriş ödülü', dailyBody], ['wheel', 'Çark', wheelBody], ['ach', 'Başarımlar', achBody], F.event ? ['event', F.event.name, eventBody] : null].filter(Boolean),
-    S: () => [['rank', 'Sıralama', rankBody], ['coop', 'Ortak', coopBody], ['club', 'Kulüp', clubBody], ['pairs', 'Çift bahçesi', pairsBody], ['book', 'Defter', bookBody]] };
+    S: () => [['rank', 'Sıralama', rankBody], ['contest', 'Yarışma', contestBody], ['trade', 'Takas', tradeBody], ['coop', 'Ortak', coopBody], ['club', 'Kulüp', clubBody], ['pairs', 'Çift bahçesi', pairsBody], ['invite', 'Davet', inviteBody], ['book', 'Defter', bookBody]] };
   const hubBody = (grp) => () => { const tabs = TABS[grp](); const cur = tabs.find((t) => t[0] === ps.T) || tabs[0]; return `<div class="sf-tabs top">${tabs.map(([k, n]) => `<button class="${cur[0] === k ? 'on' : ''}" data-a="ptab" data-k="${k}">${esc(n)}</button>`).join('')}</div>${cur[2]()}`; };
   const loadTab = (k) => { const get = (url, key, pickFn) => { if (!ps[key]) api(url).then((r) => { ps[key] = pickFn(r); panel?.paint(); }).catch((e) => toast(e.message)); };
-    if (k === 'rank') get('/farm/rank', 'rank', (r) => r); if (k === 'coop' && !F.coop) get('/farm/neighbors', 'nb', (r) => r); if (k === 'club') get('/farm/club', 'club', (r) => r); if (k === 'pairs') get('/farm/pairs', 'pairs', (r) => r.list); };
-  const openHub = (grp, title, T) => { ps = { T }; openPanel(title, hubBody(grp), true); loadTab(T); };
+    if (k === 'rank') get('/farm/rank', 'rank', (r) => r); if ((k === 'coop' && !F.coop) || k === 'trade') get('/farm/neighbors', 'nb', (r) => r); if (k === 'club') get('/farm/club', 'club', (r) => r); if (k === 'pairs') get('/farm/pairs', 'pairs', (r) => r.list);
+    if (k === 'contest') get('/farm/contest', 'contest', (r) => r); if (k === 'trade') get('/farm/trades', 'trades', (r) => r); if (k === 'invite') get('/farm/invites', 'inv', (r) => r); };
+  const STILL = new Set(['contest', 'trade', 'invite']); // her saniye yeniden çizilmeyen sekmeler
+  const openHub = (grp, title, T) => { ps = { T }; openPanel(title, hubBody(grp), () => !STILL.has(ps.T)); loadTab(T); };
   async function shareFarm() { // çiftliğin görüntüsü: sahnenin o anki hâli + küçük imza
     const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; const x = c.getContext('2d'); x.drawImage(cv, 0, 0);
     const u = Math.round(c.height / 16); x.font = `800 ${u}px system-ui, sans-serif`; x.textBaseline = 'bottom'; x.lineWidth = u / 6; x.strokeStyle = 'rgba(58,34,12,.75)'; x.fillStyle = '#fff'; const tx = `SwipeFarm · Seviye ${F.lvl}`; x.strokeText(tx, u * 0.7, c.height - u * 0.6); x.fillText(tx, u * 0.7, c.height - u * 0.6);
@@ -472,9 +647,32 @@ export default async function farm(view, who) {
       <button class="sf-tg nav" data-a="share"><span><b>Çiftliğini paylaş</b><small>Görüntüsünü hikâyene ekle ya da kaydet</small></span>${icon('share')}</button>
       <button class="sf-tg ${muted ? '' : 'on'}" data-a="snd"><span><b>Oyun sesleri</b><small>Hasat, altın ve seviye sesleri</small></span><i></i></button>
       <button class="sf-tg ${F.notif ? 'on' : ''}" data-a="notif"><span><b>Tarla hazır bildirimi</b><small>Ekinlerin olgunlaşınca haber verir, günde en çok 2 kez</small></span><i></i></button>
-      <button class="sf-tg ${ambOn ? 'on' : ''}" data-a="amb"><span><b>Gün ve mevsim</b><small>Gece karanlığı, gün batımı, kar ve yaprak görüntüleri</small></span><i></i></button></div>
+      <button class="sf-tg ${music ? 'on' : ''}" data-a="music"><span><b>Arka plan müziği</b><small>Sakin bir çiftlik ezgisi</small></span><i></i></button>
+      <button class="sf-tg ${ambOn ? 'on' : ''}" data-a="amb"><span><b>Gün ve mevsim</b><small>Gece karanlığı, gün batımı, kar ve yaprak görüntüleri</small></span><i></i></button>
+      <button class="sf-tg nav" data-a="tutRestart"><span><b>Oyun rehberi</b><small>Adım adım anlatımı yeniden göster</small></span>${icon('question')}</button></div>
     <p class="sf-note">Bildirimin telefonuna gelmesi için SwipeUp bildirimlerine izin vermiş olman gerekir.</p>`;
   const overQ = []; const showOver = (html) => { if (over.innerHTML) overQ.push(html); else over.innerHTML = html; };
+  // ---------- ilk giriş rehberi ----------
+  const TUT = [
+    { t: 'Olgun buğdayların üzerinde parmağını kaydır, hasat et.', ev: 'harvest' },
+    { t: 'Boş bir tarlaya dokun, buğdayı seç ve boş tarlaların üzerinde kaydırarak ek.', ev: 'plant' },
+    { t: 'Siparişlerine bak: Sipariş düğmesine dokun.', ev: 'orders', sel: '[data-a="orders"]' },
+    { t: 'Ürünlerin depoda durur. Ambar göstergesine dokun.', ev: 'barn', sel: '.sf-barnp' },
+    { t: "Market'ten yeni tarla, bina ve hayvan alırsın. Market'e dokun.", ev: 'shop', sel: '[data-a="shop"]' },
+    { t: 'Günlük görevler, şans çarkı ve ödüller burada. Görevler düğmesine dokun.', ev: 'hubG', sel: '[data-a="hubG"]' },
+  ];
+  let tutKey = '';
+  function paintTut() {
+    const el = root.querySelector('.sf-tut'); const on = tutOn() && !panel && !over.innerHTML && mode?.k !== 'place' && mode?.k !== 'edit'; const k = on ? `${F.tut}${mode?.k || ''}` : ''; if (k === tutKey) return; tutKey = k;
+    root.querySelectorAll('.sf-tut-hl').forEach((x) => x.classList.remove('sf-tut-hl'));
+    if (!on) { el.hidden = true; return; } const s = TUT[F.tut]; el.hidden = false; el.classList.toggle('low', !mode);
+    el.innerHTML = `<span class="sf-tutn">${F.tut + 1}/${cfg.TUT_N}</span><p>${esc(s.t)}</p><button class="sf-x sm" data-a="tutSkip" aria-label="Rehberi kapat">${icon('close')}</button>`;
+    if (s.sel) root.querySelector(s.sel)?.classList.add('sf-tut-hl');
+  }
+  function tutEv(ev) {
+    if (!tutOn() || TUT[F.tut]?.ev !== ev) return; const next = F.tut + 1; F.tut = next; paintTut();
+    act('tut', { step: next }).then((r) => { if (r?.tutDone) showOver(`<div class="sf-lvl"><div class="sf-lvc dec"><span class="sf-decs">${spr('i_basket', 92)}</span><h2>Rehber tamamlandı!</h2><p class="sf-lvr">${spr('i_coin', 22)} +${cfg.TUT_RW.coins} altın · ${spr('i_fert', 22)} +${cfg.TUT_RW.fert} gübre</p><p class="sf-note">Gübreyi büyüyen ekine ver, altın yıldızlı ürün çıksın. İyi hasatlar!</p><button class="sf-btn" data-a="lvlok">Başlayalım</button></div></div>`); });
+  }
   function gotDecor(k) { const Ty = cfg.TYPES[k]; showOver(`<div class="sf-lvl"><div class="sf-lvc dec"><span class="sf-decs">${spr(k, 92)}</span><h2>${esc(Ty.name)}</h2><p class="sf-lvr">Koleksiyonuna eklendi</p><p class="sf-note">Market'teki Koleksiyon bölümünden çiftliğine yerleştirebilirsin.</p><button class="sf-btn" data-a="lvlok">Harika!</button></div></div>`); }
   function levelUp(f) {
     showOver(`<div class="sf-lvl"><div class="sf-lvc"><span class="sf-bigstar">${STAR}<b>${f.lvl}</b></span><h2>Seviye ${f.lvl}!</h2><p class="sf-lvr">${spr('i_coin', 22)} +${f.coins} altın</p>
@@ -491,12 +689,34 @@ export default async function farm(view, who) {
     }
     mode = { k: 'place', t, id: id || null, x, y, stock: !id && F.stock?.[t] > 0, back: mode?.k === 'edit' ? 'edit' : null }; closePanel(); paintBot();
   }
+  const trOp = (id, op, msg) => api(`/farm/trades/${id}/${op}`, { body: {} }).then((r) => { apply({ farm: r.farm, fx: r.fx }); ps.trades = null; loadTab('trade'); toast(msg); }).catch((e) => toast(e.message));
   const UI = {
     back() { if (visit) location.hash = '#/farm'; else if (history.length > 1) history.back(); else location.hash = '#/oyunlar'; },
     close: closePanel,
-    orders() { ps = {}; openPanel('Siparişler', ordersBody, true); },
-    barn() { ps = {}; openPanel('Ambar', barnBody); },
-    shop() { ps = {}; openPanel('Market', shopBody); },
+    orders() { ps = {}; openPanel('Siparişler ve ziyaretçiler', ordersBody, true); tutEv('orders'); },
+    barn(d) { ps = { st: d?.st }; openPanel('Depolar', barnBody); tutEv('barn'); },
+    shop() { ps = {}; openPanel('Market', shopBody); tutEv('shop'); },
+    stab(d) { ps.st = d.k; ps.sel = null; panel.paint(); }, storeUp(d) { act('storeUp', { s: d.s }); }, placeT(d) { startPlace(d.t); },
+    wx() { const w = F.wx; if (w) toast(`${WXT[w.k]} ${fmt(w.until - tnow())} sonra hava ${cfg.WX[w.next].toLocaleLowerCase('tr-TR')} olacak.`); },
+    tool(d) { if (d.k === 'fert' && !(inv().fert > 0)) { toast(F.objs.some((o) => o.t === 'compost') ? 'Gübren kalmadı. Kompostta üret.' : `Gübre için Market'ten kompost kur (seviye ${cfg.TYPES.compost.lvl}).`); return; } mode = { k: 'tool', tool: d.k, crop: mode?.crop }; paintBot(); },
+    water1(d) { pendW.add(d.id); act('water', { ids: [d.id] }).then(() => pendW.delete(d.id)); }, fert1(d) { pendF.add(d.id); act('fert', { ids: [d.id] }).then(() => pendF.delete(d.id)); },
+    collectAll() { act('collectAll'); }, waterAll() { act('water', { all: 1 }); },
+    plantAll(d) { act('plantAll', { crop: d.k }).then((r) => { if (r?.planted) toast(`${r.planted} tarlaya ${cfg.CROPS[d.k].name.toLocaleLowerCase('tr-TR')} ekildi.`); }); },
+    serve(d) { act('serve', { id: d.id }); }, shoo(d) { act('shoo', { id: d.id }); },
+    plusInfo() { toast('Altın yelekli kıyafet SwipeUp+ üyelerine özel. SwipeUp+ üyeliğini Mağaza\'dan alabilirsin.'); },
+    music() { music = !music; try { localStorage.setItem('sf_music', music ? '1' : '0'); } catch { /* yok say */ } if (music) musicStart(); else musicStop(); panel?.paint(); },
+    tutSkip() { F.tut = cfg.TUT_N; paintTut(); act('tut', { skip: 1 }); },
+    tutRestart() { closePanel(); act('tut', { restart: 1 }).then(() => { tutKey = ''; paintTut(); }); },
+    emo() { const el = root.querySelector('.sf-emos'); el.hidden = !el.hidden; },
+    emote(d) { const i = +d.i; root.querySelector('.sf-emos').hidden = true; sock?.emit('farm:emote', { e: i }); if (meW) { meW.emo = i + 1; meW.emoT = T; } else myEmo = { emo: i + 1, emoT: T }; SFX.pop(2); },
+    cEnter() { ps.busy = true; panel.paint(); api('/farm/contest/enter', { body: {} }).then((r) => { toast(r.updated ? 'Yarışmadaki görüntün güncellendi.' : 'Çiftliğin yarışmaya katıldı. Bol şans!'); ps.contest = null; ps.busy = false; loadTab('contest'); }).catch((e) => { ps.busy = false; panel?.paint(); toast(e.message); }); },
+    cVote(d) { api('/farm/contest/vote', { body: { id: d.id } }).then((r) => { const e = ps.contest?.list.find((x) => x.id === d.id); if (e) { e.voted = true; e.votes = r.votes; } if (ps.contest) ps.contest.votesLeft = r.votesLeft; SFX.pop(3); panel?.paint(); }).catch((e) => toast(e.message)); },
+    trTo(d) { ps.tr.to = d.u; panel.paint(); }, trG(d) { ps.tr.give = d.k; if (ps.tr.want === d.k) ps.tr.want = null; panel.paint(); }, trW(d) { ps.tr.want = d.k; panel.paint(); },
+    trN(d) { ps.tr[d.k] = Math.max(1, Math.min(5, (ps.tr[d.k] || 1) + +d.d)); panel.paint(); },
+    trSend() { const t = ps.tr; ps.busy = true; panel.paint(); api('/farm/trades', { body: { to: t.to, give: t.give, gn: t.gn, want: t.want, wn: t.wn } }).then((r) => { apply({ farm: r.farm }); ps.tr = { gn: 1, wn: 1 }; ps.trades = null; ps.busy = false; loadTab('trade'); toast('Takas teklifin gönderildi.'); }).catch((e) => { ps.busy = false; panel?.paint(); toast(e.message); }); },
+    trAcc(d) { trOp(d.id, 'accept', 'Takas tamam! Tohumlar ambarında.'); }, trDec(d) { trOp(d.id, 'decline', 'Teklifi geri çevirdin.'); }, trCan(d) { trOp(d.id, 'cancel', 'Teklifini geri çektin, tohumların ambarına döndü.'); },
+    invShare() { api('/invite').then(async (r) => { const link = `${location.origin}/?ref=${encodeURIComponent(r.code)}#/register`; const text = `SwipeUp'ta SwipeFarm oynayalım! Bu bağlantıyla katılırsan çiftliğin ${cfg.INV_LVL}. seviyeye gelince ikimize de ödül var.`;
+      if (navigator.share) { navigator.share({ title: 'SwipeFarm', text, url: link }).catch(() => {}); return; } try { await navigator.clipboard.writeText(`${text} ${link}`); toast('Davet bağlantın kopyalandı.'); } catch { location.hash = '#/davet'; } }).catch((e) => toast(e.message)); },
     nb() { ps = {}; openPanel('Komşular', nbBody); api('/farm/neighbors').then((r) => { ps.nb = r; panel?.paint(); }).catch((e) => toast(e.message)); },
     edit() { mode = mode?.k === 'edit' ? null : { k: 'edit' }; paintBot(); },
     set() { ps = {}; openPanel('Ayarlar', setBody); },
@@ -512,8 +732,8 @@ export default async function farm(view, who) {
     shop_(t) { startPlace(t); },
     craft(d) { act('craft', { b: d.b, r: d.r }); }, takeB(d) { act('take', { b: d.b }); },
     feed(d) { act('feed', { pen: d.p }); }, collect(d) { act('collect', { pen: d.p }); }, animal(d) { act('animal', { pen: d.p }); },
-    lvlok() { over.innerHTML = overQ.shift() || ''; },
-    hubG() { openHub('G', 'Görevler ve ödüller', 'quests'); }, hubS() { openHub('S', 'Sosyal', 'rank'); },
+    lvlok() { over.innerHTML = overQ.shift() || ''; paintTut(); },
+    hubG() { openHub('G', 'Görevler ve ödüller', 'quests'); tutEv('hubG'); }, hubS() { openHub('S', 'Sosyal', 'rank'); },
     ptab(d) { ps.T = d.k; loadTab(d.k); panel.paint(); },
     questClaim() { act('questClaim'); }, achClaim(d) { act('achClaim', { k: d.k }); }, evClaim(d) { act('evClaim', { i: +d.i }); },
     spin() { if (ps.spinning) return; ps.spinning = true; panel.paint();
@@ -598,8 +818,9 @@ export default async function farm(view, who) {
     const now = tnow();
     if (mode?.k === 'place') return;
     if (mode?.k === 'edit') { if (o) { pops.set(o.id, T); startPlace(o.t, o.id); } return; }
-    if (!o) { if (mode?.k === 'plant') { mode = null; paintBot(); } return; }
+    if (!o) { if (mode?.k === 'plant' || mode?.k === 'tool') { mode = null; paintBot(); } return; }
     pops.set(o.id, T); SFX.tap(); const Ty = cfg.TYPES[o.t];
+    if (!visit && mode?.k === 'tool' && o.t === 'plot') { if (o.crop && !cropReady(o, now)) UI[mode.tool === 'water' ? 'water1' : 'fert1']({ id: o.id }); return; }
     if (visit) {
       if (o.t === 'plot' && o.crop && !cropReady(o, now)) {
         if (o.h) { toast('Bu ekin zaten sulanmış.'); return; }
@@ -611,6 +832,7 @@ export default async function farm(view, who) {
     if (Ty.kind === 'plot') { if (!o.crop) { if (mode?.k !== 'plant') { const c = localStorage.getItem('sf_crop'); mode = { k: 'plant', crop: cfg.CROPS[c]?.lvl <= F.lvl ? c : 'wheat' }; paintBot(); } } else if (!cropReady(o, now)) { info = { id: o.id, until: T + 7000 }; paintBot(); } return; }
     if (Ty.kind === 'build') { const q = F.q[o.t] || []; if (q.length && q[0].end <= now) act('take', { b: o.t }); else { ps = {}; openPanel(Ty.name, buildBody(o.t), true); } return; }
     if (Ty.kind === 'pen') { const P = cfg.PENS[o.t]; if ((F.pens[o.t] || []).some((a) => a.at && now - a.at >= P.t)) act('collect', { pen: o.t }); else { ps = {}; openPanel(Ty.name, penBody(o.t), true); } return; }
+    if (Ty.kind === 'store') { UI.barn({ st: o.t }); return; }
     if (o.t === 'barn') UI.barn(); else if (o.t === 'board') UI.orders(); else if (o.t === 'house') UI.nb();
   }
   const ptr = new Map(); let drag = null;
@@ -618,7 +840,10 @@ export default async function farm(view, who) {
   const swipeOn = (o) => { // kaydırırken üzerinden geçilen tarlayı işleme kat
     if (!o || o.t !== 'plot' || drag.ids.has(o.id)) return;
     if (drag.k === 'harvest' && cropReady(o, tnow())) { drag.ids.add(o.id); pendH.add(o.id); pops.set(o.id, T); SFX.pop(drag.ids.size); }
-    if (drag.k === 'plant' && !o.crop && !pendP.has(o.id)) { const c = cfg.CROPS[mode.crop]; if (F.coins < c.seed * (drag.ids.size + 1)) return; drag.ids.add(o.id); pendP.set(o.id, mode.crop); pops.set(o.id, T); SFX.plant(); }
+    if (drag.k === 'plant' && !o.crop && !pendP.has(o.id)) { const c = cfg.CROPS[mode.crop]; if (c.rare ? (inv()[`s_${mode.crop}`] || 0) <= drag.ids.size : F.coins < c.seed * (drag.ids.size + 1)) return; drag.ids.add(o.id); pendP.set(o.id, mode.crop); pops.set(o.id, T); SFX.plant(); }
+    const grow = o.crop && !cropReady(o, tnow());
+    if (drag.k === 'water' && grow && !o.w && !pendW.has(o.id)) { drag.ids.add(o.id); pendW.add(o.id); pops.set(o.id, T); SFX.water(); }
+    if (drag.k === 'fert' && grow && !o.f && !pendF.has(o.id) && (inv().fert || 0) > drag.ids.size) { drag.ids.add(o.id); pendF.add(o.id); pops.set(o.id, T); SFX.plant(); }
   };
   cv.addEventListener('pointerdown', (e) => {
     cv.setPointerCapture?.(e.pointerId); const [sx, sy] = pos(e); ptr.set(e.pointerId, [sx, sy]);
@@ -626,6 +851,7 @@ export default async function farm(view, who) {
     const o = pick(sx, sy); drag = { k: 'pan', sx, sy, moved: false, o };
     if (mode?.k === 'place') { const [gx, gy] = toGrid(sx, sy); const Ty = cfg.TYPES[mode.t]; if (gx >= mode.x - 0.8 && gx <= mode.x + Ty.w + 0.8 && gy >= mode.y - 0.8 && gy <= mode.y + Ty.h + 0.8) drag = { k: 'ghost', moved: true }; return; }
     if (visit || mode?.k === 'edit' || !o || o.t !== 'plot') return;
+    if (mode?.k === 'tool') { if (o.crop && !cropReady(o, tnow())) { drag = { k: mode.tool, ids: new Set() }; swipeOn(o); } return; }
     if (cropReady(o, tnow())) { drag = { k: 'harvest', ids: new Set() }; swipeOn(o); } else if (!o.crop && mode?.k === 'plant') { drag = { k: 'plant', ids: new Set() }; swipeOn(o); }
   });
   cv.addEventListener('pointermove', (e) => {
@@ -638,10 +864,16 @@ export default async function farm(view, who) {
   const up = (e) => {
     if (!ptr.has(e.pointerId)) return; const [sx, sy] = ptr.get(e.pointerId); ptr.delete(e.pointerId); const d = drag; if (!d) return;
     if (d.k === 'pinch') { if (ptr.size === 0) drag = null; return; } drag = null;
-    if (d.k === 'pan' && !d.moved) { if (mode?.k === 'place') { const [gx, gy] = toGrid(sx, sy); const Ty = cfg.TYPES[mode.t]; mode.x = Math.min(N - Ty.w, Math.max(0, Math.round(gx - Ty.w / 2))); mode.y = Math.min(N - Ty.h, Math.max(0, Math.round(gy - Ty.h / 2))); } else if (!visit && F.pet && Math.hypot(sx - petW.sx, sy - petW.sy) < 30) { SFX.tap(); ps = {}; openPanel(cfg.PETS[F.pet.t].name, petBody, true); } else tap(d.o); return; }
-    if ((d.k === 'harvest' || d.k === 'plant') && d.ids.size) {
-      const ids = [...d.ids]; if (d.k === 'plant') localStorage.setItem('sf_crop', mode.crop);
-      act(d.k, d.k === 'plant' ? { ids, crop: mode.crop } : { ids }).then(() => ids.forEach((id) => { pendH.delete(id); pendP.delete(id); }));
+    if (d.k === 'pan' && !d.moved) {
+      if (mode?.k === 'place') { const [gx, gy] = toGrid(sx, sy); const Ty = cfg.TYPES[mode.t]; mode.x = Math.min(N - Ty.w, Math.max(0, Math.round(gx - Ty.w / 2))); mode.y = Math.min(N - Ty.h, Math.max(0, Math.round(gy - Ty.h / 2))); return; }
+      const zk = Math.max(1, cam.z / 0.3); const nh = !mode && npcHit.find(([x, y]) => Math.hypot(sx - x, sy - y) < 30 * zk);
+      if (nh) { const v = nh[2]; SFX.tap(); if (visit) toast(`${v.who} ${v.n} ${iname(v.k).toLocaleLowerCase('tr-TR')} almaya gelmiş.`); else { ps = {}; openPanel(v.who, () => { const x = visList().find((y) => y.id === v.id); return x ? `<div class="sf-recs">${visRow(x)}</div><p class="sf-note">Çabuk verirsen büyük bahşiş bırakır. Ziyaretçiler sipariş panosundan da görünür.</p>` : '<p class="sf-empty">Ziyaretçi ayrıldı.</p>'; }, true); } return; }
+      if (!visit && F.pet && Math.hypot(sx - petW.sx, sy - petW.sy) < 30) { SFX.tap(); ps = {}; openPanel(cfg.PETS[F.pet.t].name, petBody, true); return; }
+      if (visit && meW && !(d.o?.t === 'plot' && d.o.crop)) { const [gx, gy] = toGrid(sx, sy); if (!blocked(gx, gy) && gx > 0 && gy > 0 && gx < N && gy < N + 0.5) { meW.tx = gx; meW.ty = gy; meW.walk = true; } if (!d.o) return; }
+      tap(d.o); return; }
+    if ((d.k === 'harvest' || d.k === 'plant' || d.k === 'water' || d.k === 'fert') && d.ids.size) {
+      const ids = [...d.ids]; if (d.k === 'plant') { try { localStorage.setItem('sf_crop', mode.crop); } catch { /* yok say */ } }
+      act(d.k, d.k === 'plant' ? { ids, crop: mode.crop } : { ids }).then(() => ids.forEach((id) => { pendH.delete(id); pendP.delete(id); pendW.delete(id); pendF.delete(id); }));
     }
   };
   cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
@@ -650,11 +882,17 @@ export default async function farm(view, who) {
   // ---------- zaman ----------
   hud(); paintBot();
   const tick = setInterval(() => {
-    if (panel?.live && !ps.spinning) panel.paint();
-    paintBot(); if (!visit) hud(); calcAmb();
+    const lv = typeof panel?.live === 'function' ? panel.live() : panel?.live; if (lv && !ps.spinning) panel.paint();
+    paintBot(); hud(); paintTut(); calcAmb();
+    if (F.wx && F.wx.until <= tnow()) { F.wx = null; reload(); } // hava değişti
+    if (!visit && (F.vis || []).some((v) => v.until <= tnow())) F.vis = F.vis.filter((v) => v.until > tnow());
     if (!visit && F.orders.some((o) => o.wait && o.wait <= tnow())) reload();
   }, 1000);
   const vis = () => { if (document.visibilityState === 'visible') reload(); };
   document.addEventListener('visibilitychange', vis);
-  return () => { cancelAnimationFrame(raf); cancelAnimationFrame(glide); clearInterval(tick); clearTimeout(toastT); ro.disconnect(); document.removeEventListener('visibilitychange', vis); unfit(); };
+  // müzik ilk dokunuşta başlar (tarayıcılar sesi ancak bir dokunuştan sonra açar)
+  const startMus = () => { musicStart(); root.removeEventListener('pointerdown', startMus); }; root.addEventListener('pointerdown', startMus);
+  if (data.welcome) { const w = data.welcome; showOver(`<div class="sf-lvl"><div class="sf-lvc dec"><span class="sf-decs">${spr('i_basket', 92)}</span><h2>Hoş geldin hediyesi</h2><p class="sf-lvr">${spr('i_coin', 22)} +${w.coins} altın · ${spr(ik(w.seed), 22)} +${w.n} ${esc(iname(w.seed).toLocaleLowerCase('tr-TR'))}</p><p class="sf-note">${esc(visit.name || visit.username)} seni çiftliğine davet etti, ilk ziyaretine ikinize de hediye verildi.</p><button class="sf-btn" data-a="lvlok">Teşekkürler!</button></div></div>`); }
+  paintTut();
+  return () => { cancelAnimationFrame(raf); cancelAnimationFrame(glide); clearInterval(tick); clearTimeout(toastT); ro.disconnect(); document.removeEventListener('visibilitychange', vis); unLive(); musicStop(); root.removeEventListener('pointerdown', startMus); unfit(); };
 }

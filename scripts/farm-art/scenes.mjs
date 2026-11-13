@@ -323,6 +323,82 @@ const ITEMS = {
     .add(C.redS, 0, sph(-0.13, 0.31, 0.04, 0.055)).add(C.yellow, 0, sph(0, 0.31, 0.04, 0.055)).add(C.leaf, 0, sph(0.13, 0.31, 0.04, 0.055)),
   coin: () => { const R = { rx: 62, ry: 35 }; return new Scene().add(C.coin, 0, cyl(0, 0.22, 0, 0.21, 0.04, 0.025, R)).add(C.coinD, 0, cyl(0, 0.22, 0, 0.165, 0.046, 0.01, R)).add(C.coin, 0, tor(0, 0.22, 0, 0.19, 0.036, R)).add(M('#ffe680', { spec: 0.9, gloss: 50 }), 0, starP(0, 0.22, 0, 0.11, 0.062, R)); },
 };
+// ---- ikinci genişleme: nadir ekinler, depolar, kasaba ziyaretçileri, yeni ürünler ----
+const berry = M('#4b5bd0', { spec: 0.6, gloss: 40 }); const lav = M('#9a6ad8', { soft: 0.2 }); const lavS = M('#7fa86a'); const melonS = stripes('#2f8f4a', '#1f6a36', { axis: 'x', w: 0.05 });
+const RARE_CROPS = {
+  blueberry_2: () => soil().add(C.leafD, 0.05, grid(2, (x, z) => [sph(x, 0.15, z, 0.12), sph(x + 0.06, 0.21, z - 0.03, 0.08)], 0.2)),
+  blueberry_3: () => soil().add(C.leafD, 0.05, grid(2, (x, z) => [sph(x, 0.18, z, 0.15), sph(x + 0.07, 0.27, z - 0.04, 0.1), sph(x - 0.05, 0.26, z + 0.05, 0.09)], 0.2))
+    .add(berry, 0, grid(2, (x, z, i) => [[0.13, 0.2, 0.08], [0.03, 0.31, 0.12], [0.15, 0.3, -0.03], [0.05, 0.13, 0.16], [-0.1, 0.21, 0.12], [0.12, 0.11, 0.13], [-0.02, 0.24, 0.17]].map(([a, b, c], k) => sph(x + a, b + jit(i + k, 4) * 0.02, z + c, 0.034)), 0.2)),
+  lavender_2: () => soil().add(C.leafL, 0.01, grid(3, (x, z, i) => [-1, 0, 1].map((k) => cap(x, 0.07, z, x + k * 0.04, 0.2 + jit(i + k, 3) * 0.03, z + jit(i, k + 2) * 0.04, 0.012)))),
+  lavender_3: () => soil().add(lavS, 0.01, grid(3, (x, z, i) => [-1, 0, 1].map((k) => cap(x, 0.07, z, x + k * 0.045, 0.3 + jit(i + k, 3) * 0.04, z + jit(i, k + 2) * 0.04, 0.011))))
+    .add(lav, 0.01, grid(3, (x, z, i) => [-1, 0, 1].map((k) => ell(x + k * 0.05, 0.35 + jit(i + k, 3) * 0.04, z + jit(i, k + 2) * 0.045, 0.024, 0.065, 0.024, { rz: -k * 10 })))),
+  watermelon_2: () => soil().add(C.leaf, 0.02, grid(3, (x, z, i) => ell(x, 0.1, z, 0.09, 0.02, 0.07, { ry: i * 53, rz: 8 }))).add(C.leafL, 0, sph(0.05, 0.12, 0.02, 0.06), sph(-0.16, 0.11, 0.14, 0.045)),
+  watermelon_3: () => soil().add(C.leaf, 0.02, grid(3, (x, z, i) => ell(x, 0.1, z, 0.1, 0.02, 0.08, { ry: i * 53, rz: 8 })))
+    .add(melonS, 0, ell(-0.12, 0.17, 0.12, 0.2, 0.14, 0.15, { ry: 30 }), ell(0.18, 0.15, -0.12, 0.16, 0.12, 0.13, { ry: -20 })),
+};
+// kasaba ziyaretçileri: çiftçiden farklı giyimli kasabalılar (elbise, kasket, aşçı şapkası)
+const folk = (o) => () => {
+  const s = new Scene().add(M('#6b4a30'), 0.01, ell(0.02, 0.03, 0.06, 0.06, 0.035, 0.045), ell(0.02, 0.03, -0.06, 0.06, 0.035, 0.045));
+  if (o.skirt) s.add(C.skin, 0, cap(0, 0.05, 0.055, 0, 0.16, 0.05, 0.03), cap(0, 0.05, -0.055, 0, 0.16, -0.05, 0.03)).add(M(o.bottom), 0.03, cone(0, 0.12, 0, 0.18, 0.1, 0.3, 0.03));
+  else s.add(M(o.bottom), 0.03, cap(0, 0.06, 0.06, 0, 0.24, 0.05, 0.045), cap(0, 0.06, -0.06, 0, 0.24, -0.05, 0.045), ell(0, 0.33, 0, 0.11, 0.13, 0.12));
+  s.add(M(o.top), 0.03, ell(0, 0.43, 0, 0.115, 0.09, 0.125), cap(0, 0.47, 0.13, 0.02, 0.3, 0.17, 0.035), cap(0, 0.47, -0.13, 0.02, 0.3, -0.17, 0.035))
+    .add(C.skin, 0.02, sph(0.01, 0.63, 0, 0.115), sph(0.02, 0.28, 0.17, 0.035), sph(0.02, 0.28, -0.17, 0.035))
+    .add(M(o.hair), 0.02, ell(-0.035, 0.675, 0, 0.1, 0.095, 0.122), o.bun ? sph(-0.11, 0.73, 0, 0.055) : null, o.pony ? cap(-0.1, 0.68, 0, -0.17, 0.5, 0, 0.038) : null)
+    .add(C.black, 0, sph(0.105, 0.64, 0.045, 0.013), sph(0.105, 0.64, -0.045, 0.013)).add(C.pink, 0, sph(0.1, 0.6, 0.075, 0.02), sph(0.1, 0.6, -0.075, 0.02));
+  if (o.bow) s.add(M(o.bow), 0, ell(-0.13, 0.7, 0.04, 0.03, 0.03, 0.045), ell(-0.13, 0.7, -0.04, 0.03, 0.03, 0.045), sph(-0.13, 0.7, 0, 0.022));
+  if (o.hat === 'cap') s.add(M(o.hatC), 0.02, ell(-0.01, 0.725, 0, 0.125, 0.055, 0.125), ell(0.1, 0.71, 0, 0.075, 0.014, 0.1));
+  if (o.hat === 'chef') s.add(M('#ffffff', { soft: 0.4 }), 0.03, cyl(0, 0.79, 0, 0.1, 0.07, 0.02), sph(0.02, 0.88, 0.04, 0.07), sph(0.02, 0.88, -0.05, 0.07), sph(-0.04, 0.89, 0, 0.07));
+  if (o.apron) s.add(M('#fff6e6'), 0.01, box(0.115, 0.34, 0, 0.02, 0.15, 0.1, 0.02));
+  if (o.basket) s.add(C.woodH, 0.01, cyl(0.06, 0.22, 0.24, 0.08, 0.05, 0.02)).add(C.woodD, 0, tor(0.06, 0.28, 0.24, 0.07, 0.01, { rx: 90 })).add(C.redS, 0, sph(0.04, 0.29, 0.22, 0.035), sph(0.09, 0.29, 0.26, 0.03)).add(C.leaf, 0, sph(0.03, 0.29, 0.28, 0.03));
+  return s;
+};
+const NPC = {
+  npc_a: folk({ top: '#9a6ad8', bottom: '#7a45b8', skirt: 1, hair: '#d9d4cc', bun: 1, basket: 1 }),
+  npc_b: folk({ top: '#3f8f5a', bottom: '#c9a46a', hair: '#5a3d2b', hat: 'cap', hatC: '#7b5a3a' }),
+  npc_c: folk({ top: '#ffd24a', bottom: '#ffb52e', skirt: 1, hair: '#8b5a33', pony: 1, bow: '#ff8fb3' }),
+  npc_d: folk({ top: '#f5f0e6', bottom: '#3f6fd0', hair: '#2b2320', hat: 'chef', apron: 1 }),
+  farmer_e: (...x) => manOf('#ffc933', '#5a3d9a', '#7a45e0', '#ffc933')(...x),
+};
+const STORE = {
+  compost: () => new Scene().add(C.woodH, 0, [0.07, 0.19, 0.31].flatMap((y) => [box(0, y, 0.3, 0.36, 0.045, 0.025, 0.01), box(0.36, y, 0, 0.025, 0.045, 0.3, 0.01), box(0, y, -0.3, 0.36, 0.045, 0.025, 0.01), box(-0.36, y, 0, 0.025, 0.045, 0.3, 0.01)]))
+    .add(C.woodD, 0, [[-0.36, -0.3], [0.36, -0.3], [-0.36, 0.3], [0.36, 0.3]].map(([x, z]) => box(x, 0.2, z, 0.04, 0.2, 0.04, 0.01)))
+    .add(mottle('#4a2f1c', '#2e1d12', 10), 0.05, ell(0, 0.33, 0, 0.32, 0.12, 0.27), box(0, 0.18, 0, 0.33, 0.15, 0.27, 0.02))
+    .add(C.leafL, 0, sph(-0.12, 0.43, 0.1, 0.04), ell(0.15, 0.43, -0.05, 0.06, 0.02, 0.035, { rz: 20 })).add(C.orange, 0, ell(0.05, 0.44, 0.13, 0.05, 0.015, 0.03, { rz: -15 })).add(M('#fff1dc'), 0, ell(-0.04, 0.45, -0.1, 0.035, 0.02, 0.03))
+    .add(C.woodH, 0, cap(0.2, 0.38, -0.12, 0.3, 0.9, -0.2, 0.016)).add(C.metal, 0, box(0.19, 0.33, -0.11, 0.06, 0.075, 0.012, 0.008, { rz: -12 })),
+  silo: () => { const R = 0.34; const q = Math.SQRT1_2; const s = new Scene().add(C.stone, 0, cyl(0, 0.05, 0, 0.4, 0.06, 0.03))
+    .add(stripes('#eef3f6', '#c9d3da', { axis: 'y', w: 0.12 }), 0, cyl(0, 0.62, 0, R, 0.56, 0.02)).add(C.metal, 0, [0.36, 0.7, 1.0].map((y) => tor(0, y, 0, R + 0.005, 0.014)))
+    .add(C.roofR, 0.02, ell(0, 1.17, 0, R + 0.03, 0.25, R + 0.03), sph(0, 1.43, 0, 0.05)).add(C.white, 0, tor(0, 1.19, 0, R + 0.02, 0.016));
+    const t = [-q, 0, q]; const rail = (o) => cap((R + 0.04) * q + t[0] * o, 0.12, (R + 0.04) * q + t[2] * o, (R + 0.04) * q + t[0] * o, 1.12, (R + 0.04) * q + t[2] * o, 0.012);
+    s.add(C.woodD, 0, rail(0.06), rail(-0.06), Array.from({ length: 7 }, (_, i) => cap((R + 0.04) * q - t[0] * 0.06, 0.22 + i * 0.14, (R + 0.04) * q - t[2] * 0.06, (R + 0.04) * q + t[0] * 0.06, 0.22 + i * 0.14, (R + 0.04) * q + t[2] * 0.06, 0.01)));
+    return s.add(M('#d8433a'), 0, box(R * 0.98, 0.28, 0, 0.02, 0.15, 0.1, 0.01)).add(C.white, 0, box(R * 0.98 + 0.012, 0.28, 0, 0.012, 0.15, 0.012, 0.004), box(R * 0.98 + 0.012, 0.28, 0, 0.012, 0.012, 0.1, 0.004)); },
+  cellar: () => new Scene().add(mottle('#7cc25a', '#5fa846', 8, { soft: 0.4 }), 0.06, ell(-0.04, 0.06, -0.06, 0.46, 0.44, 0.44))
+    .add(C.stone, 0.01, box(0, 0.17, 0.3, 0.32, 0.17, 0.07, 0.02), cyl(0, 0.34, 0.3, 0.32, 0.07, 0.02, { rx: 90 }))
+    .add(C.woodD, 0, box(0, 0.16, 0.37, 0.14, 0.16, 0.012, 0.006), cyl(0, 0.32, 0.37, 0.14, 0.012, 0.006, { rx: 90 })).add(C.woodH, 0, [-0.07, 0, 0.07].map((x) => box(x, 0.22, 0.384, 0.028, 0.2, 0.004, 0.003)))
+    .add(C.metal, 0, tor(0.08, 0.2, 0.39, 0.022, 0.006, { rx: 90 }))
+    .add(C.woodH, 0.01, cyl(0.33, 0.12, 0.42, 0.085, 0.12, 0.03)).add(C.metal, 0, tor(0.33, 0.06, 0.42, 0.087, 0.008), tor(0.33, 0.18, 0.42, 0.087, 0.008))
+    .add(C.stone, 0, cyl(-0.16, 0.48, -0.14, 0.055, 0.1, 0.01), cyl(-0.16, 0.59, -0.14, 0.07, 0.015, 0.008)).add(C.pink, 0, sph(-0.28, 0.34, 0.26, 0.03), sph(0.22, 0.42, 0.06, 0.03)).add(C.yellow, 0, sph(-0.3, 0.3, 0.32, 0.026)),
+  swing: () => new Scene().add(C.woodH, 0, cap(-0.3, 0, -0.14, -0.3, 0.72, 0, 0.024), cap(-0.3, 0, 0.14, -0.3, 0.72, 0, 0.024), cap(0.3, 0, -0.14, 0.3, 0.72, 0, 0.024), cap(0.3, 0, 0.14, 0.3, 0.72, 0, 0.024), cap(-0.36, 0.72, 0, 0.36, 0.72, 0, 0.028))
+    .add(M('#d8c286'), 0, cap(-0.14, 0.7, 0, -0.14, 0.22, 0, 0.008), cap(0.14, 0.7, 0, 0.14, 0.22, 0, 0.008)).add(C.redS, 0, box(0, 0.21, 0, 0.18, 0.018, 0.075, 0.01))
+    .add(C.leaf, 0.02, [-0.3, -0.18, -0.05, 0.08, 0.2, 0.32].map((x, i) => sph(x, 0.76 + (i % 2) * 0.02, 0.02, 0.045))).add(C.pink, 0, [-0.24, 0.02, 0.26].map((x) => sph(x, 0.8, 0.05, 0.028))),
+  rosette: () => new Scene().add(C.woodD, 0, cap(0, 0, 0, 0, 0.5, 0, 0.022), box(0, 0.02, 0, 0.12, 0.02, 0.12, 0.01))
+    .add(M('#3f6fd0'), 0, box(-0.05, 0.42, 0.04, 0.035, 0.12, 0.008, 0.004, { rz: 14 }), box(0.05, 0.42, 0.04, 0.035, 0.12, 0.008, 0.004, { rz: -14 }))
+    .add(M('#e23b3b', { spec: 0.3 }), 0.02, Array.from({ length: 10 }, (_, i) => { const a = (i / 10) * 6.283; return sph(Math.cos(a) * 0.12, 0.62 + Math.sin(a) * 0.12, 0.04, 0.05); }))
+    .add(C.coin, 0, cyl(0, 0.62, 0.07, 0.085, 0.022, 0.01, { rx: 90 })).add(M('#fff3b0', { spec: 0.9, gloss: 50 }), 0, starP(0, 0.62, 0.095, 0.05, 0.012, { rx: 90 })),
+};
+const packOf = (col, mat) => () => new Scene().add(M('#fff6e6'), 0, box(0, 0.25, 0, 0.16, 0.25, 0.035, 0.015)).add(M('#efe3c8'), 0, box(0, 0.51, 0, 0.165, 0.025, 0.03, 0.01))
+  .add(M(col), 0, box(0, 0.08, 0.03, 0.14, 0.045, 0.012, 0.008)).add(mat, 0.02, sph(-0.03, 0.27, 0.05, 0.075), sph(0.06, 0.24, 0.05, 0.06)).add(C.leaf, 0, ell(0.02, 0.36, 0.05, 0.07, 0.025, 0.012, { rz: 20 }));
+const ITEMS2 = {
+  blueberry: () => new Scene().add(berry, 0.01, [[0, 0.1, 0], [0.12, 0.1, 0.04], [-0.11, 0.1, 0.05], [0.05, 0.1, 0.13], [-0.04, 0.1, -0.1], [0.08, 0.21, 0], [-0.06, 0.21, 0.04], [0.01, 0.2, 0.1]].map(([x, y, z]) => sph(x, y, z, 0.085)))
+    .add(M('#2c3577'), 0, [[0.11, 0.27, 0.03], [-0.03, 0.27, 0.07], [0.04, 0.26, 0.13]].map(([x, y, z]) => sph(x, y, z, 0.02))).add(C.leaf, 0, ell(0.0, 0.3, -0.07, 0.1, 0.015, 0.045, { rz: 15, ry: 30 })),
+  lavender: () => new Scene().add(lavS, 0, [-2, -1, 0, 1, 2].map((k) => cap(0, 0, 0, k * 0.06, 0.34, k * 0.025, 0.012))).add(lav, 0.01, [-2, -1, 0, 1, 2].map((k) => ell(k * 0.07, 0.44, k * 0.03, 0.035, 0.1, 0.035, { rz: -k * 9 }))).add(M('#ff8fb3'), 0, tor(0, 0.12, 0, 0.035, 0.016)),
+  watermelon: () => new Scene().add(stripes('#2f8f4a', '#1f6a36', { axis: 'x', w: 0.06 }), 0, ell(0, 0.17, 0, 0.25, 0.17, 0.19, { ry: 30 })).add(C.brown, 0, cap(0.2, 0.26, -0.1, 0.24, 0.3, -0.12, 0.012)),
+  s_blueberry: packOf('#4b5bd0', berry), s_lavender: packOf('#9a6ad8', lav), s_watermelon: packOf('#2f8f4a', M('#e8324a', { spec: 0.4 })),
+  fert: () => sackOf('#5a3d22')().add(C.leafL, 0, ell(0.04, 0.53, 0, 0.06, 0.018, 0.03, { rz: 30 }), ell(-0.04, 0.53, 0, 0.06, 0.018, 0.03, { rz: -30 }), cap(0, 0.46, 0, 0, 0.53, 0, 0.01)),
+  can: () => new Scene().add(M('#3fa9d6', { spec: 0.6, gloss: 40 }), 0.02, cyl(0, 0.15, 0, 0.15, 0.15, 0.03), cap(0.12, 0.1, 0, 0.32, 0.3, 0, 0.026))
+    .add(M('#2f86b0', { spec: 0.6, gloss: 40 }), 0, tor(0, 0.3, 0, 0.12, 0.018), cyl(0.34, 0.32, 0, 0.05, 0.02, 0.01, { rz: -40 }), tor(-0.08, 0.32, 0, 0.1, 0.02, { rx: 90 })),
+  basket: () => new Scene().add(C.woodH, 0.01, cyl(0, 0.12, 0, 0.22, 0.12, 0.04)).add(C.woodD, 0, tor(0, 0.24, 0, 0.21, 0.02), tor(0, 0.28, 0, 0.19, 0.016, { rx: 90 }))
+    .add(C.redS, 0, sph(-0.08, 0.26, 0.06, 0.07)).add(C.yellow, 0, sph(0.08, 0.26, 0.05, 0.065)).add(berry, 0, sph(0.0, 0.26, -0.09, 0.06)).add(C.leaf, 0.02, ell(0.02, 0.29, 0.1, 0.07, 0.025, 0.04)),
+};
 const HERO = { // oyun salonu kapağı ve boş ekranlar için küçük sahne
   hero: () => { const s = BUILD.barn(); const t = DECOR.appletree(); t.groups.forEach((g) => g.prims.forEach((p) => { const d0 = p.d; p.d = (x, y, z) => d0(x - 1.25, y, z + 0.2); p.c = [p.c[0] + 1.25, p.c[1], p.c[2] - 0.2]; })); s.groups.push(...t.groups); return s; },
 };
@@ -335,5 +411,9 @@ export const SCENES = {
   ...Object.fromEntries(Object.entries(ANIMAL).map(([k, f]) => [k, obj(f)])),
   ...Object.fromEntries(Object.entries(DECOR).map(([k, f]) => [k, obj(f)])),
   ...Object.fromEntries(Object.entries(ITEMS).map(([k, f]) => [`i_${k}`, item(f)])),
+  ...Object.fromEntries(Object.entries(RARE_CROPS).map(([k, f]) => [k, obj(f)])),
+  ...Object.fromEntries(Object.entries(NPC).map(([k, f]) => [k, obj(f)])),
+  ...Object.fromEntries(Object.entries(STORE).map(([k, f]) => [k, obj(f)])),
+  ...Object.fromEntries(Object.entries(ITEMS2).map(([k, f]) => [`i_${k}`, item(f)])),
   hero: { build: HERO.hero, opt: { S: 150 }, set: 'hero' },
 };

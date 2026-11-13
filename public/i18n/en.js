@@ -589,6 +589,15 @@ const D = {
   'Google ile giriş şu an açılamadı.': 'Google sign-in couldn’t open right now.',
   'Apple ile giriş tamamlanmadı.': 'Apple sign-in wasn’t completed.',
   'Bu metin bilgilendirme amaçlıdır; okuman için onay vermen gerekmez.': 'This notice is for information; you don’t need to approve it.',
+  'Çiftliğim': 'My farm',
+  'Çiftliğini gez': 'Visit their farm',
+  'Çiftliğime davet et': 'Invite to my farm',
+  'SwipeFarm: ilk ziyarette ikinize de hediye': 'SwipeFarm: a gift for both of you on the first visit',
+  'Çiftlik davetin gönderildi.': 'Your farm invite was sent.',
+  'SwipeFarm daveti': 'SwipeFarm invite',
+  'Çiftliğime gel!': 'Come visit my farm!',
+  'İlk ziyaretinde ikimize de hoş geldin hediyesi var': 'There’s a welcome gift for both of us on your first visit',
+  'Bugün davet gönderdin. Yarın yeniden gönderebilirsin.': 'You already sent an invite today. You can send another tomorrow.',
 };
 
 // Sayı / isim içeren metinler
@@ -748,5 +757,7 @@ export const patterns = [
   [/^(\d+) gün (\d+) saat$/, (_, d, h) => `${d} days ${h} hours`],
   [/^(\d+) sa (\d+) dk$/, (_, h, m) => `${h}h ${m}m`],
   [/^(\d+)–(\d+) dk$/, (_, a, b) => `${a}–${b} min`],
+  [/^SwipeFarm · Seviye (\d+)(.*)$/, (_, l, r) => `SwipeFarm · Level ${l}${r.replace(/ rozet/, ' badges').replace(/ beğeni/, ' likes')}`],
+  [/^Seviye (\d+) çiftliğimi gez$/, (_, l) => `Visit my level ${l} farm`],
 ];
 export default D;
