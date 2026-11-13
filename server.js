@@ -428,6 +428,21 @@ app.use(helmet({
 app.disable('x-powered-by');
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));
+// "__proto__", "constructor", "toString" gibi nesne prototipi adları ne anahtar ne değer olarak kabul edilir:
+// sabit tablolarda (ürün, fal türü, kategori…) arama yapan uçlar bu adlarla kandırılamasın, nesnelere prototip sızmasın.
+const PROTO_NAMES = new Set(Object.getOwnPropertyNames(Object.prototype));
+const PROTO_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+function protoBad(v, st = { n: 0 }, d = 0) {
+  if (typeof v === 'string') return v.length <= 24 && PROTO_NAMES.has(v);
+  if (!v || typeof v !== 'object' || d > 8 || Buffer.isBuffer(v) || ArrayBuffer.isView(v)) return false;
+  for (const k of Object.keys(v)) { if (++st.n > 5000) return false; if (PROTO_KEYS.has(k) || protoBad(v[k], st, d + 1)) return true; }
+  return false;
+}
+app.use((req, res, next) => {
+  let p = ''; try { p = decodeURIComponent(req.path); } catch { return res.status(400).json({ error: 'Geçersiz istek.' }); }
+  if (p.split('/').some((x) => PROTO_NAMES.has(x)) || protoBad(req.query) || protoBad(req.body)) return res.status(400).json({ error: 'Geçersiz istek.' });
+  next();
+});
 
 // ---------- Yönetim paneli gizli adreste ----------
 // Panel /admin'de değil, tahmin edilemeyen bir adreste açılır (ADMIN_PATH). Eski /admin ve /api/admin adresleri dışarıdan 404 verir;
@@ -2093,6 +2108,7 @@ function finishCall(call, reason) {
 
 io.on('connection', (socket) => {
   const uid = socket.data.userId;
+  socket.use((pkt, next) => { if (pkt.slice(1).some((a) => typeof a !== 'function' && protoBad(a))) return; next(); }); // prototip adı taşıyan olayları sessizce düşür
   if (!online.has(uid)) online.set(uid, new Set());
   const wasOnline = isOnline(uid);
   online.get(uid).add(socket);

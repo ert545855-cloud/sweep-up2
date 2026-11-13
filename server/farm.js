@@ -172,6 +172,9 @@ module.exports = function farm(app, ctx) {
   const pay = (user, n, ref) => { if (!eco?.spend(user.id, n, 'farm', { ref })) throw E(`Jetonun yetmiyor (${n} jeton gerekli).`); };
   const rushCost = (ms) => Math.min(RUSH_MAX, Math.max(1, Math.ceil(ms / (RUSH_MIN * MIN))));
   const E = (msg, code = 400) => Object.assign(new Error(msg), { status: code });
+  // tablolarda yalnızca kendi anahtarlar: "__proto__", "constructor" gibi devralınan adlarla oyun kandırılamasın
+  const own = (o, k) => typeof k === 'string' && !!o && Object.prototype.hasOwnProperty.call(o, k);
+  const pick = (o, k) => (own(o, k) ? o[k] : null);
 
   const has = (f, items) => Object.entries(items).every(([k, n]) => (f.inv[k] || 0) >= n);
   const take = (f, items) => { Object.entries(items).forEach(([k, n]) => { f.inv[k] -= n; if (f.inv[k] <= 0) delete f.inv[k]; }); };
@@ -258,7 +261,19 @@ module.exports = function farm(app, ctx) {
     touch(f);
     return store.put('farms', f);
   }
-  const load = (uid) => { const f = store.get('farms', uid) || create(uid); if (touch(f)) store.put('farms', f); return f; };
+  // bozulmuş kayıt onarımı: bilinmeyen ürün ve yapılar atılır, sayı olmayan altın sıfırlanır
+  function repair(f) {
+    let ch = false;
+    if (!Number.isFinite(f.coins) || f.coins < 0) { f.coins = 0; ch = true; }
+    if (!Number.isFinite(f.xp) || f.xp < 0) { f.xp = 0; ch = true; }
+    if (!f.inv || typeof f.inv !== 'object' || Array.isArray(f.inv)) { f.inv = {}; ch = true; }
+    for (const k of Object.keys(f.inv)) { const n = f.inv[k]; if (!own(ITEMS, k) || !Number.isFinite(n) || n < 1) { delete f.inv[k]; ch = true; } else if (n !== Math.floor(n)) { f.inv[k] = Math.floor(n); ch = true; } }
+    const n0 = (f.objs || []).length; f.objs = (f.objs || []).filter((o) => o && own(TYPES, o.t) && Number.isInteger(o.x) && Number.isInteger(o.y)); if (f.objs.length !== n0) ch = true;
+    if (f.fit && !own(FITS, f.fit)) { f.fit = 'a'; ch = true; }
+    if (f.pet && !own(PETS, f.pet.t)) { delete f.pet; ch = true; }
+    return ch;
+  }
+  const load = (uid) => { const f = store.get('farms', uid) || create(uid); const fixed = repair(f); if (touch(f) || fixed) store.put('farms', f); return f; };
   const save = (f) => store.put('farms', f);
   function gain(f, xp, fx) {
     if (!xp) return; f.xp += xp; fx.push({ t: 'xp', n: xp });
@@ -310,13 +325,13 @@ module.exports = function farm(app, ctx) {
     f.boat = { day: day(), crates, coins: Math.round(V * 1.5) + 40, xp: 20 + f.lvl * 3, sent: 0 }; return f.boat;
   }
   const boatOut = (f) => { const b = boatOf(f); return b ? { crates: b.crates.map((c) => ({ k: c.k, n: c.n, done: c.done, by: c.by ? store.get('users', c.by)?.username || null : null })), coins: b.coins, xp: b.xp, sent: b.sent } : null; };
-  const petOut = (f) => (f.pet ? { t: f.pet.t, fed: f.pet.fed || 0 } : null);
+  const petOut = (f) => (f.pet && own(PETS, f.pet.t) ? { t: f.pet.t, fed: f.pet.fed || 0 } : null);
   const bookOut = (f, n = 30) => (f.book || []).slice(0, n).map((x) => { const u = store.get('users', x.from); return u ? { id: x.id, user: brief(u), text: x.text, at: x.at } : null; }).filter(Boolean);
   const upK = (f, b) => { const l = (f.bu || {})[b] || 0; return l ? UPG[l - 1].k : 1; };
   const matched = (a, b) => !!store.get('matches', [a, b].sort().join('_'));
   const pairOut = (a, b) => { if (!matched(a, b)) return null; const p = store.get('farm_pairs', [a, b].sort().join('_')) || { g: 0, w: {} }; return { g: p.g, max: PAIR_STEPS[PAIR_STEPS.length - 1].g, me: p.w[a] === day(), them: p.w[b] === day() }; };
 
-  const fitOf = (f, plus) => (f.fit === 'e' && !plus ? 'a' : f.fit || 'a');
+  const fitOf = (f, plus) => (!own(FITS, f.fit) || (f.fit === 'e' && !plus) ? 'a' : f.fit);
   const spinFree = (plus) => (plus ? 2 : 1);
   const visOut = (f) => (f.vis || []).filter((v) => v.until > now()).map(({ id, who, look, k, n, coins, at, until, sx }) => ({ id, who, look, k, n, coins, at, until, sx }));
   const out = (f) => { const plus = isPlusU(f.id); return { quests: (() => { const q = questOf(f); return { list: q.list, coins: q.coins, xp: q.xp, claimed: !!q.claimed }; })(), ach: achOut(f), boat: boatOut(f), pet: petOut(f), fit: fitOf(f, plus), fits: { a: 1, ...(f.fits || {}), ...(plus ? { e: 1 } : {}) }, bu: f.bu || {},
@@ -369,7 +384,7 @@ module.exports = function farm(app, ctx) {
     },
     shoo(f, b) { const n0 = (f.vis || []).length; f.vis = (f.vis || []).filter((v) => v.id !== b.id); if (f.vis.length === n0) throw E('Bu ziyaretçi ayrılmış.'); },
     storeUp(f, b) { // ambar, silo ve kiler büyütme
-      const s = b.s; if (s !== 'barn' && !STORE[s]) throw E('Depo bulunamadı.'); if (s !== 'barn' && !count(f, s)) throw E(`Önce ${STORE[s].name.toLocaleLowerCase('tr-TR')} kur.`);
+      const s = b.s; if (s !== 'barn' && !own(STORE, s)) throw E('Depo bulunamadı.'); if (s !== 'barn' && !count(f, s)) throw E(`Önce ${STORE[s].name.toLocaleLowerCase('tr-TR')} kur.`);
       const c = upOf(f, s); if (f.coins < c) throw E('Altının yetmiyor.'); f.coins -= c; f[LV[s]] = (f[LV[s]] || 0) + 1;
     },
     tut(f, b, fx) { // ilk giriş rehberi: adım adım ilerler, bitince küçük bir ödül
@@ -381,7 +396,7 @@ module.exports = function farm(app, ctx) {
       return {};
     },
     plant(f, b, fx) {
-      const c = CROPS[b.crop]; if (!c || c.lvl > f.lvl) throw E('Bu ekin henüz açılmadı.');
+      const c = pick(CROPS, b.crop); if (!c || c.lvl > f.lvl) throw E('Bu ekin henüz açılmadı.');
       const sk = `s_${b.crop}`; const w = wxAt(now()).k; let n = 0;
       for (const id of [].concat(b.ids || []).slice(0, 40)) {
         const o = f.objs.find((x) => x.id === id && x.t === 'plot'); if (!o || o.crop) continue;
@@ -417,7 +432,7 @@ module.exports = function farm(app, ctx) {
       return { fertilized: n };
     },
     buy(f, b, fx, user) {
-      const T = TYPES[b.t]; if (!T || T.kind === 'fixed') throw E('Bu satın alınamaz.');
+      const T = pick(TYPES, b.t); if (!T || T.kind === 'fixed') throw E('Bu satın alınamaz.');
       const stock = (f.stock || {})[b.t] > 0; // koleksiyondan yerleştirme ücretsiz
       if (T.special && !stock) throw E(`${T.name} satın alınamaz: ${T.special}.`);
       if (!stock && T.lvl > f.lvl) throw E(`${T.name} ${T.lvl}. seviyede açılır.`);
@@ -445,32 +460,32 @@ module.exports = function farm(app, ctx) {
       if (T.special || T.gem) { f.stock = f.stock || {}; f.stock[o.t] = (f.stock[o.t] || 0) + 1; } else f.coins += Math.floor(T.cost / 2); // koleksiyon parçası depoya döner
     },
     animal(f, b) {
-      const P = PENS[b.pen]; const list = f.pens[b.pen]; if (!P || !list) throw E('Önce barınağı kur.');
+      const P = pick(PENS, b.pen); const list = pick(f.pens, b.pen); if (!P || !Array.isArray(list)) throw E('Önce barınağı kur.');
       const price = P.prices[list.length]; if (price == null) throw E('Barınak dolu.');
       if (f.coins < price) throw E('Altının yetmiyor.');
       f.coins -= price; list.push({ at: 0 });
     },
     feed(f, b) {
-      const P = PENS[b.pen]; const list = f.pens[b.pen]; if (!P || !list) throw E('Barınak yok.');
+      const P = pick(PENS, b.pen); const list = pick(f.pens, b.pen); if (!P || !Array.isArray(list)) throw E('Barınak yok.');
       let n = 0; for (const a of list) { if (a.at) continue; if (!(f.inv[P.feed] > 0)) break; take(f, { [P.feed]: 1 }); a.at = now(); n++; }
       if (!n) throw E(list.some((a) => !a.at) ? `${ITEMS[P.feed][0]} kalmadı. Değirmende üret.` : 'Hepsi tok.');
     },
     collect(f, b, fx) {
-      const P = PENS[b.pen]; const list = f.pens[b.pen]; const o = f.objs.find((x) => x.t === b.pen); if (!P || !list) throw E('Barınak yok.');
+      const P = pick(PENS, b.pen); const list = pick(f.pens, b.pen); const o = f.objs.find((x) => x.t === b.pen); if (!P || !Array.isArray(list)) throw E('Barınak yok.');
       let n = 0; let full = false;
       for (const a of list) { if (!a.at || now() - a.at < P.t) continue; if (room(f, P.out) < 1) { full = true; break; } a.at = 0; give(f, P.out, 1); gain(f, P.xp, fx); n++; }
       if (!n) throw E(full ? 'Ambar dolu.' : 'Toplanacak ürün yok.');
       fx.push({ t: 'item', k: P.out, n, at: o?.id }); bump(f, 'collect', n);
     },
     craft(f, b) {
-      const r = RECIPES[b.b]?.[b.r]; const q = f.q[b.b]; if (!r || !q) throw E('Önce bu binayı kur.');
+      const r = pick(pick(RECIPES, b.b), b.r); const q = pick(f.q, b.b); if (!r || !Array.isArray(q)) throw E('Önce bu binayı kur.');
       if (r.lvl > f.lvl) throw E(`Bu tarif ${r.lvl}. seviyede açılır.`);
       if (q.length >= TYPES[b.b].slots) throw E('Sıra dolu. Biten ürünü al.');
       if (!has(f, r.in)) throw E('Malzeme eksik.');
       take(f, r.in); const start = Math.max(now(), q.length ? q[q.length - 1].end : 0); q.push({ r: b.r, end: start + Math.round(r.t * upK(f, b.b)) });
     },
     take(f, b, fx) {
-      const q = f.q[b.b]; const o = f.objs.find((x) => x.t === b.b); if (!q) throw E('Bina yok.');
+      const q = pick(f.q, b.b); const o = f.objs.find((x) => x.t === b.b); if (!Array.isArray(q) || !own(RECIPES, b.b)) throw E('Bina yok.');
       let n = 0; let full = false;
       while (q.length && q[0].end <= now()) { const r = RECIPES[b.b][q[0].r]; if (room(f, q[0].r) < r.out) { full = true; break; } give(f, q[0].r, r.out); fx.push({ t: 'item', k: q[0].r, n: r.out, at: o?.id }); gain(f, r.xp, fx); q.shift(); n++; }
       if (!n) throw E(full ? `${storeOf(f, q[0].r) === 'cellar' ? 'Kiler' : 'Ambar'} dolu.` : 'Henüz hazır değil.');
@@ -483,7 +498,7 @@ module.exports = function farm(app, ctx) {
     },
     skip(f, b) { const i = f.orders.findIndex((o) => o.id === b.id && !o.wait); if (i < 0) throw E('Sipariş bulunamadı.'); f.orders[i] = { id: nanoid(6), wait: now() + SKIP_WAIT }; },
     sell(f, b, fx) {
-      const n = Math.floor(+b.n); if (!ITEMS[b.item] || !(n > 0) || (f.inv[b.item] || 0) < n) throw E('Satılacak ürün yok.');
+      const n = Math.floor(+b.n); if (!own(ITEMS, b.item) || !(n > 0) || !((pick(f.inv, b.item) || 0) >= n)) throw E('Satılacak ürün yok.');
       take(f, { [b.item]: n }); const c = n * ITEMS[b.item][1]; f.coins += c; fx.push({ t: 'coins', n: c });
     },
     pick(f, b, fx) { // elma ağacı, arı kovanı
@@ -497,7 +512,7 @@ module.exports = function farm(app, ctx) {
         const o = f.objs.find((x) => x.id === b.id && x.t === 'plot'); const c = o && CROPS[o.crop]; const left = c ? cropT(o) - (now() - o.at) : 0;
         if (left <= 0) throw E('Hızlandırılacak bir şey yok.'); pay(user, rushCost(left), 'rush'); o.at = now() - cropT(o);
       } else {
-        const q = f.q[b.b]; const left = q && q.length ? q[0].end - now() : 0;
+        const q = pick(f.q, b.b); const left = Array.isArray(q) && q.length ? q[0].end - now() : 0;
         if (left <= 0) throw E('Hızlandırılacak bir şey yok.'); pay(user, rushCost(left), 'rush'); q.forEach((x) => { x.end -= left; });
       }
     },
@@ -515,8 +530,8 @@ module.exports = function farm(app, ctx) {
       if (R.decor) { f.stock = f.stock || {}; f.stock[R.decor] = (f.stock[R.decor] || 0) + 1; fx.push({ t: 'decor', k: R.decor }); }
     },
     stallPut(f, b) { // yol kenarı tezgâhı: ürünü kendi fiyatınla satışa koy (taban fiyatın en çok 2 katı)
-      const n = Math.floor(+b.n); const price = Math.floor(+b.price); const I = ITEMS[b.item]; f.stall = f.stall || [];
-      if (!I || !(n >= 1 && n <= 10) || (f.inv[b.item] || 0) < n) throw E('Tezgâha koyacak ürünün yok.');
+      const n = Math.floor(+b.n); const price = Math.floor(+b.price); const I = pick(ITEMS, b.item); f.stall = f.stall || [];
+      if (!I || !(n >= 1 && n <= 10) || !((pick(f.inv, b.item) || 0) >= n)) throw E('Tezgâha koyacak ürünün yok.');
       if (f.stall.length >= STALL_SLOTS + (isPlusU(f.id) ? PLUS_STALL : 0)) throw E('Tezgâh dolu.');
       if (!(price >= 1 && price <= n * I[1] * 2)) throw E(`Fiyat 1 ile ${n * I[1] * 2} altın arasında olmalı.`);
       take(f, { [b.item]: n }); f.stall.push({ id: nanoid(6), k: b.item, n, price });
@@ -535,7 +550,7 @@ module.exports = function farm(app, ctx) {
     },
     coopGive(f, b, fx) {
       const c = coopOf(f); if (!c) throw E('Ortak siparişin yok.');
-      const n = Math.min(Math.floor(+b.n) || 0, (c.need[b.item] || 0) - (c.got[b.item] || 0), f.inv[b.item] || 0); if (!(n > 0)) throw E('Bu ürünü veremezsin.');
+      const n = Math.min(Math.floor(+b.n) || 0, (pick(c.need, b.item) || 0) - (pick(c.got, b.item) || 0), pick(f.inv, b.item) || 0); if (!(n > 0)) throw E('Bu ürünü veremezsin.');
       take(f, { [b.item]: n }); c.got[b.item] = (c.got[b.item] || 0) + n; c.by[f.id] = (c.by[f.id] || 0) + n; gain(f, Math.ceil(n / 2), fx);
       if (Object.entries(c.need).every(([k, v]) => (c.got[k] || 0) >= v)) { // tamamlandı: ikisine de ödül
         c.done = now(); const pid = c.a === f.id ? c.b : c.a; const p = store.get('farms', pid);
@@ -550,27 +565,27 @@ module.exports = function farm(app, ctx) {
       q.claimed = 1; f.coins += q.coins; fx.push({ t: 'coins', n: q.coins }); gain(f, q.xp, fx); stat(f, 'quest'); evAdd(f, 2);
     },
     achClaim(f, b, fx) {
-      const a = ACH[b.k]; if (!a) throw E('Başarım bulunamadı.'); f.ach = f.ach || {}; if (f.ach[b.k]) throw E('Bu ödülü aldın.'); if (statOf(f, a.s) < a.n) throw E('Bu başarım henüz tamamlanmadı.');
+      const a = pick(ACH, b.k); if (!a) throw E('Başarım bulunamadı.'); f.ach = f.ach || {}; if (own(f.ach, b.k)) throw E('Bu ödülü aldın.'); if (statOf(f, a.s) < a.n) throw E('Bu başarım henüz tamamlanmadı.');
       f.ach[b.k] = now(); f.coins += a.coins; fx.push({ t: 'coins', n: a.coins });
     },
     boatFill(f, b) { const bt = boatOf(f); const c = bt && !bt.sent && bt.crates[+b.i]; if (!c || c.done) throw E('Bu kasa dolu.'); if (!has(f, { [c.k]: c.n })) throw E('Bu kasa için ürünün eksik.'); take(f, { [c.k]: c.n }); c.done = 1; },
     boatSend(f, b, fx) { const bt = boatOf(f); if (!bt || bt.sent) throw E('Tekne bugün yola çıktı. Yarın yenisi gelir.'); if (bt.crates.some((c) => !c.done)) throw E('Önce bütün kasaları doldur.');
       bt.sent = 1; f.coins += bt.coins; fx.push({ t: 'coins', n: bt.coins }); gain(f, bt.xp, fx); stat(f, 'boat'); evAdd(f, 3); },
     upgrade(f, b) { // odun ve taşla bina yükseltme: üretim hızlanır
-      const T = TYPES[b.b]; if (!T || T.kind !== 'build' || !count(f, b.b)) throw E('Önce bu binayı kur.'); f.bu = f.bu || {}; const l = f.bu[b.b] || 0; const U = UPG[l]; if (!U) throw E('Bu bina en üst seviyede.');
+      const T = pick(TYPES, b.b); if (!T || T.kind !== 'build' || !count(f, b.b)) throw E('Önce bu binayı kur.'); f.bu = f.bu || {}; const l = pick(f.bu, b.b) || 0; const U = UPG[l]; if (!U) throw E('Bu bina en üst seviyede.');
       if (!has(f, { wood: U.wood, stone: U.stone })) throw E(`Yükseltme için ${U.wood} odun ve ${U.stone} taş gerekli.`); if (f.coins < U.coins) throw E('Altının yetmiyor.');
       take(f, { wood: U.wood, stone: U.stone }); f.coins -= U.coins; f.bu[b.b] = l + 1;
     },
-    petBuy(f, b) { const P = PETS[b.t]; if (!P) throw E('Bulunamadı.'); if (f.lvl < P.lvl) throw E(`Evcil hayvan ${P.lvl}. seviyede açılır.`); if (f.pet?.t === b.t) throw E('Zaten seninle.');
-      f.pets = f.pets || {}; if (!f.pets[b.t]) { if (f.coins < P.cost) throw E('Altının yetmiyor.'); f.coins -= P.cost; f.pets[b.t] = 1; } f.pet = { t: b.t, fed: 0 }; },
-    petFeed(f, b) { const P = f.pet && PETS[f.pet.t]; if (!P) throw E('Evcil hayvanın yok.'); if (f.pet.fed) throw E('Karnı tok, etrafı kolaçan ediyor.'); if (!P.food.includes(b.item) || !(f.inv[b.item] > 0)) throw E('Bunu yemez.');
+    petBuy(f, b) { const P = pick(PETS, b.t); if (!P) throw E('Bulunamadı.'); if (f.lvl < P.lvl) throw E(`Evcil hayvan ${P.lvl}. seviyede açılır.`); if (f.pet?.t === b.t) throw E('Zaten seninle.');
+      f.pets = f.pets || {}; if (!own(f.pets, b.t)) { if (f.coins < P.cost) throw E('Altının yetmiyor.'); f.coins -= P.cost; f.pets[b.t] = 1; } f.pet = { t: b.t, fed: 0 }; },
+    petFeed(f, b) { const P = f.pet && pick(PETS, f.pet.t); if (!P) throw E('Evcil hayvanın yok.'); if (f.pet.fed) throw E('Karnı tok, etrafı kolaçan ediyor.'); if (!P.food.includes(b.item) || !(f.inv[b.item] > 0)) throw E('Bunu yemez.');
       take(f, { [b.item]: 1 }); f.pet.fed = now(); stat(f, 'pet'); },
     petTake(f, b, fx) { if (!f.pet?.fed || now() - f.pet.fed < PET_T) throw E('Henüz bir şey bulamadı.'); f.pet.fed = 0;
       if (Math.random() < 0.6 || room(f, 'wheat') < 3) { const c = rnd(20, 60); f.coins += c; fx.push({ t: 'coins', n: c }); } else { const ks = Object.entries(CROPS).filter(([, c]) => c.lvl <= f.lvl && !c.rare).map(([k]) => k); const k = ks[rnd(0, ks.length - 1)]; give(f, k, 3); fx.push({ t: 'item', k, n: 3 }); }
       gain(f, 3, fx); },
-    fit(f, b, fx, user) { const F = FITS[b.k]; if (!F) throw E('Kıyafet bulunamadı.'); f.fits = f.fits || {};
+    fit(f, b, fx, user) { const F = pick(FITS, b.k); if (!F) throw E('Kıyafet bulunamadı.'); f.fits = f.fits || {};
       if (F.plus) { if (!isPlusU(f.id)) throw E('Bu kıyafet SwipeUp+ üyelerine özel.', 402); f.fit = b.k; return; }
-      if (b.k !== 'a' && !f.fits[b.k]) { if (F.gem) pay(user, F.gem, `fit_${b.k}`); else { if (f.coins < F.cost) throw E('Altının yetmiyor.'); f.coins -= F.cost; } f.fits[b.k] = 1; } f.fit = b.k; },
+      if (b.k !== 'a' && !own(f.fits, b.k)) { if (F.gem) pay(user, F.gem, `fit_${b.k}`); else { if (f.coins < F.cost) throw E('Altının yetmiyor.'); f.coins -= F.cost; } f.fits[b.k] = 1; } f.fit = b.k; },
     evClaim(f, b, fx) { const e = evOf(f); const i = +b.i; const S = e && EV_STEPS[i]; if (!S) throw E('Şu an şenlik yok.'); if (f.ev.got[i]) throw E('Bu ödülü aldın.'); if (f.ev.pts < S.pts) throw E('Şenlik puanın yetmiyor.');
       f.ev.got[i] = 1; if (S.coins) { f.coins += S.coins; fx.push({ t: 'coins', n: S.coins }); } if (S.decor != null) { const k = e.decor[S.decor]; f.stock = f.stock || {}; f.stock[k] = (f.stock[k] || 0) + 1; fx.push({ t: 'decor', k }); } },
     spin(f, b, fx, user) { // şans çarkı: günde bir ücretsiz, ikincisi jetonla
@@ -588,10 +603,12 @@ module.exports = function farm(app, ctx) {
     barn(f) { ACT.storeUp(f, { s: 'barn' }); },
   };
 
+  app.post(/^\/api\/farm\/(of|trades|contest|invite)\//, auth, (req, res, next) => (ctx.limited?.(`farmv:${req.user.id}`, 60, 30000) ? res.status(429).json({ error: 'Çok hızlı gidiyorsun, bir saniye bekle.' }) : next()));
   app.get('/api/farm', auth, (req, res) => { const f = load(req.user.id); f.seen = now(); save(f); res.json({ cfg: CFG, farm: out(f) }); });
   app.post('/api/farm/act', auth, (req, res) => {
-    const f = load(req.user.id); const fn = ACT[req.body?.a]; const fx = [];
-    if (!fn) return res.status(400).json({ error: 'Bilinmeyen işlem.' });
+    const fn = pick(ACT, req.body?.a); if (!fn) return res.status(400).json({ error: 'Bilinmeyen işlem.' });
+    if (ctx.limited?.(`farmact:${req.user.id}`, 150, 30000)) return res.status(429).json({ error: 'Çok hızlı gidiyorsun, bir saniye bekle.' });
+    const f = load(req.user.id); const fx = [];
     try { const extra = fn(f, req.body, fx, req.user) || {}; touch(f); f.seen = now(); save(f); res.json({ farm: out(f), fx, ...extra }); } catch (e) { if (!e.status) throw e; res.status(e.status).json({ error: e.message, farm: out(f) }); }
   });
   // komşular: takip ettiklerinin çiftlikleri + en iyi çiftçiler
@@ -602,7 +619,7 @@ module.exports = function farm(app, ctx) {
     res.json({ following: fol, top });
   });
   // başkasının çiftliğini gez
-  const visitOut = (f, me) => { const mine = me.helpDay === day() ? me.helpN : 0; return { lvl: f.lvl, objs: f.objs, pens: f.pens, q: Object.fromEntries(Object.entries(f.q).map(([k, v]) => [k, v.map((x) => ({ end: x.end }))])), helpsLeft: Math.max(0, HELPS - mine), now: now(),
+  const visitOut = (f, me) => { const mine = me.helpDay === day() ? me.helpN : 0; return { lvl: f.lvl, objs: f.objs.filter((o) => own(TYPES, o.t)), pens: f.pens, q: Object.fromEntries(Object.entries(f.q).map(([k, v]) => [k, v.map((x) => ({ end: x.end }))])), helpsLeft: Math.max(0, HELPS - mine), now: now(),
     n: size(f), stall: f.stall || [], myCoins: me.coins, myInv: me.inv, gifted: me.giftDay === day(), canCoop: !coopOf(f) && !coopOf(me),
     fit: fitOf(f, isPlusU(f.id)), myFit: fitOf(me, isPlusU(me.id)), pet: petOut(f), bu: f.bu || {}, boat: boatOut(f), likes: f.likes || 0, liked: (f.likeBy || {})[me.id] === day(), book: bookOut(f, 6), wrote: (f.book || []).some((x) => x.from === me.id && x.day === day()), pair: pairOut(me.id, f.id),
     wx: wxOut(), vis: visOut(f), myLvl: me.lvl, home: homeSeed(me.id) }; };
@@ -619,14 +636,15 @@ module.exports = function farm(app, ctx) {
     // "Çiftliğime gel" daveti: davet edilenin ilk ziyaretinde ikisine de hediye
     if (f.invd?.[me.id] && !(f.firstV || {})[me.id]) {
       f.firstV = { ...(f.firstV || {}), [me.id]: now() }; const seed = `s_${homeSeed(f.id)}`;
-      give(me, seed, 2); me.coins += 40; f.coins += 40; welcome = { coins: 40, seed, n: 2 }; save(me); save(f);
+      give(me, seed, 2); me.coins += 40; welcome = { coins: 40, seed, n: 2 };
+      if (f.welDay !== day()) { f.welDay = day(); f.welN = 0; } if (f.welN < 5) { f.welN += 1; f.coins += 40; } save(me); save(f); // ev sahibine günde en çok 5 hoş geldin ödülü
       notify(f.id, { type: 'farm', fromId: me.id, title: 'SwipeFarm', text: `${req.user.username} davetine uydu ve çiftliğine ilk kez geldi! İkinize de hoş geldin hediyesi verildi: 40 altın.`, url: '/#/farm' });
     }
     res.json({ cfg: CFG, user: brief(u), farm: visitOut(f, me), welcome });
   });
   // profildeki çiftlik vitrini ve yarışma için: çiftliğin o anki hâli (yalnızca görünüş)
   const stageOf = (o) => { if (o.t !== 'plot' || !CROPS[o.crop]) return undefined; const p = (now() - o.at) / cropT(o); return p >= 1 ? `${o.crop}_3` : p >= 0.4 ? `${o.crop}_2` : 'sprout'; };
-  const snap = (f) => ({ n: size(f), lvl: f.lvl, fit: fitOf(f, isPlusU(f.id)), pet: f.pet?.t || null, o: f.objs.map((o) => [o.t, o.x, o.y, stageOf(o) || 0, TYPES[o.t].w, TYPES[o.t].h]),
+  const snap = (f) => ({ n: size(f), lvl: f.lvl, fit: fitOf(f, isPlusU(f.id)), pet: petOut(f)?.t || null, o: f.objs.filter((o) => own(TYPES, o.t)).map((o) => [o.t, o.x, o.y, stageOf(o) || 0, TYPES[o.t].w, TYPES[o.t].h]),
     a: Object.fromEntries(Object.entries(f.pens || {}).filter(([k]) => PENS[k]).map(([k, v]) => [k, [PENS[k].animal, v.length]])) });
   app.get('/api/farm/peek/:uid', auth, (req, res) => {
     const uid = req.params.uid; const f = (uid === req.user.id || !isBlocked(req.user.id, uid)) && store.get('farms', uid);
@@ -653,7 +671,7 @@ module.exports = function farm(app, ctx) {
   app.post('/api/farm/of/:uid/gift', auth, (req, res) => {
     const uid = req.params.uid; const f = uid !== req.user.id && !isBlocked(req.user.id, uid) && store.get('farms', uid);
     if (!f) return res.status(404).json({ error: 'Çiftlik bulunamadı.' });
-    const me = load(req.user.id); const k = req.body?.item; const I = ITEMS[k]; const n = Math.min(3, Math.floor(+req.body?.n) || 1, me.inv[k] || 0);
+    const me = load(req.user.id); const k = req.body?.item; const I = pick(ITEMS, k); const n = Math.min(3, Math.floor(+req.body?.n) || 1, pick(me.inv, k) || 0);
     if (me.giftDay === day()) return res.status(400).json({ error: 'Bugün hediyeni gönderdin. Yarın yine gönderebilirsin.' });
     if (!I || !(n > 0)) return res.status(400).json({ error: 'Gönderecek ürünün yok.' });
     take(me, { [k]: n }); give(f, k, n); me.giftDay = day(); stat(me, 'gift'); const fx = []; gain(me, 3, fx); save(me); save(f);
@@ -800,7 +818,8 @@ module.exports = function farm(app, ctx) {
     if (!e || e.wk !== w || isBlocked(me, e.uid)) return res.status(404).json({ error: 'Katılımcı bulunamadı.' });
     if (e.uid === me) return res.status(400).json({ error: 'Kendi çiftliğine oy veremezsin.' });
     if ((e.by || {})[me]) return res.status(400).json({ error: 'Bu çiftliğe oy verdin.' });
-    const f = load(me); if (f.cv?.wk !== w) f.cv = { wk: w, n: 0 }; if (f.cv.n >= CONTEST_VOTES) return res.status(400).json({ error: `Bu hafta ${CONTEST_VOTES} oyunu da kullandın.` });
+    const f = load(me); if (f.lvl < CONTEST_LVL) return res.status(400).json({ error: `Oy vermek için çiftliğinin ${CONTEST_LVL}. seviyede olması gerekir.` });
+    if (f.cv?.wk !== w) f.cv = { wk: w, n: 0 }; if (f.cv.n >= CONTEST_VOTES) return res.status(400).json({ error: `Bu hafta ${CONTEST_VOTES} oyunu da kullandın.` });
     f.cv.n += 1; e.by = { ...(e.by || {}), [me]: 1 }; e.votes = (e.votes || 0) + 1; store.put('farm_contest', e); save(f);
     res.json({ ok: true, votes: e.votes, votesLeft: CONTEST_VOTES - f.cv.n });
   });
@@ -837,10 +856,11 @@ module.exports = function farm(app, ctx) {
   const live = new Map(); // çiftlik sahibi -> Map(socket.id -> ziyaretçi)
   const roomOf = (owner) => `farm:${owner}`; const clampN = (v) => Math.round(Math.min(30, Math.max(0, +v || 0)) * 100) / 100;
   if (ctx.io) ctx.io.on('connection', (socket) => {
-    const uid = socket.data.userId; let cur = null; let lastPos = 0; let lastEmo = 0;
+    const uid = socket.data.userId; let cur = null; let lastPos = 0; let lastEmo = 0; let lastJoin = 0;
     const leave = () => { if (!cur) return; const m = live.get(cur); m?.delete(socket.id); if (m && !m.size) live.delete(cur); socket.to(roomOf(cur)).emit('farm:gone', { id: socket.id }); socket.leave(roomOf(cur)); cur = null; };
     socket.on('farm:join', (p) => {
-      const owner = String(p?.owner || ''); const u = store.get('users', uid); const f = store.get('farms', owner);
+      if (Date.now() - lastJoin < 400) return; lastJoin = Date.now();
+      const owner = String(p?.owner || '').slice(0, 40); const u = store.get('users', uid); const f = store.get('farms', owner);
       if (!u || !f || (owner !== uid && isBlocked(uid, owner))) return;
       leave(); cur = owner; socket.join(roomOf(owner));
       const mf = store.get('farms', uid); const m = live.get(owner) || new Map();

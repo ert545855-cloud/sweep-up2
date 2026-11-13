@@ -55,7 +55,8 @@ function musicStop() { if (!MUS.on) return; MUS.on = false; clearTimeout(MUS.tim
 let A = null;
 function useCss() { if (document.getElementById('sf-css')) return; const l = document.createElement('link'); l.id = 'sf-css'; l.rel = 'stylesheet'; l.href = `/css/farm.css${AV}`; document.head.append(l); }
 // atlastaki bir görseli DOM'da göster. "i_g_" ile başlayanlar altın yıldızlı ürünlerdir: aynı görsel, üstünde yıldız.
-const spr = (k0, size = 40) => { const gold = k0.startsWith('i_g_'); const k = gold ? `i_${k0.slice(4)}` : k0; const a = A.atlas[k]; if (!a) return ''; const im = A[a[0]]; const s = size / Math.max(a[3], a[4]); const r = (v) => Math.round(v * 10) / 10;
+const HAS = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+const spr = (k0, size = 40) => { const gold = String(k0).startsWith('i_g_'); const k = gold ? `i_${k0.slice(4)}` : k0; if (!HAS(A.atlas, k)) return ''; const a = A.atlas[k]; const im = A[a[0]]; const s = size / Math.max(a[3], a[4]); const r = (v) => Math.round(v * 10) / 10;
   return `<i class="sf-sp${gold ? ' gold' : ''}" style="width:${r(a[3] * s)}px;height:${r(a[4] * s)}px;background:url(/img/farm/${a[0]}.webp${AV}) ${r(-a[1] * s)}px ${r(-a[2] * s)}px/${r(im.width * s)}px ${r(im.height * s)}px"></i>`; };
 const WXI = { // hava durumu simgeleri
   sun: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="#ffc933" stroke="#e09a12" stroke-width="1.4"/><g stroke="#ffb520" stroke-width="2" stroke-linecap="round"><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></g></svg>',
@@ -122,7 +123,10 @@ export default async function farm(view, who) {
       <button data-a="nb">${spr('house', 36)}<small>Komşular</small></button>
       <button data-a="edit">${icon('edit')}<small>Düzenle</small></button></div>`}
     <div class="sf-bot"></div><div class="sf-layer"></div><div class="sf-over"></div><div class="sf-toast" role="status"></div>`;
-  const cv = root.querySelector('.sf-cv'); const g = cv.getContext('2d');
+  // sahne tek ve opak bir tuvale çizilir; çim, zemin ve arkadaki çit/ağaçlar ayrı (görünmeyen) bir tuvalde tutulur ve her karede tek seferde kopyalanır
+  const cv = root.querySelector('.sf-cv'); const g = cv.getContext('2d', { alpha: false }); const cvb = document.createElement('canvas'); const gb = cvb.getContext('2d', { alpha: false });
+  // hafif grafik: yavaş cihazlarda çözünürlük ve süs efektleri kısılır (Ayarlar'dan da açılıp kapanır)
+  let lowQ = false; try { lowQ = localStorage.getItem('sf_lowq') === '1'; } catch { /* yok say */ }
   const bot = root.querySelector('.sf-bot'); const layer = root.querySelector('.sf-layer'); const over = root.querySelector('.sf-over');
 
   // ---------- kamera ----------
@@ -136,10 +140,10 @@ export default async function farm(view, who) {
     gx = Math.min(N + 1, Math.max(-1, gx)); gy = Math.min(N + 1, Math.max(-1, gy));
     cam.x = (gx - gy) * HW; cam.y = (gx + gy) * HH;
   };
-  let first = true;
+  let first = true; let bgKey = ''; let curFont = '';
   const resize = () => {
-    W = root.clientWidth; H = root.clientHeight; dpr = Math.min(2, window.devicePixelRatio || 1); root.classList.toggle('land', W > H);
-    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    W = root.clientWidth; H = root.clientHeight; dpr = Math.min(lowQ ? 1 : 1.5, window.devicePixelRatio || 1); // sahne en çok 1,5 kat çözünürlükte çizilir: keskinlik korunur, piksel yükü yarıya iner root.classList.toggle('land', W > H);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cvb.width = cv.width; cvb.height = cv.height; bgKey = ''; curFont = ''; // boyut değişince tuvalin yazı tipi sıfırlanır
     if (first && W) { // ilk açılış: tarlalar ve binalar ortada, yan düğmelere yer bırak
       first = false; cam.z = Math.min(0.5, Math.max(0.26, Math.min(W / (6.8 * 2 * HW), H / (10.5 * 2 * HH))));
       const core = F.objs.filter((o) => cfg.TYPES[o.t].kind !== 'decor'); let gx = 0; let gy = 0;
@@ -152,7 +156,8 @@ export default async function farm(view, who) {
 
   // ---------- sahne ----------
   let ring = []; // çiftliğin çevresi: çit ve ağaçlar (süs). Arazi büyüyünce yeniden kurulur.
-  function buildRing() { ring = []; let i = 0;
+  let objVer = 0; // çiftlik verisi her yenilendiğinde artar
+  function buildRing() { ring = []; let i = 0; objVer++; bgKey = '';
     for (let x = -7; x < N + 7; x++) for (let y = -7; y < N + 7; y++) { i++;
       if (x >= -1 && x <= N && y >= -1 && y <= N) continue;
       const r = rnd(i, 1); if (r > 0.36) continue;
@@ -196,31 +201,37 @@ export default async function farm(view, who) {
   // canlı ziyaret: aynı çiftlikteki diğer çiftçiler
   const peers = new Map(); let meW = null; let myEmo = null; // meW: ziyaretteyken kendi çiftçin, myEmo: kendi çiftliğindeyken gönderdiğin ifade
   if (visit) { meW = { id: 'me', x: gate[0], y: N - 0.4, tx: man.x + 0.9, ty: man.y + 0.4, walk: true, fit: F.myFit || 'a', user: state.me || {} }; if (blocked(meW.tx, meW.ty)) { meW.tx = gate[0]; meW.ty = N - 1.6; } }
-  const pat = g.createPattern(A.grass, 'repeat');
+  const pat = gb.createPattern(A.grass, 'repeat');
+  // önceden çizilmiş ışık ve gölge lekeleri (her karede degrade üretmemek için)
+  const blob = (rgb) => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'); const gr = x.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, `rgba(${rgb},1)`); gr.addColorStop(1, `rgba(${rgb},0)`); x.fillStyle = gr; x.fillRect(0, 0, 128, 128); return c; };
+  const GLOW = blob('255,190,90'); const SHADE = blob('30,45,60'); const SUNB = blob('255,230,140');
+  const font = (f) => { if (f !== curFont) { g.font = f; curFont = f; } };
   const free = (t, x, y, skip) => { const Ty = cfg.TYPES[t]; if (x < 0 || y < 0 || x + Ty.w > N || y + Ty.h > N) return false;
     return !F.objs.some((o) => o.id !== skip && x < o.x + cfg.TYPES[o.t].w && o.x < x + Ty.w && y < o.y + cfg.TYPES[o.t].h && o.y < y + Ty.h); };
 
   function sp(k, sx, sy, kx = 1, ky = kx, alpha = 1) {
-    const a = A.atlas[k]; if (!a) return; const z = cam.z;
+    if (!HAS(A.atlas, k)) return; const a = A.atlas[k]; const z = cam.z;
     if (alpha !== 1) g.globalAlpha = alpha;
     g.drawImage(A[a[0]], a[1], a[2], a[3], a[4], sx - a[5] * z * kx, sy - a[6] * z * ky, a[3] * z * kx, a[4] * z * ky);
     if (alpha !== 1) g.globalAlpha = 1;
   }
-  function ico(k0, x, y, s, alpha = 1) { const gold = k0.startsWith('i_g_'); const k = gold ? `i_${k0.slice(4)}` : k0; const a = A.atlas[k]; if (!a) return; const f = s / Math.max(a[3], a[4]); g.globalAlpha = alpha; g.drawImage(A[a[0]], a[1], a[2], a[3], a[4], x - (a[3] * f) / 2, y - (a[4] * f) / 2, a[3] * f, a[4] * f); g.globalAlpha = 1;
+  function ico(k0, x, y, s, alpha = 1) { const gold = k0.startsWith('i_g_'); const k = gold ? `i_${k0.slice(4)}` : k0; if (!HAS(A.atlas, k)) return; const a = A.atlas[k]; const f = s / Math.max(a[3], a[4]); g.globalAlpha = alpha; g.drawImage(A[a[0]], a[1], a[2], a[3], a[4], x - (a[3] * f) / 2, y - (a[4] * f) / 2, a[3] * f, a[4] * f); g.globalAlpha = 1;
     if (gold) { g.globalAlpha = alpha; star(x + s * 0.34, y - s * 0.32, s * 0.24); g.globalAlpha = 1; } }
   // canlı ziyaret: çiftçinin üstünde ifade balonu
   function emoteAt(p, sx, sy) { if (!p.emo || T - p.emoT > 3200) return; const txt = cfg.EMOTES[p.emo - 1]; if (!txt) return; const k = Math.min(1, (T - p.emoT) / 160); const fade = T - p.emoT > 2700 ? 1 - (T - p.emoT - 2700) / 500 : 1;
-    g.save(); g.globalAlpha = Math.max(0, fade); const big = [...txt].length <= 2; g.font = big ? '26px system-ui, sans-serif' : '800 13px "Bricolage Grotesque", system-ui, sans-serif'; const w = Math.max(38, g.measureText(txt).width + 22); const h = big ? 38 : 30; const y = sy - h / 2 - (1 - k) * 8;
-    g.fillStyle = '#fffdf3'; g.shadowColor = 'rgba(40,25,10,.3)'; g.shadowBlur = 8; g.beginPath(); if (g.roundRect) g.roundRect(sx - w / 2, y - h / 2, w, h, h / 2); else g.rect(sx - w / 2, y - h / 2, w, h); g.fill(); g.shadowBlur = 0; g.beginPath(); g.moveTo(sx - 6, y + h / 2 - 1); g.lineTo(sx, y + h / 2 + 7); g.lineTo(sx + 6, y + h / 2 - 1); g.fill();
+    g.save(); g.globalAlpha = Math.max(0, fade); const big = [...txt].length <= 2; font(big ? '26px system-ui, sans-serif' : '800 13px "Bricolage Grotesque", system-ui, sans-serif'); const w = Math.max(38, g.measureText(txt).width + 22); const h = big ? 38 : 30; const y = sy - h / 2 - (1 - k) * 8;
+    const rr = (dy) => { if (g.roundRect) g.roundRect(sx - w / 2, y - h / 2 + dy, w, h, h / 2); else g.rect(sx - w / 2, y - h / 2 + dy, w, h); };
+    g.fillStyle = 'rgba(40,25,10,.2)'; g.beginPath(); rr(3); g.fill(); g.fillStyle = '#fffdf3'; g.beginPath(); rr(0); g.fill(); g.beginPath(); g.moveTo(sx - 6, y + h / 2 - 1); g.lineTo(sx, y + h / 2 + 7); g.lineTo(sx + 6, y + h / 2 - 1); g.fill();
     g.fillStyle = '#3a220c'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, sx, y + 1); g.restore(); }
   function walkTo(w, dt, v) { if (!w.walk) return; const dx = w.tx - w.x; const dy = w.ty - w.y; const d = Math.hypot(dx, dy); const st = dt * v; if (d <= st) { w.x = w.tx; w.y = w.ty; w.walk = false; } else { w.x += (dx / d) * st; w.y += (dy / d) * st; } }
   function drop(x, y, r) { g.save(); g.fillStyle = '#3aa8ee'; g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y - r * 1.5); g.bezierCurveTo(x + r * 1.3, y, x + r, y + r, x, y + r); g.bezierCurveTo(x - r, y + r, x - r * 1.3, y, x, y - r * 1.5); g.fill(); g.stroke(); g.fillStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.arc(x - r * 0.3, y + r * 0.2, r * 0.22, 0, 7); g.fill(); g.restore(); }
   function star(x, y, r) { g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5; const rr = i % 2 ? r * 0.46 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fillStyle = '#ffd23f'; g.strokeStyle = '#b97a0c'; g.lineWidth = 1.5; g.lineJoin = 'round'; g.stroke(); g.fill(); }
-  function label(txt, x, y, size = 13, fill = '#fff') { g.font = `800 ${size}px "Bricolage Grotesque", system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.strokeStyle = 'rgba(58,34,12,.9)'; g.lineWidth = size * 0.3; g.strokeText(txt, x, y); g.fillStyle = fill; g.fillText(txt, x, y); }
+  function label(txt, x, y, size = 13, fill = '#fff') { font(`800 ${Math.round(size * 2) / 2}px "Bricolage Grotesque", system-ui, sans-serif`); g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.strokeStyle = 'rgba(58,34,12,.9)'; g.lineWidth = size * 0.3; g.strokeText(txt, x, y); g.fillStyle = fill; g.fillText(txt, x, y); }
   function bubble(sx, sy, k, o = {}) {
     const s = 32 * Math.min(1.3, Math.max(0.85, cam.z / 0.3)); const y = sy - s * 0.95 + (o.still ? 0 : Math.sin(T / 260 + sx * 0.05) * 3); const r = s * 0.62;
-    g.save(); g.shadowColor = 'rgba(40,25,10,.35)'; g.shadowBlur = 8; g.shadowOffsetY = 3; g.fillStyle = o.bg || '#fffdf3';
-    g.beginPath(); g.arc(sx, y, r, 0, 7); g.fill(); g.beginPath(); g.moveTo(sx - s * 0.2, y + s * 0.5); g.lineTo(sx, y + s * 0.9); g.lineTo(sx + s * 0.2, y + s * 0.5); g.fill(); g.restore();
+    const tail = (dy) => { g.moveTo(sx - s * 0.2, y + s * 0.5 + dy); g.lineTo(sx, y + s * 0.9 + dy); g.lineTo(sx + s * 0.2, y + s * 0.5 + dy); };
+    g.fillStyle = 'rgba(40,25,10,.2)'; g.beginPath(); g.arc(sx, y + 3, r + 1, 0, 7); tail(3); g.fill();
+    g.fillStyle = o.bg || '#fffdf3'; g.beginPath(); g.arc(sx, y, r, 0, 7); tail(0); g.fill();
     if (o.p != null) { g.lineWidth = 3.5; g.lineCap = 'round'; g.strokeStyle = '#eadfc6'; g.beginPath(); g.arc(sx, y, r - 2.5, 0, 7); g.stroke(); g.strokeStyle = '#62b63f'; g.beginPath(); g.arc(sx, y, r - 2.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, Math.max(0.02, o.p))); g.stroke(); }
     if (k === 'drop') drop(sx, y, s * 0.26); else if (o.text) label(o.text, sx, y + 1, s * 0.5, '#fff'); else ico(k, sx, y, s * 0.8, o.dim ? 0.5 : 1);
     if (o.cnt > 1) label(`×${o.cnt}`, sx + r * 0.75, y + r * 0.62, s * 0.36, '#fff');
@@ -248,7 +259,7 @@ export default async function farm(view, who) {
       return;
     }
     sp(o.t, sx, sy, k);
-    const a = A.atlas[o.t]; const top = sy - a[6] * z * 0.94;
+    const a = A.atlas[o.t]; if (!a) return; const top = sy - a[6] * z * 0.94;
     if (amb.night > 0.01) { if (o.t === 'lantern') lights.push([sx, sy - 92 * z, 170 * z]); else if (o.t === 'house' || Ty.kind === 'build') lights.push([sx + 10 * z, sy - 46 * z, 150 * z]); }
     const ul = Ty.kind === 'build' ? F.bu?.[o.t] || 0 : 0; // yükseltilmiş bina: önünde yıldızlar
     for (let i = 0; i < ul; i++) { starPath(sx + (i - (ul - 1) / 2) * 30 * z, sy + ((Ty.w + Ty.h) / 2) * HH * z - 10 * z, 13 * z); g.fillStyle = '#ffc933'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = '#7a4a12'; g.stroke(); }
@@ -267,56 +278,97 @@ export default async function farm(view, who) {
   }
 
   let raf = 0; let last = 0;
-  function frame(ts) {
-    raf = requestAnimationFrame(frame); if (ts - last < 30 || !W) return;
-    { const dt = Math.min(120, ts - last); const op = visit ? [...peers.values()].find((p) => p.owner) : null;
-      if (op) { man.x += (op.x - man.x) * Math.min(1, dt / 400); man.y += (op.y - man.y) * Math.min(1, dt / 400); man.go = Math.hypot(op.x - man.x, op.y - man.y) > 0.05; } else stepW(man, dt, 0.0011);
-      if (F.pet) stepW(petW, dt, 0.0017); if (meW) walkTo(meW, dt, 0.0016);
-      for (const p of peers.values()) { if (p.owner && visit) continue; const d = Math.hypot(p.x - p.dx, p.y - p.dy); p.go = d > 0.05; const s = Math.min(1, dt / 350); p.dx += (p.x - p.dx) * s; p.dy += (p.y - p.dy) * s; } }
-    last = ts; T = ts; const now = tnow(); const z = cam.z;
-    g.setTransform(dpr, 0, 0, dpr, 0, 0); g.imageSmoothingQuality = 'high';
+  // ---------- arka plan: çim, çiftlik zemini ve arkadaki çit/ağaçlar. Kamera oynamadıkça yeniden çizilmez ----------
+  function drawBg() {
+    const grid = mode?.k === 'place' || mode?.k === 'edit';
+    const k = `${cam.x.toFixed(1)}|${cam.y.toFixed(1)}|${cam.z.toFixed(4)}|${W}|${H}|${dpr}|${N}|${amb.season}|${grid}|${lowQ}`; if (k === bgKey) return; bgKey = k;
+    const x = gb; const z = cam.z; x.setTransform(dpr, 0, 0, dpr, 0, 0); x.imageSmoothingQuality = lowQ ? 'medium' : 'high';
     const [ox, oy] = toScr(0, 0); const c = (6 / 512) * z;
-    pat.setTransform(new DOMMatrix([HW * c, HH * c, -HW * c, HH * c, ox, oy])); g.fillStyle = pat; g.fillRect(0, 0, W, H);
-    g.fillStyle = 'rgba(16,64,30,.2)'; g.beginPath(); g.rect(0, 0, W, H); { const P = [[-1, -1], [-1, N + 1], [N + 1, N + 1], [N + 1, -1]]; P.forEach(([a, b], i) => { const [sx, sy] = toScr(a, b); if (i) g.lineTo(sx, sy); else g.moveTo(sx, sy); }); g.closePath(); } g.fill('evenodd');
-    if (amb.season === 'winter') { g.fillStyle = 'rgba(238,246,255,.34)'; g.fillRect(0, 0, W, H); } else if (amb.season === 'autumn') { g.fillStyle = 'rgba(204,132,36,.14)'; g.fillRect(0, 0, W, H); }
-    diamond(0, 0, N, N); g.fillStyle = 'rgba(255,248,190,.07)'; g.fill();
-    if (mode?.k === 'place' || mode?.k === 'edit') { g.strokeStyle = 'rgba(255,255,255,.2)'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i <= N; i++) { let [a, b] = toScr(i, 0); g.moveTo(a, b); [a, b] = toScr(i, N); g.lineTo(a, b); [a, b] = toScr(0, i); g.moveTo(a, b); [a, b] = toScr(N, i); g.lineTo(a, b); } g.stroke(); }
+    pat.setTransform(new DOMMatrix([HW * c, HH * c, -HW * c, HH * c, ox, oy])); x.fillStyle = pat; x.fillRect(0, 0, W, H);
+    const path = (pts) => { x.beginPath(); pts.forEach(([a, b], i) => { const [sx, sy] = toScr(a, b); if (i) x.lineTo(sx, sy); else x.moveTo(sx, sy); }); x.closePath(); };
+    x.fillStyle = 'rgba(16,64,30,.2)'; x.beginPath(); x.rect(0, 0, W, H); { const P = [[-1, -1], [-1, N + 1], [N + 1, N + 1], [N + 1, -1]]; P.forEach(([a, b], i) => { const [sx, sy] = toScr(a, b); if (i) x.lineTo(sx, sy); else x.moveTo(sx, sy); }); x.closePath(); } x.fill('evenodd');
+    if (amb.season === 'winter') { x.fillStyle = 'rgba(238,246,255,.34)'; x.fillRect(0, 0, W, H); } else if (amb.season === 'autumn') { x.fillStyle = 'rgba(204,132,36,.14)'; x.fillRect(0, 0, W, H); }
+    path([[0, 0], [N, 0], [N, N], [0, N]]); x.fillStyle = 'rgba(255,248,190,.07)'; x.fill();
+    if (grid) { x.strokeStyle = 'rgba(255,255,255,.2)'; x.lineWidth = 1; x.beginPath(); for (let i = 0; i <= N; i++) { let [a, b] = toScr(i, 0); x.moveTo(a, b); [a, b] = toScr(i, N); x.lineTo(a, b); [a, b] = toScr(0, i); x.moveTo(a, b); [a, b] = toScr(N, i); x.lineTo(a, b); } x.stroke(); }
+    for (const r of ring) { if (r.gx > 0 && r.gy > 0) continue; const [sx, sy] = toScr(r.gx, r.gy); if (sx < -200 || sx > W + 200 || sy < -80 || sy > H + 260) continue; const a = A.atlas[r.k]; if (a) x.drawImage(A[a[0]], a[1], a[2], a[3], a[4], sx - a[5] * z, sy - a[6] * z, a[3] * z, a[4] * z); }
+  }
+  // ---------- sabit çizim listesi: yapılar ve öndeki çit/ağaçlar derinliğe göre bir kez sıralanır ----------
+  let statList = []; let statVer = -1; const spotCache = new Map();
+  function buildStatic() {
+    statList = []; for (const r of ring) if (r.gx > 0 && r.gy > 0) statList.push([r.gx + r.gy, r]);
+    for (const o of F.objs) { const Ty = cfg.TYPES[o.t]; if (Ty) statList.push([o.x + o.y + (Ty.w + Ty.h) / 2, o]); }
+    statList.sort((a, b) => a[0] - b[0]); statVer = objVer; spotCache.clear();
+  }
+  const spotOf = (v, i) => { let s = spotCache.get(v.id); if (!s) { s = visSpot(v, i); spotCache.set(v.id, s); } return s; };
+  // renk katmanlarını (gün batımı, gece, hava) tek bir dolguda birleştir: tam ekran boyama sayısı azalır
+  function tint() {
+    let R = 0; let G = 0; let B = 0; let Al = 0;
+    const add = (r, gg, b, a) => { if (a <= 0.004) return; R = r * a + R * (1 - a); G = gg * a + G * (1 - a); B = b * a + B * (1 - a); Al = a + Al * (1 - a); };
+    add(255, 128, 48, 0.13 * amb.warm); add(14, 24, 70, 0.46 * amb.night);
+    const wx = F.wx?.k; if (wx === 'rain') add(40, 70, 110, 0.16); else if (wx === 'cloud') add(70, 85, 100, 0.1); else if (wx === 'hot') add(255, 150, 40, 0.08 + (0.5 + 0.5 * Math.sin(T / 1400)) * 0.05);
+    if (Al > 0.004) { g.fillStyle = `rgba(${Math.round(R / Al)},${Math.round(G / Al)},${Math.round(B / Al)},${Al.toFixed(3)})`; g.fillRect(0, 0, W, H); }
+  }
+  function drawDyn(e, now, op) {
+    const z = cam.z; const kind = e[1];
+    if (kind === 0) { const [sx, sy] = toScr(man.x, man.y); sp(F.fit && F.fit !== 'a' ? `farmer_${F.fit}` : 'farmer', sx, sy - (man.go ? Math.abs(Math.sin(T / 110)) * 5 * z : 0)); man.sx = sx; man.sy = sy;
+      if (visit && op) { label(op.user.name || op.user.username, sx, sy - 128 * z - 8, 12); emoteAt(op, sx, sy - 128 * z - 28); } else if (!visit && myEmo) emoteAt(myEmo, sx, sy - 128 * z - 14); return; }
+    if (kind === 1) { const [sx, sy] = toScr(petW.x, petW.y); sp(F.pet.t, sx, sy - (petW.go ? Math.abs(Math.sin(T / 80)) * 4 * z : 0)); petW.sx = sx; petW.sy = sy - 30 * z;
+      if (!visit && cfg.PETS[F.pet.t] && (!F.pet.fed || now - F.pet.fed >= cfg.PET_T)) bubbles.push([sx, sy - 62 * z, F.pet.fed ? 'i_gift' : `i_${cfg.PETS[F.pet.t].food[0]}`, {}]); return; }
+    if (kind === 2) { const r = e[2]; const v = r.v; const [sx, sy] = toScr(r.x, r.y); sp(v.look, sx, sy - (r.walking ? Math.abs(Math.sin(T / 120)) * 5 * z : Math.abs(Math.sin(T / 900 + v.sx)) * 1.5 * z)); npcHit.push([sx, sy - 50 * z, v]);
+      if (!r.walking) { const enough = (inv()[v.k] || 0) >= v.n; bubbles.push([sx, sy - 118 * z, ik(v.k), { dim: !visit && !enough, cnt: v.n }]); } return; }
+    const p = e[2]; const x = p === meW ? p.x : p.dx; const y = p === meW ? p.y : p.dy; const [sx, sy] = toScr(x, y);
+    if (sx < -100 || sx > W + 100 || sy < -60 || sy > H + 200) return;
+    sp(p.fit && p.fit !== 'a' ? `farmer_${p.fit}` : 'farmer', sx, sy - ((p.go || p.walk) ? Math.abs(Math.sin(T / 110)) * 5 * z : 0));
+    label(p === meW ? 'Sen' : (p.user.name || p.user.username), sx, sy - 128 * z - 8, 12, p === meW ? '#ffe98a' : '#fff'); emoteAt(p, sx, sy - 128 * z - 28);
+  }
+  // akıcılık ölçümü: kareler uzun süre geç gelirse hafif grafiğe geçilir
+  let slowEma = 33; let slowN = 0; let shownAt = 0;
+  function setLowQ(on, auto) { lowQ = on; try { localStorage.setItem('sf_lowq', on ? '1' : '0'); } catch { /* yok say */ } resize(); bgKey = ''; if (auto) toast('Oyun daha akıcı olsun diye hafif grafiğe geçildi. Ayarlar\'dan değiştirebilirsin.'); panel?.paint(); }
+  function frame(ts) {
+    raf = requestAnimationFrame(frame);
+    const gap = panel && !mode ? 110 : lowQ ? 40 : 30; if (ts - last < gap || !W) return; // pencere açıkken sahne yavaş yenilenir
+    const dt = Math.min(120, ts - last);
+    if (!panel && !lowQ && dt < 500) { if (!shownAt) shownAt = ts; if (ts - shownAt > 4000) { slowEma = slowEma * 0.95 + (ts - last) * 0.05; if (slowEma > 52) { if (++slowN > 90) setLowQ(true, true); } else slowN = Math.max(0, slowN - 2); } }
+    let op = null; if (visit) for (const p of peers.values()) if (p.owner) { op = p; break; }
+    if (op) { man.x += (op.x - man.x) * Math.min(1, dt / 400); man.y += (op.y - man.y) * Math.min(1, dt / 400); man.go = Math.hypot(op.x - man.x, op.y - man.y) > 0.05; } else stepW(man, dt, 0.0011);
+    if (F.pet) stepW(petW, dt, 0.0017); if (meW) walkTo(meW, dt, 0.0016);
+    for (const p of peers.values()) { if (p.owner && visit) continue; const d = Math.hypot(p.x - p.dx, p.y - p.dy); p.go = d > 0.05; const s = Math.min(1, dt / 350); p.dx += (p.x - p.dx) * s; p.dy += (p.y - p.dy) * s; }
+    last = ts; T = ts; const now = tnow(); const z = cam.z;
+    drawBg();
+    g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(cvb, 0, 0); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.imageSmoothingQuality = lowQ ? 'medium' : 'high';
+    if (statVer !== objVer) buildStatic();
     bubbles = []; lights = []; npcHit = [];
-    const list = [[man.x + man.y, 'man', null]]; if (F.pet) list.push([petW.x + petW.y, 'pet', null]);
-    for (const r of ring) list.push([r.gx + r.gy, r, null]);
-    for (const o of F.objs) { const Ty = cfg.TYPES[o.t]; list.push([o.x + o.y + (Ty.w + Ty.h) / 2, null, o]); }
-    (F.vis || []).forEach((v, i) => { if (v.until <= now) return; const [x, y] = visSpot(v, i); const p = Math.min(1, Math.max(0, (now - v.at) / 5000)); const e = 1 - (1 - p) ** 2;
-      const vx = gate[0] + (x - gate[0]) * e; const vy = gate[1] + (y - gate[1]) * e; list.push([vx + vy, { npc: v, x: vx, y: vy, walking: p < 1 }, null]); });
-    for (const p of peers.values()) { if (p.owner && visit) continue; list.push([p.dx + p.dy, { peer: p }, null]); }
-    if (meW) list.push([meW.x + meW.y, { peer: meW }, null]);
-    list.sort((p, q) => p[0] - q[0]);
-    for (const [, r, o] of list) { if (o) drawObj(o, now); else if (r === 'man') { const [sx, sy] = toScr(man.x, man.y); sp(F.fit && F.fit !== 'a' ? `farmer_${F.fit}` : 'farmer', sx, sy - (man.go ? Math.abs(Math.sin(T / 110)) * 5 * z : 0)); man.sx = sx; man.sy = sy;
-        const op = [...peers.values()].find((p) => p.owner); if (visit && op) { label(op.user.name || op.user.username, sx, sy - 128 * z - 8, 12); emoteAt(op, sx, sy - 128 * z - 28); } else if (!visit && myEmo) emoteAt(myEmo, sx, sy - 128 * z - 14); }
-      else if (r.npc) { const v = r.npc; const [sx, sy] = toScr(r.x, r.y); sp(v.look, sx, sy - (r.walking ? Math.abs(Math.sin(T / 120)) * 5 * z : Math.abs(Math.sin(T / 900 + v.sx)) * 1.5 * z)); npcHit.push([sx, sy - 50 * z, v]);
-        if (!r.walking) { const enough = (inv()[v.k] || 0) >= v.n; bubbles.push([sx, sy - 118 * z, ik(v.k), { dim: !visit && !enough, cnt: v.n, gold: v.k.startsWith('g_') }]); } }
-      else if (r.peer) { const p = r.peer; const x = p === meW ? p.x : p.dx; const y = p === meW ? p.y : p.dy; const [sx, sy] = toScr(x, y); sp(p.fit && p.fit !== 'a' ? `farmer_${p.fit}` : 'farmer', sx, sy - ((p.go || p.walk) ? Math.abs(Math.sin(T / 110)) * 5 * z : 0));
-        label(p === meW ? 'Sen' : (p.user.name || p.user.username), sx, sy - 128 * z - 8, 12, p === meW ? '#ffe98a' : '#fff'); emoteAt(p, sx, sy - 128 * z - 28); }
-      else if (r === 'pet') { const [sx, sy] = toScr(petW.x, petW.y); sp(F.pet.t, sx, sy - (petW.go ? Math.abs(Math.sin(T / 80)) * 4 * z : 0)); petW.sx = sx; petW.sy = sy - 30 * z;
-        if (!visit && (!F.pet.fed || now - F.pet.fed >= cfg.PET_T)) bubbles.push([sx, sy - 62 * z, F.pet.fed ? 'i_gift' : `i_${cfg.PETS[F.pet.t].food[0]}`, {}]); } else { const [sx, sy] = toScr(r.gx, r.gy); if (sx > -200 && sx < W + 200 && sy > -80 && sy < H + 200) sp(r.k, sx, sy); } }
+    const dyn = [[man.x + man.y, 0]]; if (F.pet) dyn.push([petW.x + petW.y, 1]);
+    (F.vis || []).forEach((v, i) => { if (v.until <= now) return; const [x, y] = spotOf(v, i); const p = Math.min(1, Math.max(0, (now - v.at) / 5000)); const e = 1 - (1 - p) ** 2;
+      const vx = gate[0] + (x - gate[0]) * e; const vy = gate[1] + (y - gate[1]) * e; dyn.push([vx + vy, 2, { v, x: vx, y: vy, walking: p < 1 }]); });
+    for (const p of peers.values()) { if (p.owner && visit) continue; dyn.push([p.dx + p.dy, 3, p]); }
+    if (meW) dyn.push([meW.x + meW.y, 3, meW]);
+    dyn.sort((a, b) => a[0] - b[0]);
+    let j = 0; const L = statList;
+    for (let i = 0; i < L.length; i++) {
+      const [d, e] = L[i]; while (j < dyn.length && dyn[j][0] <= d) drawDyn(dyn[j++], now, op);
+      if (e.id) drawObj(e, now); else { const [sx, sy] = toScr(e.gx, e.gy); if (sx > -200 && sx < W + 200 && sy > -80 && sy < H + 260) sp(e.k, sx, sy); }
+    }
+    while (j < dyn.length) drawDyn(dyn[j++], now, op);
     if (mode?.k === 'place') { // yerleştirilen şey: yeşil/kırmızı zemin + yarı saydam görsel
       const Ty = cfg.TYPES[mode.t]; const ok = free(mode.t, mode.x, mode.y, mode.id); mode.ok = ok;
       diamond(mode.x, mode.y, mode.x + Ty.w, mode.y + Ty.h); g.fillStyle = ok ? 'rgba(98,200,70,.55)' : 'rgba(230,60,50,.55)'; g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
       const [sx, sy] = toScr(mode.x + Ty.w / 2, mode.y + Ty.h / 2); sp(mode.t, sx, sy - 6 * z, 1, 1, 0.9);
     }
-    if (amb.warm > 0.01) { g.fillStyle = `rgba(255,128,48,${0.13 * amb.warm})`; g.fillRect(0, 0, W, H); }
-    if (amb.night > 0.01) { g.fillStyle = `rgba(14,24,70,${0.46 * amb.night})`; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'lighter';
-      for (const [lx, ly, lr] of lights) { const gr = g.createRadialGradient(lx, ly, 0, lx, ly, lr); gr.addColorStop(0, `rgba(255,190,90,${0.5 * amb.night})`); gr.addColorStop(1, 'rgba(255,190,90,0)'); g.fillStyle = gr; g.fillRect(lx - lr, ly - lr, lr * 2, lr * 2); }
-      g.globalCompositeOperation = 'source-over'; }
-    if (amb.season) { const win = amb.season === 'winter'; const n = win ? 46 : 16; // kar, yaprak ya da çiçek yaprağı
-      for (let i = 0; i < n; i++) { const v = 0.5 + rnd(i, 3); const x = (((rnd(i, 1) * W + T * 0.012 * v + Math.sin(T / 900 + i) * 14) % W) + W) % W; const y = (rnd(i, 2) * H + T * (win ? 0.035 : 0.05) * v) % H;
-        if (win) { g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(x, y, 1.4 + rnd(i, 4) * 1.8, 0, 7); g.fill(); } else { g.save(); g.translate(x, y); g.rotate(T / 500 + i); g.fillStyle = amb.season === 'spring' ? 'rgba(255,170,200,.9)' : ['#e8892b', '#d4572a', '#e9b23a'][i % 3]; g.beginPath(); g.ellipse(0, 0, 5, 2.6, 0, 0, 7); g.fill(); g.restore(); } } }
+    tint();
+    if (amb.night > 0.01 && lights.length && !lowQ) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.5 * amb.night; for (const [lx, ly, lr] of lights) g.drawImage(GLOW, lx - lr, ly - lr, lr * 2, lr * 2); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
+    if (amb.season && !lowQ) { const win = amb.season === 'winter'; const n = win ? 46 : 16; // kar, yaprak ya da çiçek yaprağı
+      if (win) { g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); for (let i = 0; i < n; i++) { const v = 0.5 + rnd(i, 3); const x = (((rnd(i, 1) * W + T * 0.012 * v + Math.sin(T / 900 + i) * 14) % W) + W) % W; const y = (rnd(i, 2) * H + T * 0.035 * v) % H; const r = 1.4 + rnd(i, 4) * 1.8; g.moveTo(x + r, y); g.arc(x, y, r, 0, 7); } g.fill(); }
+      else { for (let i = 0; i < n; i++) { const v = 0.5 + rnd(i, 3); const x = (((rnd(i, 1) * W + T * 0.012 * v + Math.sin(T / 900 + i) * 14) % W) + W) % W; const y = (rnd(i, 2) * H + T * 0.05 * v) % H; const a = T / 500 + i;
+        g.setTransform(dpr * Math.cos(a), dpr * Math.sin(a), -dpr * Math.sin(a), dpr * Math.cos(a), dpr * x, dpr * y); g.fillStyle = amb.season === 'spring' ? 'rgba(255,170,200,.9)' : ['#e8892b', '#d4572a', '#e9b23a'][i % 3]; g.beginPath(); g.ellipse(0, 0, 5, 2.6, 0, 0, 7); g.fill(); }
+        g.setTransform(dpr, 0, 0, dpr, 0, 0); } }
     const wx = F.wx?.k; // hava durumu: yağmur çizgileri, bulut gölgesi, sıcak hava
-    if (wx === 'rain') { g.fillStyle = 'rgba(40,70,110,.16)'; g.fillRect(0, 0, W, H); g.strokeStyle = 'rgba(210,230,255,.55)'; g.lineWidth = 1.3; g.beginPath();
-      for (let i = 0; i < 90; i++) { const v = 0.7 + rnd(i, 7) * 0.6; const x = ((rnd(i, 5) * W - T * 0.12 * v) % W + W) % W; const y = (rnd(i, 6) * H + T * 0.9 * v) % (H + 40) - 20; g.moveTo(x, y); g.lineTo(x - 4, y + 14); } g.stroke(); }
-    else if (wx === 'cloud') { g.fillStyle = 'rgba(70,85,100,.1)'; g.fillRect(0, 0, W, H); for (let i = 0; i < 3; i++) { const x = ((rnd(i, 9) * W + T * 0.012) % (W + 600)) - 300; const y = rnd(i, 8) * H; const gr = g.createRadialGradient(x, y, 0, x, y, 260); gr.addColorStop(0, 'rgba(30,45,60,.16)'); gr.addColorStop(1, 'rgba(30,45,60,0)'); g.fillStyle = gr; g.fillRect(x - 260, y - 260, 520, 520); } }
-    else if (wx === 'hot') { const pu = 0.5 + 0.5 * Math.sin(T / 1400); g.fillStyle = `rgba(255,150,40,${0.08 + pu * 0.05})`; g.fillRect(0, 0, W, H); const gr = g.createRadialGradient(W * 0.9, -40, 0, W * 0.9, -40, H * 0.9); gr.addColorStop(0, 'rgba(255,230,140,.35)'); gr.addColorStop(1, 'rgba(255,230,140,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H); }
+    if (wx === 'rain') { g.strokeStyle = 'rgba(210,230,255,.55)'; g.lineWidth = 1.3; g.beginPath(); const n = lowQ ? 40 : 90;
+      for (let i = 0; i < n; i++) { const v = 0.7 + rnd(i, 7) * 0.6; const x = ((rnd(i, 5) * W - T * 0.12 * v) % W + W) % W; const y = (rnd(i, 6) * H + T * 0.9 * v) % (H + 40) - 20; g.moveTo(x, y); g.lineTo(x - 4, y + 14); } g.stroke(); }
+    else if (wx === 'cloud' && !lowQ) { g.globalAlpha = 0.16; for (let i = 0; i < 3; i++) { const x = ((rnd(i, 9) * W + T * 0.012) % (W + 600)) - 300; const y = rnd(i, 8) * H; g.drawImage(SHADE, x - 260, y - 260, 520, 520); } g.globalAlpha = 1; }
+    else if (wx === 'hot' && !lowQ) { g.globalAlpha = 0.35; g.drawImage(SUNB, W * 0.9 - H * 0.9, -40 - H * 0.9, H * 1.8, H * 1.8); g.globalAlpha = 1; }
     for (const [sx, sy, k, o] of bubbles) {
-      if (o.info) { g.font = '800 12px "Bricolage Grotesque", system-ui, sans-serif'; const w = g.measureText(o.info).width + 18; g.fillStyle = 'rgba(58,34,12,.88)'; g.beginPath(); g.arc(sx - w / 2 + 12, sy - 12, 12, Math.PI / 2, Math.PI * 1.5); g.arc(sx + w / 2 - 12, sy - 12, 12, -Math.PI / 2, Math.PI / 2); g.closePath(); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(o.info, sx, sy - 11.5); } else bubble(sx, sy, k, o);
+      if (o.info) { font('800 12px "Bricolage Grotesque", system-ui, sans-serif'); const w = g.measureText(o.info).width + 18; g.fillStyle = 'rgba(58,34,12,.88)'; g.beginPath(); g.arc(sx - w / 2 + 12, sy - 12, 12, Math.PI / 2, Math.PI * 1.5); g.arc(sx + w / 2 - 12, sy - 12, 12, -Math.PI / 2, Math.PI / 2); g.closePath(); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(o.info, sx, sy - 11.5); } else bubble(sx, sy, k, o);
     }
     if (info && T > info.until) info = null;
     fxs = fxs.filter((f) => T - f.t0 < 1200);
@@ -330,7 +382,7 @@ export default async function farm(view, who) {
   let chain = Promise.resolve(); let lastPos = [8, 8];
   const centerOf = (id) => { const o = F.objs.find((x) => x.id === id); if (!o) return null; const Ty = cfg.TYPES[o.t]; return [o.x + Ty.w / 2, o.y + Ty.h / 2]; };
   function apply(r) {
-    if (r.farm) { F = r.farm; if (F.now) skew = F.now - Date.now(); if ((F.n || cfg.N) !== N) { N = F.n || cfg.N; buildRing(); clampCam(); } }
+    if (r.farm) { F = r.farm; objVer++; if (F.now) skew = F.now - Date.now(); if ((F.n || cfg.N) !== N) { N = F.n || cfg.N; buildRing(); clampCam(); } }
     let i = 0;
     for (const f of r.fx || []) {
       if (f.t === 'item') { const c = centerOf(f.at); if (c) lastPos = c; fxs.push({ gx: lastPos[0], gy: lastPos[1], k: `i_${f.k}`, n: f.n, t0: T + i++ * 90 }); }
@@ -450,7 +502,8 @@ export default async function farm(view, who) {
   const closePanel = () => { panel = null; layer.innerHTML = ''; paintTut(); };
   function openPanel(title, body, live) {
     layer.innerHTML = `<div class="sf-dim" data-a="close"></div><section class="sf-panel"><header class="sf-ph"><b>${esc(title)}</b><button class="sf-x" data-a="close" aria-label="Kapat">${icon('close')}</button></header><div class="sf-pb"></div></section>`;
-    const el = layer.querySelector('.sf-pb'); tutKey = 'x'; root.querySelector('.sf-tut').hidden = true; root.querySelectorAll('.sf-tut-hl').forEach((x) => x.classList.remove('sf-tut-hl')); panel = { live, paint() { const st = el.scrollTop; minis.clear(); el.innerHTML = body(); el.scrollTop = st; el.querySelectorAll('canvas[data-mini]').forEach((c) => { const s = minis.get(c.dataset.mini); if (s) lazyMini(c, s); }); } }; panel.paint();
+    const el = layer.querySelector('.sf-pb'); tutKey = 'x'; root.querySelector('.sf-tut').hidden = true; root.querySelectorAll('.sf-tut-hl').forEach((x) => x.classList.remove('sf-tut-hl')); let prev = '';
+    panel = { live, paint() { minis.clear(); const html = body(); if (html === prev) return; prev = html; const st = el.scrollTop; el.innerHTML = html; el.scrollTop = st; el.querySelectorAll('canvas[data-mini]').forEach((c) => { const s = minis.get(c.dataset.mini); if (s) lazyMini(c, s, { anim: false }); }); } }; panel.paint();
   }
   const needs = (items) => Object.entries(items).map(([k, n]) => { const h = inv()[k] || 0; return `<span class="sf-need ${h >= n ? 'ok' : 'no'}">${spr(`i_${k}`, 26)}<b>${Math.min(h, 99)}/${n}</b></span>`; }).join('');
   const visRow = (v) => { const now = tnow(); const fast = now - v.at <= cfg.VIS_FAST; const ok = hasAll({ [v.k]: v.n });
@@ -647,6 +700,7 @@ export default async function farm(view, who) {
       <button class="sf-tg nav" data-a="share"><span><b>Çiftliğini paylaş</b><small>Görüntüsünü hikâyene ekle ya da kaydet</small></span>${icon('share')}</button>
       <button class="sf-tg ${muted ? '' : 'on'}" data-a="snd"><span><b>Oyun sesleri</b><small>Hasat, altın ve seviye sesleri</small></span><i></i></button>
       <button class="sf-tg ${F.notif ? 'on' : ''}" data-a="notif"><span><b>Tarla hazır bildirimi</b><small>Ekinlerin olgunlaşınca haber verir, günde en çok 2 kez</small></span><i></i></button>
+      <button class="sf-tg ${lowQ ? 'on' : ''}" data-a="lowq"><span><b>Hafif grafik</b><small>Yavaş telefonlarda oyunu akıcılaştırır: çözünürlük ve süs efektleri azalır</small></span><i></i></button>
       <button class="sf-tg ${music ? 'on' : ''}" data-a="music"><span><b>Arka plan müziği</b><small>Sakin bir çiftlik ezgisi</small></span><i></i></button>
       <button class="sf-tg ${ambOn ? 'on' : ''}" data-a="amb"><span><b>Gün ve mevsim</b><small>Gece karanlığı, gün batımı, kar ve yaprak görüntüleri</small></span><i></i></button>
       <button class="sf-tg nav" data-a="tutRestart"><span><b>Oyun rehberi</b><small>Adım adım anlatımı yeniden göster</small></span>${icon('question')}</button></div>
@@ -704,6 +758,7 @@ export default async function farm(view, who) {
     plantAll(d) { act('plantAll', { crop: d.k }).then((r) => { if (r?.planted) toast(`${r.planted} tarlaya ${cfg.CROPS[d.k].name.toLocaleLowerCase('tr-TR')} ekildi.`); }); },
     serve(d) { act('serve', { id: d.id }); }, shoo(d) { act('shoo', { id: d.id }); },
     plusInfo() { toast('Altın yelekli kıyafet SwipeUp+ üyelerine özel. SwipeUp+ üyeliğini Mağaza\'dan alabilirsin.'); },
+    lowq() { slowN = 0; slowEma = 33; setLowQ(!lowQ, false); },
     music() { music = !music; try { localStorage.setItem('sf_music', music ? '1' : '0'); } catch { /* yok say */ } if (music) musicStart(); else musicStop(); panel?.paint(); },
     tutSkip() { F.tut = cfg.TUT_N; paintTut(); act('tut', { skip: 1 }); },
     tutRestart() { closePanel(); act('tut', { restart: 1 }).then(() => { tutKey = ''; paintTut(); }); },
@@ -807,10 +862,10 @@ export default async function farm(view, who) {
   // ---------- dokunma ----------
   function pick(sx, sy) {
     const [gx, gy] = toGrid(sx, sy); const tx = Math.floor(gx); const ty = Math.floor(gy);
-    const hit = F.objs.find((o) => { const Ty = cfg.TYPES[o.t]; return tx >= o.x && tx < o.x + Ty.w && ty >= o.y && ty < o.y + Ty.h; });
+    const hit = F.objs.find((o) => { const Ty = cfg.TYPES[o.t]; return Ty && tx >= o.x && tx < o.x + Ty.w && ty >= o.y && ty < o.y + Ty.h; });
     if (hit) return hit;
     let best = null; // yüksek yapıların çatısına dokunma
-    for (const o of F.objs) { const Ty = cfg.TYPES[o.t]; if (Ty.w * Ty.h < 2 && o.t !== 'board') continue; const a = A.atlas[o.t]; const [ox, oy] = toScr(o.x + Ty.w / 2, o.y + Ty.h / 2);
+    for (const o of F.objs) { const Ty = cfg.TYPES[o.t]; if (!Ty || (Ty.w * Ty.h < 2 && o.t !== 'board')) continue; const a = A.atlas[o.t]; if (!a) continue; const [ox, oy] = toScr(o.x + Ty.w / 2, o.y + Ty.h / 2);
       const x0 = ox - a[5] * cam.z * 0.8; const y0 = oy - a[6] * cam.z; if (sx > x0 && sx < x0 + a[3] * cam.z * 0.62 && sy > y0 && sy < oy && (!best || o.x + o.y > best.x + best.y)) best = o; }
     return best;
   }
