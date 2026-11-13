@@ -4,7 +4,7 @@ import {
 } from '../core.js';
 
 const TL = (n) => `${Number(n).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₺`;
-const REASON = { purchase: 'Jeton satın alma', gift: 'Canlı yayın hediyesi', fal: 'Fal', boost: 'Boost', admin: 'SwipeUp hediyesi', promo: 'Öne çıkarma', promo_refund: 'Öne çıkarma iadesi', quest: 'Günlük görev', quest_bonus: 'Görev bonusu', invite: 'Davet ödülü', super_msg: 'Süper mesaj', frame: 'Profil çerçevesi', badge: 'Etkinlik rozeti', fal_sub: 'Fal aboneliği', wheel: 'Hediye çarkı', streak: 'Sohbet serisi ödülü', login_streak: 'Giriş serisi ödülü', streak_freeze: 'Seri koruyucu', level: 'Seviye ödülü', weekly_best: 'Haftanın enleri', contest: 'Yarışma ödülü', fal_pack: 'Fal paketi', kupa_look: 'Kostüm', kupa_season: 'Parti Kupası ligi' };
+const REASON = { purchase: 'Jeton satın alma', farm: 'SwipeFarm', gift: 'Canlı yayın hediyesi', fal: 'Fal', boost: 'Boost', admin: 'SwipeUp hediyesi', promo: 'Öne çıkarma', promo_refund: 'Öne çıkarma iadesi', quest: 'Günlük görev', quest_bonus: 'Görev bonusu', invite: 'Davet ödülü', super_msg: 'Süper mesaj', frame: 'Profil çerçevesi', badge: 'Etkinlik rozeti', fal_sub: 'Fal aboneliği', wheel: 'Hediye çarkı', streak: 'Sohbet serisi ödülü', login_streak: 'Giriş serisi ödülü', streak_freeze: 'Seri koruyucu', level: 'Seviye ödülü', weekly_best: 'Haftanın enleri', contest: 'Yarışma ödülü', fal_pack: 'Fal paketi', kupa_look: 'Kostüm', kupa_season: 'Parti Kupası ligi' };
 const why = (t) => (t.reason === 'gift' && t.chat ? 'Sohbet hediyesi' : REASON[t.reason] || t.reason);
 const PST = { pending: 'Bekliyor', paid: 'Ödendi', rejected: 'Reddedildi' };
 

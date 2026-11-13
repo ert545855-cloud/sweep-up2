@@ -4120,6 +4120,10 @@ html.land-game #fx-layer { display: none; }
 .cns-list .it { align-items: center; }
 
 /* SwipeFarm kapağı (oyun salonu) */
+.sf-visit { display: flex; align-items: center; gap: 10px; margin: 10px 16px 0; padding: 8px 14px 8px 8px; border-radius: 18px; background: linear-gradient(90deg, #dff5c6, #f3fbe6); color: #2f6b1f; text-decoration: none; }
+.sf-visit[hidden], .sf-h[hidden] { display: none; }
+.sf-visit img { width: 44px; height: 44px; border-radius: 12px; } .sf-visit span { display: grid; } .sf-visit b { font-size: 15px; } .sf-visit small { font-size: 12px; opacity: .8; }
+.sf-h img { width: 28px; height: 28px; border-radius: 8px; }
 .sf-card { position: relative; display: flex; align-items: center; gap: 4px; min-height: 132px; margin: 0 0 14px; padding: 14px 16px; border-radius: 24px; overflow: hidden; background: radial-gradient(120% 120% at 85% 10%, #b9ec74, #62b63f 55%, #3f8f3a); color: #fff; text-decoration: none; box-shadow: 0 10px 24px -10px rgba(40,100,20,.7); }
 .sf-card img { position: absolute; right: -24px; bottom: -6px; height: 100%; width: auto; filter: drop-shadow(0 8px 10px rgba(20,60,10,.35)); }
 .sf-card span { position: relative; display: grid; gap: 3px; max-width: 52%; }

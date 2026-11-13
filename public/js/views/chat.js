@@ -89,6 +89,7 @@ export default async function chat(view, chatId) {
       <a class="who" href="#/chat/${esc(chatId)}/info">${avatar(other, 40, { ring: true, dot: !isGroup })}
         <div class="grow"><div class="n ellipsis">${nm(other)}</div><div class="s ellipsis"></div></div></a>
       <a class="stk-h" href="#/seriler" aria-label="Sohbet serisi">${isGroup ? '' : streakChip(data.streak, true)}</a>
+      ${isGroup || falChat ? '' : `<a class="ib sf-h" href="#/farm/${esc(other.id)}" aria-label="Çiftliğini gez" title="Çiftliğini gez" hidden><img src="/img/farm/icon.webp" alt=""></a>`}
       <button class="ib ttl-ind" aria-label="Kaybolan mesajlar" ${ttl ? '' : 'hidden'}>${icon('timer')}</button>
       ${isGroup || falChat ? '' : `<button class="ib vc" aria-label="Sesli ara">${icon('phone')}</button><button class="ib vv" aria-label="Görüntülü ara">${icon('video')}</button>`}
     </header>
@@ -96,6 +97,8 @@ export default async function chat(view, chatId) {
     <div class="holdbar" hidden></div>
     <div class="date-tools" hidden></div>
     <div class="composer"></div></div>`;
+  { const sfh = view.querySelector('.sf-h'); if (sfh) api(`/farm/has/${other.id}`).then((r) => { sfh.hidden = !r.lvl; }).catch(() => {}); } // çiftliği varsa "Çiftliğini gez"
+
 
   const box = view.querySelector('.msgs');
   const st = view.querySelector('.s');
