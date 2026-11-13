@@ -1,7 +1,7 @@
 // SwipeFarm: izometrik çiftlik oyunu. Görseller hazır 3D çizimlerdir (public/img/farm, scripts/farm-art ile üretilir);
 // sahne tek bir tuvale çizilir, bütün kurallar ve süreler sunucudadır (server/farm.js).
 import { icon } from '../icons.js';
-import { api, esc, state } from '../core.js';
+import { api, esc, state, uploadFile } from '../core.js';
 
 const HW = 136 * Math.SQRT1_2; const HH = HW / 2; // bir karenin yarı genişliği / yüksekliği (görsel pikseli)
 const STAR = '<svg class="sf-st" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.4 5.9 20.8l1.4-6.8L2.2 9.3l6.9-.8z" fill="#ffd23f" stroke="#c98a12" stroke-width="1.6" stroke-linejoin="round"/></svg>';
@@ -79,14 +79,18 @@ export default async function farm(view, who) {
       ${visit ? `<div class="sf-who"><img src="${esc(visit.avatar)}" alt=""><span><b>${esc(visit.name || visit.username)}</b><small>Seviye ${F.lvl} çiftlik</small></span></div><span class="sf-grow"></span><div class="sf-pill"><i class="sf-dropi"></i><b class="sf-helps"></b></div><div class="sf-pill sf-coin">${spr('i_coin', 24)}<b></b></div><button class="sf-rb sf-sndb" data-a="snd" aria-label="Ses">${icon(muted ? 'mute' : 'volume')}</button>`
     : `<div class="sf-lv"><span class="sf-star">${STAR}<b class="sf-lvn"></b></span><div class="sf-xp"><i></i><small></small></div></div><span class="sf-grow"></span>
       <button class="sf-pill sf-jet" data-a="jet">${spr('i_jeton', 24)}<b></b></button><div class="sf-pill sf-coin">${spr('i_coin', 24)}<b></b></div><button class="sf-pill sf-barnp" data-a="barn">${spr('barn', 28)}<b></b></button><button class="sf-rb" data-a="set" aria-label="Ayarlar">${icon('settings')}</button>`}</div>
-    ${visit ? `<div class="sf-side">
+    ${visit ? `<div class="sf-side sf-sideL">
+      <button data-a="vbook">${spr('i_book', 34)}<small>Defter</small></button>
+      <button data-a="vpair" class="sf-vpair">${spr('i_heart', 30)}<small>Çift</small><em class="sf-badge" data-b="vpair" hidden>!</em></button>
+      <button data-a="vboat" class="sf-vboat">${spr('i_boat', 34)}<small>Tekne</small><em class="sf-badge" data-b="vboat" hidden></em></button></div>
+    <div class="sf-side">
       <button data-a="vgift">${spr('i_gift', 32)}<small>Hediye</small></button>
       <button data-a="vstall">${spr('i_stall', 34)}<small>Tezgâh</small><em class="sf-badge" data-b="vstall" hidden></em></button>
       <button data-a="vcoop" class="sf-vcoop">${spr('i_crate', 32)}<small>Ortak</small></button></div>`
     : `<div class="sf-side sf-sideL">
-      <button data-a="daily">${spr('i_gift', 32)}<small>Ödül</small><em class="sf-badge" data-b="daily" hidden>!</em></button>
-      <button data-a="rank">${spr('trophy', 34)}<small>Sıralama</small></button>
-      <button data-a="coop">${spr('i_crate', 32)}<small>Ortak</small><em class="sf-badge" data-b="coop" hidden>!</em></button>
+      <button data-a="hubG">${spr('i_chest', 32)}<small>Görevler</small><em class="sf-badge" data-b="hubG" hidden>!</em></button>
+      <button data-a="boat" class="sf-boatb">${spr('i_boat', 34)}<small>Tekne</small><em class="sf-badge" data-b="boat" hidden>!</em></button>
+      <button data-a="hubS">${spr('trophy', 34)}<small>Sosyal</small><em class="sf-badge" data-b="hubS" hidden>!</em></button>
       <button data-a="stall">${spr('i_stall', 34)}<small>Tezgâh</small></button></div>
     <div class="sf-side">
       <button data-a="orders">${spr('board', 34)}<small>Sipariş</small><em class="sf-badge" data-b="orders" hidden></em></button>
@@ -137,13 +141,15 @@ export default async function farm(view, who) {
   const man = { x: home ? home.x + 1.5 : 8, y: home ? home.y + 2.6 : 8, tx: 0, ty: 0, wait: 900, go: false };
   const blocked = (gx, gy) => gx < 0.25 || gy < 0.25 || gx > N - 0.25 || gy > N - 0.25 || F.objs.some((o) => { const Ty = cfg.TYPES[o.t]; return gx > o.x - 0.22 && gx < o.x + Ty.w + 0.22 && gy > o.y - 0.22 && gy < o.y + Ty.h + 0.22; });
   const clear = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) * 3); for (let i = 1; i <= n; i++) if (blocked(ax + ((bx - ax) * i) / n, ay + ((by - ay) * i) / n)) return false; return true; };
-  function stepMan(dt) {
-    if (man.go) { const dx = man.tx - man.x; const dy = man.ty - man.y; const d = Math.hypot(dx, dy); const st = dt * 0.0011;
+  function stepW(man, dt, v) {
+    if (man.go) { const dx = man.tx - man.x; const dy = man.ty - man.y; const d = Math.hypot(dx, dy); const st = dt * v;
       if (d <= st) { man.x = man.tx; man.y = man.ty; man.go = false; man.wait = 900 + Math.random() * 2600; } else { man.x += (dx / d) * st; man.y += (dy / d) * st; } return; }
     man.wait -= dt; if (man.wait > 0) return; const stuck = blocked(man.x, man.y);
     for (let i = 0; i < 10; i++) { const a = Math.random() * 6.283; const r = 1.5 + Math.random() * 5; const tx = man.x + Math.cos(a) * r; const ty = man.y + Math.sin(a) * r; if (!blocked(tx, ty) && (stuck || clear(man.x, man.y, tx, ty))) { man.tx = tx; man.ty = ty; man.go = true; return; } }
     man.wait = 1200;
   }
+  const petW = { x: man.x + 1, y: man.y + 0.6, tx: 0, ty: 0, wait: 400, go: false };
+  const starPath = (x, y, r) => { g.beginPath(); for (let i = 0; i < 10; i++) { const an = -Math.PI / 2 + (i * Math.PI) / 5; const q = i % 2 ? r * 0.45 : r; g[i ? 'lineTo' : 'moveTo'](x + Math.cos(an) * q, y + Math.sin(an) * q); } g.closePath(); };
   // gün döngüsü ve mevsim: cihazın saatine ve aya göre. Ayarlardan kapatılabilir.
   let ambOn = true; try { ambOn = localStorage.getItem('sf_amb') !== '0'; } catch { /* yok say */ }
   let amb = { night: 0, warm: 0, season: '' }; let lights = [];
@@ -197,6 +203,8 @@ export default async function farm(view, who) {
     sp(o.t, sx, sy, k);
     const a = A.atlas[o.t]; const top = sy - a[6] * z * 0.94;
     if (amb.night > 0.01) { if (o.t === 'lantern') lights.push([sx, sy - 92 * z, 170 * z]); else if (o.t === 'house' || Ty.kind === 'build') lights.push([sx + 10 * z, sy - 46 * z, 150 * z]); }
+    const ul = Ty.kind === 'build' ? F.bu?.[o.t] || 0 : 0; // yükseltilmiş bina: önünde yıldızlar
+    for (let i = 0; i < ul; i++) { starPath(sx + (i - (ul - 1) / 2) * 30 * z, sy + ((Ty.w + Ty.h) / 2) * HH * z - 10 * z, 13 * z); g.fillStyle = '#ffc933'; g.fill(); g.lineWidth = 1.5; g.strokeStyle = '#7a4a12'; g.stroke(); }
     const PR = cfg.PROD[o.t]; // elma ağacı, arı kovanı: süresi dolunca ürün balonu
     if (PR) { const left = PR.t - (now - (o.at || 0)); if (left <= 0) { if (!visit) bubbles.push([sx, top, `i_${PR.out}`, {}]); } else if (info && info.id === o.id) bubbles.push([sx, top + 12, null, { info: `${cfg.ITEMS[PR.out][0]} · ${fmt(left)}` }]); }
     if (o.t === 'mill') sp(`rotor_${(F.q?.mill || []).some((q) => q.end > now) ? Math.floor(T / 90) % 6 : 0}`, sx, sy, k);
@@ -213,7 +221,7 @@ export default async function farm(view, who) {
 
   let raf = 0; let last = 0;
   function frame(ts) {
-    raf = requestAnimationFrame(frame); if (ts - last < 30 || !W) return; stepMan(Math.min(120, ts - last)); last = ts; T = ts; const now = tnow(); const z = cam.z;
+    raf = requestAnimationFrame(frame); if (ts - last < 30 || !W) return; { const dt = Math.min(120, ts - last); stepW(man, dt, 0.0011); if (F.pet) stepW(petW, dt, 0.0017); } last = ts; T = ts; const now = tnow(); const z = cam.z;
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.imageSmoothingQuality = 'high';
     const [ox, oy] = toScr(0, 0); const c = (6 / 512) * z;
     pat.setTransform(new DOMMatrix([HW * c, HH * c, -HW * c, HH * c, ox, oy])); g.fillStyle = pat; g.fillRect(0, 0, W, H);
@@ -222,11 +230,13 @@ export default async function farm(view, who) {
     diamond(0, 0, N, N); g.fillStyle = 'rgba(255,248,190,.07)'; g.fill();
     if (mode?.k === 'place' || mode?.k === 'edit') { g.strokeStyle = 'rgba(255,255,255,.2)'; g.lineWidth = 1; g.beginPath(); for (let i = 0; i <= N; i++) { let [a, b] = toScr(i, 0); g.moveTo(a, b); [a, b] = toScr(i, N); g.lineTo(a, b); [a, b] = toScr(0, i); g.moveTo(a, b); [a, b] = toScr(N, i); g.lineTo(a, b); } g.stroke(); }
     bubbles = []; lights = [];
-    const list = [[man.x + man.y, 'man', null]];
+    const list = [[man.x + man.y, 'man', null]]; if (F.pet) list.push([petW.x + petW.y, 'pet', null]);
     for (const r of ring) list.push([r.gx + r.gy, r, null]);
     for (const o of F.objs) { const Ty = cfg.TYPES[o.t]; list.push([o.x + o.y + (Ty.w + Ty.h) / 2, null, o]); }
     list.sort((p, q) => p[0] - q[0]);
-    for (const [, r, o] of list) { if (o) drawObj(o, now); else if (r === 'man') { const [sx, sy] = toScr(man.x, man.y); sp('farmer', sx, sy - (man.go ? Math.abs(Math.sin(T / 110)) * 5 * z : 0)); } else { const [sx, sy] = toScr(r.gx, r.gy); if (sx > -200 && sx < W + 200 && sy > -80 && sy < H + 200) sp(r.k, sx, sy); } }
+    for (const [, r, o] of list) { if (o) drawObj(o, now); else if (r === 'man') { const [sx, sy] = toScr(man.x, man.y); sp(F.fit && F.fit !== 'a' ? `farmer_${F.fit}` : 'farmer', sx, sy - (man.go ? Math.abs(Math.sin(T / 110)) * 5 * z : 0)); }
+      else if (r === 'pet') { const [sx, sy] = toScr(petW.x, petW.y); sp(F.pet.t, sx, sy - (petW.go ? Math.abs(Math.sin(T / 80)) * 4 * z : 0)); petW.sx = sx; petW.sy = sy - 30 * z;
+        if (!visit && (!F.pet.fed || now - F.pet.fed >= cfg.PET_T)) bubbles.push([sx, sy - 62 * z, F.pet.fed ? 'i_gift' : `i_${cfg.PETS[F.pet.t].food[0]}`, {}]); } else { const [sx, sy] = toScr(r.gx, r.gy); if (sx > -200 && sx < W + 200 && sy > -80 && sy < H + 200) sp(r.k, sx, sy); } }
     if (mode?.k === 'place') { // yerleştirilen şey: yeşil/kırmızı zemin + yarı saydam görsel
       const Ty = cfg.TYPES[mode.t]; const ok = free(mode.t, mode.x, mode.y, mode.id); mode.ok = ok;
       diamond(mode.x, mode.y, mode.x + Ty.w, mode.y + Ty.h); g.fillStyle = ok ? 'rgba(98,200,70,.55)' : 'rgba(230,60,50,.55)'; g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
@@ -278,12 +288,16 @@ export default async function farm(view, who) {
   // ---------- üst bilgi ----------
   const badge = (k, v) => { const b = root.querySelector(`[data-b="${k}"]`); if (!b) return; b.hidden = !v; if (typeof v === 'number') b.textContent = v; };
   function hud() {
-    if (visit) { root.querySelector('.sf-helps').textContent = `${F.helpsLeft}/${cfg.HELPS}`; root.querySelector('.sf-coin b').textContent = (F.myCoins || 0).toLocaleString('tr-TR'); badge('vstall', (F.stall || []).length); root.querySelector('.sf-vcoop').hidden = !F.canCoop; return; }
+    if (visit) { root.querySelector('.sf-helps').textContent = `${F.helpsLeft}/${cfg.HELPS}`; root.querySelector('.sf-coin b').textContent = (F.myCoins || 0).toLocaleString('tr-TR'); badge('vstall', (F.stall || []).length); root.querySelector('.sf-vcoop').hidden = !F.canCoop;
+      root.querySelector('.sf-vpair').hidden = !F.pair; badge('vpair', !!F.pair && !F.pair.me); root.querySelector('.sf-vboat').hidden = !F.boat || !!F.boat.sent; badge('vboat', F.boat ? F.boat.crates.filter((c) => !c.done).length : 0); return; }
     root.querySelector('.sf-lvn').textContent = F.lvl; root.querySelector('.sf-xp i').style.width = `${Math.min(100, (F.xp / F.need) * 100)}%`; root.querySelector('.sf-xp small').textContent = `${F.xp}/${F.need}`;
     root.querySelector('.sf-coin b').textContent = F.coins.toLocaleString('tr-TR'); root.querySelector('.sf-jet b').textContent = (F.jeton || 0).toLocaleString('tr-TR');
     const n = invN(); const bp = root.querySelector('.sf-barnp'); bp.querySelector('b').textContent = `${n}/${F.cap}`; bp.classList.toggle('full', n >= F.cap - 1);
-    badge('orders', F.orders.filter((x) => !x.wait && hasAll(x.need)).length); badge('daily', !!F.daily?.can);
-    badge('coop', !!F.coop && Object.entries(F.coop.need).some(([k, v]) => (F.coop.got[k] || 0) < v && inv()[k] > 0));
+    badge('orders', F.orders.filter((x) => !x.wait && hasAll(x.need)).length);
+    const qd = F.quests.list.every((x) => x.got >= x.n) && !F.quests.claimed; const ev = F.event && F.event.steps.some((x) => !x.got && F.event.pts >= x.pts);
+    badge('hubG', qd || !!F.daily?.can || F.wheel.n === 0 || F.ach.some((x) => x.got >= x.n && !x.claimed) || !!ev);
+    badge('hubS', !!F.coop && Object.entries(F.coop.need).some(([k, v]) => (F.coop.got[k] || 0) < v && inv()[k] > 0));
+    root.querySelector('.sf-boatb').hidden = !F.boat; badge('boat', !!F.boat && !F.boat.sent && F.boat.crates.every((c) => c.done));
   }
   function hintText() {
     if (visit) return F.helpsLeft > 0 ? 'Büyüyen ekinlere dokunup sula. Sen de altın ve deneyim kazanırsın.' : 'Bugünlük yardım hakkın bitti. Yarın yine uğra.';
@@ -337,16 +351,20 @@ export default async function farm(view, who) {
       return `<button class="sf-shop ${dis ? 'dis' : ''}" data-a="shop" data-t="${t}" ${dis ? 'disabled' : ''}><span class="sf-shi">${spr(t, 58)}</span><b>${esc(Ty.name)}</b>${have ? `<small class="ok">Yerleştir · ${have}</small>` : Ty.special ? `<small class="lk">${esc(Ty.special)}</small>` : lock ? `<small class="lk">Seviye ${Ty.lvl}</small>` : own ? '<small class="lk">Kuruldu</small>' : full ? `<small class="lk">${cnt(t)}/${lim}</small>` : Ty.gem ? `<small class="jt">${spr('i_jeton', 15)} ${Ty.gem}</small>` : `<small>${spr('i_coin', 14)} ${Ty.cost}</small>`}</button>`; };
     const E = Object.entries(cfg.TYPES).filter(([, v]) => v.kind !== 'fixed'); const ex = F.exp; const sec = (title, f) => `<h3 class="sf-h">${title}</h3><div class="sf-shopg">${E.filter(([, v]) => f(v)).map(tile).join('')}</div>`;
     return `${ex ? `<div class="sf-exp">${spr('fence_x', 44)}<span class="sf-pl">Araziyi genişlet<small>${ex.n}×${ex.n} kare${ex.lvl > F.lvl ? ` · Seviye ${ex.lvl} gerekli` : ''}</small></span><button class="sf-btn sm gold" data-a="expand" ${ex.lvl > F.lvl || F.coins < ex.cost ? 'disabled' : ''}>${spr('i_coin', 14)} ${ex.cost}</button></div>` : ''}
-      ${sec('Tarla ve üretim', (v) => v.kind !== 'decor')}${sec('Süsler', (v) => v.kind === 'decor' && !v.gem && !v.special)}${sec('Jetonla alınan özel süsler', (v) => !!v.gem)}${sec('Koleksiyon', (v) => !!v.special)}
+      ${sec('Tarla ve üretim', (v) => v.kind !== 'decor')}${sec('Süsler', (v) => v.kind === 'decor' && !v.gem && !v.special)}${sec('Jetonla alınan özel süsler', (v) => !!v.gem)}
+      <h3 class="sf-h">Evcil hayvan</h3><div class="sf-shopg">${Object.entries(cfg.PETS).map(([k, P]) => { const on = F.pet?.t === k; const lock = P.lvl > F.lvl; return `<button class="sf-shop ${lock ? 'dis' : ''}" data-a="petBuy" data-t="${k}" ${lock || on ? 'disabled' : ''}><span class="sf-shi">${spr(k, 54)}</span><b>${esc(P.name)}</b>${on ? '<small class="ok">Seninle</small>' : lock ? `<small class="lk">Seviye ${P.lvl}</small>` : `<small>${spr('i_coin', 14)} ${P.cost}</small>`}</button>`; }).join('')}</div>
+      <h3 class="sf-h">Çiftçi kıyafeti</h3><div class="sf-shopg">${Object.entries(cfg.FITS).map(([k, X]) => { const on = (F.fit || 'a') === k; const own = F.fits[k]; return `<button class="sf-shop" data-a="fit" data-k="${k}" ${on ? 'disabled' : ''}><span class="sf-shi">${spr(k === 'a' ? 'farmer' : `farmer_${k}`, 56)}</span><b>${esc(X.name)}</b>${on ? '<small class="ok">Üzerinde</small>' : own ? '<small class="ok">Giy</small>' : X.gem ? `<small class="jt">${spr('i_jeton', 15)} ${X.gem}</small>` : `<small>${spr('i_coin', 14)} ${X.cost}</small>`}</button>`; }).join('')}</div>
+      ${sec('Koleksiyon', (v) => !!v.special)}
       <p class="sf-note">Koleksiyon parçaları satın alınmaz, etkinliklerle kazanılır. Jetonlu süsler yalnızca görünüş içindir; oyunda öne geçirmez.</p>`;
   };
   const buildBody = (b) => () => {
     const q = F.q[b] || []; const Ty = cfg.TYPES[b]; const now = tnow();
     const slots = Array.from({ length: Ty.slots }, (_, i) => { const it = q[i]; if (!it) return '<div class="sf-slot"><small>Boş</small></div>'; const left = it.end - now; return `<div class="sf-slot ${left <= 0 ? 'rdy' : 'run'}">${spr(`i_${it.r}`, 38)}<small>${left > 0 ? fmt(left) : 'Hazır'}</small></div>`; }).join('');
-    const rdy = q.length && q[0].end <= now;
+    const rdy = q.length && q[0].end <= now; const ul = F.bu?.[b] || 0; const U = cfg.UPG[ul]; const K = ul ? cfg.UPG[ul - 1].k : 1;
+    const up = `<div class="sf-exp up"><span class="sf-pl">${ul ? `Yükseltme ${ul}/${cfg.UPG.length}` : 'Yükseltilmemiş'}<small>${ul ? `Üretim %${Math.round((1 - K) * 100)} daha hızlı` : 'Odun ve taşla üretimi hızlandır'}</small></span>${U ? `<span class="sf-on"><span class="${(inv().wood || 0) >= U.wood ? 'ok' : ''}">${spr('i_wood', 18)} ${inv().wood || 0}/${U.wood}</span><span class="${(inv().stone || 0) >= U.stone ? 'ok' : ''}">${spr('i_stone', 18)} ${inv().stone || 0}/${U.stone}</span></span><button class="sf-btn sm gold" data-a="upB" data-b="${b}" ${(inv().wood || 0) >= U.wood && (inv().stone || 0) >= U.stone && F.coins >= U.coins ? '' : 'disabled'}>${spr('i_coin', 14)} ${U.coins}</button>` : '<small class="ok">En üst seviye</small>'}</div>`;
     return `<div class="sf-q">${slots}${q.length && !rdy ? `<button class="sf-btn sm violet" data-a="rushB" data-b="${b}">Hızlandır · ${spr('i_jeton', 16)} ${rushCost(q[0].end - now)}</button>` : `<button class="sf-btn gold" data-a="takeB" data-b="${b}" ${rdy ? '' : 'disabled'}>Ürünü al</button>`}</div>
       <div class="sf-recs">${Object.entries(cfg.RECIPES[b]).map(([k, r]) => { const lock = r.lvl > F.lvl; const ok = !lock && hasAll(r.in) && q.length < Ty.slots;
-        return `<div class="sf-rec ${lock ? 'lock' : ''}">${spr(`i_${k}`, 46)}<div class="sf-ri"><b>${esc(cfg.ITEMS[k][0])}${r.out > 1 ? ` ×${r.out}` : ''}</b><small>${fmt(r.t)} · ${STAR} ${r.xp}</small><div class="sf-on">${needs(r.in)}</div></div>${lock ? `<small class="lk">Seviye ${r.lvl}</small>` : `<button class="sf-btn sm" data-a="craft" data-b="${b}" data-r="${k}" ${ok ? '' : 'disabled'}>Üret</button>`}</div>`; }).join('')}</div>`;
+        return `<div class="sf-rec ${lock ? 'lock' : ''}">${spr(`i_${k}`, 46)}<div class="sf-ri"><b>${esc(cfg.ITEMS[k][0])}${r.out > 1 ? ` ×${r.out}` : ''}</b><small>${fmt(Math.round(r.t * K))} · ${STAR} ${r.xp}</small><div class="sf-on">${needs(r.in)}</div></div>${lock ? `<small class="lk">Seviye ${r.lvl}</small>` : `<button class="sf-btn sm" data-a="craft" data-b="${b}" data-r="${k}" ${ok ? '' : 'disabled'}>Üret</button>`}</div>`; }).join('')}</div>${up}`;
   };
   const penBody = (p) => () => {
     const P = cfg.PENS[p]; const list = F.pens[p] || []; const now = tnow(); const feedN = inv()[P.feed] || 0; const hungry = list.filter((a) => !a.at).length; const ready = list.filter((a) => a.at && now - a.at >= P.t).length; const price = P.prices[list.length];
@@ -398,7 +416,60 @@ export default async function farm(view, who) {
     return `${Object.keys(inv()).length ? `<div class="sf-inv">${grid(sel)}</div>` : '<p class="sf-empty">Ambarında gönderecek ürün yok.</p>'}
       ${sel ? `<div class="sf-sell"><span class="sf-pl">${esc(cfg.ITEMS[sel][0])}<small>en çok 3 tane</small></span><div class="sf-stp"><button data-a="gN" data-d="-1" aria-label="Azalt">−</button><b>${ps.n}</b><button data-a="gN" data-d="1" aria-label="Artır">+</button></div><button class="sf-btn" data-a="giftSend">Hediyeyi gönder</button></div>` : ''}
       <p class="sf-note">Günde bir hediye gönderebilirsin. Yazışıyorsanız hediyen sohbetinize de düşer.</p>`; };
+  const bar = (got, n) => `<div class="sf-capb sm"><i style="width:${Math.min(100, (got / n) * 100)}%"></i><b>${got}/${n}</b></div>`;
+  const prize = (P, sz = 22) => `${P.coins ? `${spr('i_coin', sz)}<b>${P.coins}</b>` : ''}${P.item ? `${spr(`i_${P.item[0]}`, sz)}<b>×${P.item[1]}</b>` : ''}${P.xp ? `${STAR}<b>${P.xp}</b>` : ''}`;
+  const questsBody = () => { const Q = F.quests; const all = Q.list.every((x) => x.got >= x.n);
+    return `<div class="sf-recs">${Q.list.map((x) => `<div class="sf-rec ${x.got >= x.n ? 'fin' : ''}"><div class="sf-ri"><b>${esc(cfg.QUESTS[x.k])}</b>${bar(x.got, x.n)}</div>${x.got >= x.n ? '<small class="ok">Tamam</small>' : ''}</div>`).join('')}
+      <div class="sf-rec chest">${spr('i_chest', 46)}<div class="sf-ri"><b>Görev sandığı</b><small class="sf-on"><span>${spr('i_coin', 16)} ${Q.coins}</span><span>${STAR} ${Q.xp}</span></small></div><button class="sf-btn sm gold" data-a="questClaim" ${all && !Q.claimed ? '' : 'disabled'}>${Q.claimed ? 'Açıldı' : 'Sandığı aç'}</button></div></div>
+      <p class="sf-note">Görevler her gün yenilenir. Üçünü de bitirince sandık açılır.</p>`; };
+  const achBody = () => `<div class="sf-recs">${[...F.ach].sort((x, y) => (y.got >= y.n && !y.claimed) - (x.got >= x.n && !x.claimed) || x.claimed - y.claimed).map((x) => { const done = x.got >= x.n; return `<div class="sf-rec ${done ? '' : 'lock'} ${x.claimed ? 'fin' : ''}">${spr('i_medal', 40)}<div class="sf-ri"><b>${esc(x.name)}</b><small>${esc(x.desc)}</small>${x.claimed ? '' : bar(x.got, x.n)}</div>${x.claimed ? '<small class="ok">Rozet alındı</small>' : `<button class="sf-btn sm gold" data-a="achClaim" data-k="${x.k}" ${done ? '' : 'disabled'}>${spr('i_coin', 14)} ${x.coins}</button>`}</div>`; }).join('')}</div>
+    <p class="sf-note">Aldığın rozetlerin sayısı SwipeUp profilinde çiftlik düğmende görünür.</p>`;
+  const wheelBody = () => { const n = F.wheel.n; const W8 = cfg.WHEEL;
+    return `<div class="sf-wh"><div class="sf-wheel"><i style="transform:rotate(${ps.deg || 0}deg)">${W8.map((P, i) => `<span style="transform:rotate(${i * 45 + 22.5}deg) translateY(-66px)">${prize(P, 24)}</span>`).join('')}</i><em></em></div>
+      <div class="sf-whr"><b>Şans çarkı</b><small>Her gün bir çevirme ücretsiz. İkinci çevirme ${cfg.SPIN_GEM} jeton.</small>
+      <button class="sf-btn ${n === 1 ? 'violet' : 'gold'}" data-a="spin" ${n >= 2 || ps.spinning ? 'disabled' : ''}>${n === 0 ? 'Ücretsiz çevir' : n === 1 ? `Tekrar çevir · ${spr('i_jeton', 16)} ${cfg.SPIN_GEM}` : 'Yarın yine gel'}</button></div></div>`; };
+  const eventBody = () => { const E = F.event; if (!E) return '<p class="sf-empty">Şu an şenlik yok.</p>';
+    return `<div class="sf-rk"><span><b>${esc(E.name)}</b> · bitmesine ${fmtD(E.ends - tnow())}</span><span>Şenlik puanın <b>${E.pts}</b></span></div>
+      <div class="sf-recs">${E.steps.map((x, i) => `<div class="sf-rec ${x.got ? 'fin' : ''}">${x.decor ? spr(x.decor, 46) : spr('i_coin', 40)}<div class="sf-ri"><b>${x.decor ? esc(cfg.TYPES[x.decor].name) : `${x.coins} altın`}</b>${x.got ? '' : bar(Math.min(E.pts, x.pts), x.pts)}</div>${x.got ? '<small class="ok">Alındı</small>' : `<button class="sf-btn sm gold" data-a="evClaim" data-i="${i}" ${E.pts >= x.pts ? '' : 'disabled'}>Al</button>`}</div>`).join('')}</div>
+      <p class="sf-note">Şenlik puanı: her sipariş 1, günlük görev sandığı 2, tekne 3 puan. Şenlik süsleri yalnızca bu dönemde kazanılır.</p>`; };
+  const crateRow = (c, i, a, mine) => { const have = inv()[c.k] || 0; return `<div class="sf-rec ${c.done ? 'fin' : ''}">${spr(`i_${c.k}`, 42)}<div class="sf-ri"><b>${esc(cfg.ITEMS[c.k][0])} ×${c.n}</b><small>${c.done ? (c.by ? `${esc(c.by)} doldurdu` : 'Dolu') : `Ambarında ${have}`}</small></div>${c.done ? '<small class="ok">Tamam</small>' : `<button class="sf-btn sm" data-a="${a}" data-i="${i}" ${have >= c.n ? '' : 'disabled'}>Doldur${mine ? '' : ` · ${spr('i_coin', 14)} ${c.n * cfg.ITEMS[c.k][1]}`}</button>`}</div>`; };
+  const boatBody = () => { const B = F.boat; if (!B) return `<p class="sf-empty">Tekne ${cfg.BOAT_LVL}. seviyede gelir.</p>`;
+    return `<div class="sf-exp">${spr('i_boat', 46)}<span class="sf-pl">Günün teknesi<small class="sf-on"><span>${spr('i_coin', 16)} ${B.coins}</span><span>${STAR} ${B.xp}</span></small></span><button class="sf-btn sm gold" data-a="boatSend" ${!B.sent && B.crates.every((c) => c.done) ? '' : 'disabled'}>${B.sent ? 'Yola çıktı' : 'Uğurla'}</button></div>
+      ${B.sent ? '<p class="sf-empty">Tekne yola çıktı. Yarın yeni tekne gelir.</p>' : `<div class="sf-recs">${B.crates.map((c, i) => crateRow(c, i, 'boatFill', true)).join('')}</div>`}
+      <p class="sf-note">Kasaları sen doldurabilirsin, çiftliğini gezen komşuların da doldurabilir. Dört kasa dolunca tekneyi uğurla.</p>`; };
+  const vboatBody = () => { const B = F.boat; return B && !B.sent ? `<div class="sf-recs">${B.crates.map((c, i) => crateRow(c, i, 'vboatFill', false)).join('')}</div><p class="sf-note">Doldurduğun kasanın ürün bedeli sana altın olarak ödenir.</p>` : '<p class="sf-empty">Tekne yola çıkmış.</p>'; };
+  const clubBody = () => { const C = ps.club; if (!C) return '<div class="spinner"></div>';
+    return C.clubs.length ? `<div class="sf-recs">${C.clubs.map((c) => `<div class="sf-rec ${c.claimed ? 'fin' : ''}"><div class="sf-ri"><b>${esc(c.name)}</b><small>${c.farmers} çiftçi · senin katkın ${c.mine}</small>${bar(Math.min(c.sum, c.target), c.target)}</div>${c.claimed ? '<small class="ok">Alındı</small>' : `<button class="sf-btn sm gold" data-a="clubClaim" data-c="${esc(c.id)}" ${c.sum >= c.target && c.mine >= 30 ? '' : 'disabled'}>${spr('i_coin', 14)} ${C.prize}</button>`}</div>`).join('')}</div>
+      <p class="sf-note">Kulüp üyelerinin o hafta kazandığı deneyim ortak hedefe sayılır. Hedef dolunca en az 30 deneyim kazanmış her üye ödülünü alır. Pazartesi sıfırlanır.</p>` : '<p class="sf-empty">Henüz bir kulübe üye değilsin. SwipeUp\'ta bir kulübe katıl, kulüp çiftliği burada açılsın.</p>'; };
+  const pairsBody = () => { const L = ps.pairs; if (!L) return '<div class="spinner"></div>';
+    return L.length ? `${L.map((r) => `<a class="sf-nb" href="#/farm/${esc(r.user.id)}"><img src="${esc(r.user.avatar)}" alt=""><span class="sf-grow"><b>${esc(r.user.name || r.user.username)}</b>${bar(r.pair.g, r.pair.max)}</span>${r.pair.me ? '<small class="ok">Bugün suladın</small>' : '<span class="sf-btn sm">Sula</span>'}</a>`).join('')}<p class="sf-note">Eşleştiğin kişiyle ortak ağacınızı her gün sulayın. Aynı gün ikiniz de sularsanız iki kat büyür; 5, 15 ve 30. adımda ikinize de ödül var.</p>` : '<p class="sf-empty">Çift bahçesi, eşleştiğin ve çiftliği olan kişilerle açılır.</p>'; };
+  const vpairBody = () => { const P = F.pair; const nx = cfg.PAIR_STEPS.find((x) => x.g > P.g);
+    return `<div class="sf-pair"><span class="sf-decs" style="transform:scale(${(0.55 + 0.45 * (P.g / P.max)).toFixed(2)})">${spr('lovetree', 96)}</span><div class="sf-ri"><b>Çift bahçesi</b>${bar(P.g, P.max)}<small>${P.me ? 'Bugün suladın.' : 'Bugün henüz sulamadın.'} ${P.them ? 'O da suladı.' : 'O henüz sulamadı.'}</small>
+      ${nx ? `<small class="sf-on"><span>${nx.g}. adım: ${spr('i_coin', 16)} ${nx.coins}</span>${nx.decor ? `<span>${spr(nx.decor, 22)} ${esc(cfg.TYPES[nx.decor].name)}</span>` : ''}</small>` : '<small class="ok">Ağacınız tam büyüdü</small>'}
+      <button class="sf-btn" data-a="pairWater" ${P.me ? 'disabled' : ''}>${P.me ? 'Yarın yine sula' : 'Ağacı sula'}</button></div></div>
+      <p class="sf-note">Aynı gün ikiniz de sularsanız ağaç iki kat büyür. Ödüller ikinize birden verilir.</p>`; };
+  const noteRow = (x, del) => `<div class="sf-nb sf-nt"><img src="${esc(x.user.avatar)}" alt=""><span class="sf-grow"><b>${esc(x.user.name || x.user.username)}</b><small>${esc(x.text)}</small></span>${del ? `<button class="sf-x sm" data-a="bookDel" data-id="${x.id}" aria-label="Sil">${icon('close')}</button>` : ''}</div>`;
+  const bookBody = () => `<div class="sf-rk"><span>${spr('i_heart', 18)} <b>${F.likes}</b> beğeni</span><span><b>${F.book.length}</b> not</span></div>${F.book.length ? F.book.map((x) => noteRow(x, true)).join('') : '<p class="sf-empty">Defterin boş. Çiftliğini gezen komşuların buraya not bırakabilir.</p>'}`;
+  const vbookBody = () => `<div class="sf-nb">${spr('i_heart', 30)}<span class="sf-grow"><b>${F.likes} beğeni</b></span><button class="sf-btn sm" data-a="vlike" ${F.liked ? 'disabled' : ''}>${F.liked ? 'Beğendin' : 'Beğen'}</button></div>
+    ${F.wrote ? '<p class="sf-note top">Bugün bu deftere yazdın.</p>' : '<div class="sf-write"><input class="sf-in" maxlength="80" placeholder="Bir not bırak (en çok 80 harf)" enterkeyhint="send"><button class="sf-btn sm" data-a="vnote">Yaz</button></div>'}
+    ${F.book.map((x) => noteRow(x, false)).join('')}`;
+  const petBody = () => { const P = cfg.PETS[F.pet.t]; const fed = F.pet.fed; const left = fed ? cfg.PET_T - (tnow() - fed) : 0;
+    return `<div class="sf-pair"><span class="sf-decs">${spr(F.pet.t, 84)}</span><div class="sf-ri"><b>${esc(P.name)}</b>${!fed ? `<small>Karnı aç. Besle, çiftlikte dolaşıp sana küçük bir hediye bulsun.</small><div class="sf-row">${P.food.map((k) => `<button class="sf-btn sm" data-a="petFeed" data-k="${k}" ${inv()[k] > 0 ? '' : 'disabled'}>${spr(`i_${k}`, 18)} ${esc(cfg.ITEMS[k][0])} · ${inv()[k] || 0}</button>`).join('')}</div>` : left > 0 ? `<small>Karnı tok, etrafı kolaçan ediyor. ${fmt(left)} sonra bir şey bulur.</small>` : `<small>Bir şey buldu!</small><button class="sf-btn gold" data-a="petTake">${spr('i_gift', 18)} Hediyeyi al</button>`}</div></div>`; };
+  const TABS = { G: () => [['quests', 'Görevler', questsBody], ['daily', 'Giriş ödülü', dailyBody], ['wheel', 'Çark', wheelBody], ['ach', 'Başarımlar', achBody], F.event ? ['event', F.event.name, eventBody] : null].filter(Boolean),
+    S: () => [['rank', 'Sıralama', rankBody], ['coop', 'Ortak', coopBody], ['club', 'Kulüp', clubBody], ['pairs', 'Çift bahçesi', pairsBody], ['book', 'Defter', bookBody]] };
+  const hubBody = (grp) => () => { const tabs = TABS[grp](); const cur = tabs.find((t) => t[0] === ps.T) || tabs[0]; return `<div class="sf-tabs top">${tabs.map(([k, n]) => `<button class="${cur[0] === k ? 'on' : ''}" data-a="ptab" data-k="${k}">${esc(n)}</button>`).join('')}</div>${cur[2]()}`; };
+  const loadTab = (k) => { const get = (url, key, pickFn) => { if (!ps[key]) api(url).then((r) => { ps[key] = pickFn(r); panel?.paint(); }).catch((e) => toast(e.message)); };
+    if (k === 'rank') get('/farm/rank', 'rank', (r) => r); if (k === 'coop' && !F.coop) get('/farm/neighbors', 'nb', (r) => r); if (k === 'club') get('/farm/club', 'club', (r) => r); if (k === 'pairs') get('/farm/pairs', 'pairs', (r) => r.list); };
+  const openHub = (grp, title, T) => { ps = { T }; openPanel(title, hubBody(grp), true); loadTab(T); };
+  async function shareFarm() { // çiftliğin görüntüsü: sahnenin o anki hâli + küçük imza
+    const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height; const x = c.getContext('2d'); x.drawImage(cv, 0, 0);
+    const u = Math.round(c.height / 16); x.font = `800 ${u}px system-ui, sans-serif`; x.textBaseline = 'bottom'; x.lineWidth = u / 6; x.strokeStyle = 'rgba(58,34,12,.75)'; x.fillStyle = '#fff'; const tx = `SwipeFarm · Seviye ${F.lvl}`; x.strokeText(tx, u * 0.7, c.height - u * 0.6); x.fillText(tx, u * 0.7, c.height - u * 0.6);
+    const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.9)); if (!blob) throw new Error('Görüntü hazırlanamadı.'); return new File([blob], 'swipefarm.jpg', { type: 'image/jpeg' });
+  }
+  const shareBody = () => `<div class="sf-share"><img src="${ps.url}" alt="Çiftliğinin görüntüsü"><div class="sf-whr"><b>Çiftliğini paylaş</b><small>Görüntü, çiftliğinin şu an ekranda duran hâlidir. Önce istediğin yere kaydırıp yakınlaştırabilirsin.</small>
+    <button class="sf-btn" data-a="shStory" ${ps.busy ? 'disabled' : ''}>Hikâyene ekle</button><button class="sf-btn ghost" data-a="shSave" ${ps.busy ? 'disabled' : ''}>Kaydet ya da gönder</button></div></div>`;
   const setBody = () => `<div class="sf-set">
+      <button class="sf-tg nav" data-a="share"><span><b>Çiftliğini paylaş</b><small>Görüntüsünü hikâyene ekle ya da kaydet</small></span>${icon('share')}</button>
       <button class="sf-tg ${muted ? '' : 'on'}" data-a="snd"><span><b>Oyun sesleri</b><small>Hasat, altın ve seviye sesleri</small></span><i></i></button>
       <button class="sf-tg ${F.notif ? 'on' : ''}" data-a="notif"><span><b>Tarla hazır bildirimi</b><small>Ekinlerin olgunlaşınca haber verir, günde en çok 2 kez</small></span><i></i></button>
       <button class="sf-tg ${ambOn ? 'on' : ''}" data-a="amb"><span><b>Gün ve mevsim</b><small>Gece karanlığı, gün batımı, kar ve yaprak görüntüleri</small></span><i></i></button></div>
@@ -442,11 +513,31 @@ export default async function farm(view, who) {
     craft(d) { act('craft', { b: d.b, r: d.r }); }, takeB(d) { act('take', { b: d.b }); },
     feed(d) { act('feed', { pen: d.p }); }, collect(d) { act('collect', { pen: d.p }); }, animal(d) { act('animal', { pen: d.p }); },
     lvlok() { over.innerHTML = overQ.shift() || ''; },
+    hubG() { openHub('G', 'Görevler ve ödüller', 'quests'); }, hubS() { openHub('S', 'Sosyal', 'rank'); },
+    ptab(d) { ps.T = d.k; loadTab(d.k); panel.paint(); },
+    questClaim() { act('questClaim'); }, achClaim(d) { act('achClaim', { k: d.k }); }, evClaim(d) { act('evClaim', { i: +d.i }); },
+    spin() { if (ps.spinning) return; ps.spinning = true; panel.paint();
+      chain = chain.then(() => api('/farm/act', { body: { a: 'spin' } }).then((r) => { ps.deg = (Math.floor((ps.deg || 0) / 360) + 6) * 360 - (r.spin + 0.5) * 45; const el = root.querySelector('.sf-wheel i'); if (el) el.style.transform = `rotate(${ps.deg}deg)`; SFX.tap();
+        return new Promise((res) => setTimeout(() => { ps.spinning = false; apply(r); SFX.level(); res(); }, 3400)); }).catch((e) => { ps.spinning = false; SFX.err(); toast(e.message); panel?.paint(); })); },
+    boat() { ps = {}; openPanel('Tekne', boatBody); }, boatFill(d) { act('boatFill', { i: +d.i }); }, boatSend() { act('boatSend'); },
+    upB(d) { act('upgrade', { b: d.b }).then((r) => { if (r) { SFX.level(); toast('Bina yükseltildi, üretim hızlandı.'); } }); },
+    petBuy(d) { act('petBuy', { t: d.t }).then((r) => { if (r) { closePanel(); petW.x = man.x + 0.8; petW.y = man.y + 0.5; toast(`${cfg.PETS[d.t].name} artık seninle. Üzerine dokunup besleyebilirsin.`); } }); },
+    petFeed(d) { act('petFeed', { item: d.k }); }, petTake() { act('petTake'); },
+    fit(d) { act('fit', { k: d.k }); },
+    clubClaim(d) { act('clubClaim', { club: d.c }).then((r) => { if (r) { ps.club = null; loadTab('club'); } }); },
+    bookDel(d) { act('bookDel', { id: d.id }); },
+    share() { shareFarm().then((file) => { ps = { file, url: URL.createObjectURL(file) }; openPanel('Paylaş', shareBody); }).catch((e) => toast(e.message)); },
+    shStory() { ps.busy = true; panel.paint(); uploadFile(ps.file).then((m) => api('/stories', { body: { media: m.url, mediaType: 'image' } })).then(() => { closePanel(); toast('Çiftliğin hikâyene eklendi.'); }).catch((e) => { ps.busy = false; panel?.paint(); toast(e.message); }); },
+    shSave() { const f = ps.file; if (navigator.canShare?.({ files: [f] })) navigator.share({ files: [f], title: 'SwipeFarm' }).catch(() => {}); else { const a = document.createElement('a'); a.href = ps.url; a.download = 'swipefarm.jpg'; a.click(); } },
+    vbook() { ps = {}; openPanel('Ziyaretçi defteri', vbookBody); }, vlike() { vcall('like', {}, () => SFX.pop(2)); },
+    vnote() { const t = root.querySelector('.sf-in')?.value.trim(); if (!t) return; vcall('book', { text: t }, () => { SFX.take(); toast('Notun deftere yazıldı.'); }); },
+    vpair() { ps = {}; openPanel('Çift bahçesi', vpairBody); }, pairWater() { vcall('pair', {}, () => SFX.water()); },
+    vboat() { ps = {}; openPanel('Tekne', vboatBody); }, vboatFill(d) { vcall('boat', { i: +d.i }, () => SFX.coin()); },
     jet() { toast('Jeton, SwipeUp cüzdanındaki jetonundur. Hızlandırmada ve özel süslerde kullanılır.'); },
-    daily() { ps = {}; openPanel('Günlük ödül', dailyBody); }, dailyGet() { act('daily'); },
-    rank() { ps = {}; openPanel('Haftalık sıralama', rankBody, true); api('/farm/rank').then((r) => { ps.rank = r; panel?.paint(); }).catch((e) => toast(e.message)); },
+    daily() { openHub('G', 'Görevler ve ödüller', 'daily'); }, dailyGet() { act('daily'); },
+    rank() { openHub('S', 'Sosyal', 'rank'); },
     rtab(d) { ps.tab = d.k; panel.paint(); },
-    coop() { ps = {}; openPanel('Ortak sipariş', coopBody, true); if (!F.coop) api('/farm/neighbors').then((r) => { ps.nb = r; panel?.paint(); }).catch((e) => toast(e.message)); },
+    coop() { openHub('S', 'Sosyal', 'coop'); },
     coopStart(d) { act('coopStart', { uid: d.u }).then((r) => { if (r) toast('Davet gönderildi, ortak sipariş başladı.'); }); },
     coopGive(d) { act('coopGive', { item: d.k, n: +d.n }); },
     stall() { ps = {}; openPanel('Tezgâh', stallBody); },
@@ -547,7 +638,7 @@ export default async function farm(view, who) {
   const up = (e) => {
     if (!ptr.has(e.pointerId)) return; const [sx, sy] = ptr.get(e.pointerId); ptr.delete(e.pointerId); const d = drag; if (!d) return;
     if (d.k === 'pinch') { if (ptr.size === 0) drag = null; return; } drag = null;
-    if (d.k === 'pan' && !d.moved) { if (mode?.k === 'place') { const [gx, gy] = toGrid(sx, sy); const Ty = cfg.TYPES[mode.t]; mode.x = Math.min(N - Ty.w, Math.max(0, Math.round(gx - Ty.w / 2))); mode.y = Math.min(N - Ty.h, Math.max(0, Math.round(gy - Ty.h / 2))); } else tap(d.o); return; }
+    if (d.k === 'pan' && !d.moved) { if (mode?.k === 'place') { const [gx, gy] = toGrid(sx, sy); const Ty = cfg.TYPES[mode.t]; mode.x = Math.min(N - Ty.w, Math.max(0, Math.round(gx - Ty.w / 2))); mode.y = Math.min(N - Ty.h, Math.max(0, Math.round(gy - Ty.h / 2))); } else if (!visit && F.pet && Math.hypot(sx - petW.sx, sy - petW.sy) < 30) { SFX.tap(); ps = {}; openPanel(cfg.PETS[F.pet.t].name, petBody, true); } else tap(d.o); return; }
     if ((d.k === 'harvest' || d.k === 'plant') && d.ids.size) {
       const ids = [...d.ids]; if (d.k === 'plant') localStorage.setItem('sf_crop', mode.crop);
       act(d.k, d.k === 'plant' ? { ids, crop: mode.crop } : { ids }).then(() => ids.forEach((id) => { pendH.delete(id); pendP.delete(id); }));
@@ -559,7 +650,7 @@ export default async function farm(view, who) {
   // ---------- zaman ----------
   hud(); paintBot();
   const tick = setInterval(() => {
-    if (panel?.live) panel.paint();
+    if (panel?.live && !ps.spinning) panel.paint();
     paintBot(); if (!visit) hud(); calcAmb();
     if (!visit && F.orders.some((o) => o.wait && o.wait <= tnow())) reload();
   }, 1000);

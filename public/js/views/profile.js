@@ -296,7 +296,7 @@ export default async function profile(view, username) {
   };
   view.querySelector('.msg')?.addEventListener('click', () => openChatWith(u.id).catch((e) => toast(e.message)));
   const sfv = view.querySelector('.sf-visit'); // SwipeFarm: çiftliği varsa ziyaret düğmesi görünür
-  if (sfv) api(`/farm/has/${u.id}`).then((r) => { if (r.lvl) { sfv.querySelector('small').textContent = `SwipeFarm · Seviye ${r.lvl}`; sfv.hidden = false; } }).catch(() => {});
+  if (sfv) api(`/farm/has/${u.id}`).then((r) => { if (r.lvl) { sfv.querySelector('small').textContent = `SwipeFarm · Seviye ${r.lvl}${r.badges ? ` · ${r.badges} rozet` : ''}`; sfv.hidden = false; } }).catch(() => {});
 
   view.querySelector('.menu-btn')?.addEventListener('click', () => {
     const items = [['share', 'share', 'Profili paylaş']];

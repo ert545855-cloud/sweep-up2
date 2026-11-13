@@ -214,3 +214,25 @@ button.sf-slot { padding: 0; font: inherit; } .sf-q { flex-wrap: wrap; }
 
 /* koleksiyon ödülü */
 .sf-decs { display: grid; place-items: center; height: 96px; filter: drop-shadow(0 6px 6px rgba(40,25,10,.35)); animation: sf-bob 1.6s infinite; } .sf-lvc.dec .sf-note { margin: 0; }
+
+/* --- ikinci paket: görevler, çark, tekne, defter, çift bahçesi, evcil hayvan, paylaşım --- */
+.sf-tabs.top { position: sticky; top: -12px; z-index: 2; margin: -4px 0 10px; box-shadow: 0 3px 0 rgba(120,90,40,.18); } .sf-tabs.top button { font-size: 12.5px; padding: 0 4px; }
+.sf-rec.fin { background: #f1ffe6; border-color: #b9e09f; box-shadow: none; } .sf-rec.chest { background: #fff8dc; border-color: var(--gold); }
+.sf-on > span { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 800; color: #8a6a42; } .sf-on > span.ok { color: var(--greend); }
+.sf-exp.up { margin: 10px 0 0; flex-wrap: wrap; background: #fff; border-color: #ead9ae; } .sf-exp .sf-pl { flex: 1; min-width: 120px; }
+.sf-wh, .sf-pair, .sf-share { display: flex; align-items: center; gap: 16px; padding: 4px 6px; } .sf-pair { padding: 8px 10px; border-radius: 18px; background: #fff; border: 3px solid #ead9ae; }
+.sf-whr { flex: 1; min-width: 0; display: grid; gap: 8px; } .sf-whr > b { font-size: 18px; font-weight: 800; } .sf-whr > small { font-size: 12.5px; font-weight: 700; color: #8a6a42; line-height: 1.35; }
+.sf-wheel { position: relative; width: 188px; height: 188px; flex: none; }
+.sf-wheel > i { position: absolute; inset: 0; border-radius: 50%; border: 6px solid var(--wood); box-shadow: 0 5px 0 var(--woodd), 0 10px 16px rgba(40,25,10,.3), inset 0 0 0 3px #fff6dc;
+  background: conic-gradient(#ffd76a 0 45deg, #ff9d6c 0 90deg, #9ad56a 0 135deg, #7cc4f0 0 180deg, #ffd76a 0 225deg, #f29ac0 0 270deg, #b592ff 0 315deg, #9ad56a 0); transition: transform 3.2s cubic-bezier(.12,.75,.18,1); }
+.sf-wheel > i > span { position: absolute; left: 50%; top: 50%; width: 44px; margin: -22px 0 0 -22px; height: 44px; display: grid; justify-items: center; align-content: center; font-style: normal; font-size: 12px; font-weight: 800; color: #4a2c12; line-height: 1; }
+.sf-wheel > i > span svg { width: 20px; height: 20px; }
+.sf-wheel > em { position: absolute; left: 50%; top: -9px; margin-left: -11px; border: 11px solid transparent; border-top: 20px solid var(--red); filter: drop-shadow(0 2px 0 #a82a22); }
+.sf-wheel::after { content: ""; position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; margin: -15px; border-radius: 50%; background: radial-gradient(#fff6dc, var(--gold)); border: 4px solid var(--wood); }
+.sf-pair .sf-decs { width: 96px; flex: none; height: 100px; } .sf-pair .sf-ri { gap: 6px; } .sf-pair .sf-btn { justify-self: start; min-height: 40px; }
+.sf-write { display: flex; gap: 8px; margin: 0 0 10px; } .sf-in { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: 14px; border: 3px solid var(--wood); background: #fff; font: inherit; font-size: 16px; font-weight: 700; color: var(--woodd); }
+.sf-nb.sf-nt small { white-space: normal; overflow-wrap: anywhere; font-size: 13px; color: var(--woodd); } .sf-x.sm { width: 28px; height: 28px; } .sf-nb .sf-capb { margin-top: 3px; }
+.sf-share img { width: 46%; max-height: 200px; object-fit: cover; border-radius: 14px; border: 4px solid #fff; box-shadow: 0 4px 10px rgba(40,25,10,.3); }
+.sf-tg.nav > svg { width: 24px; height: 24px; flex: none; color: var(--wood); }
+.sf-side button[hidden] { display: none; }
+@container (max-height: 380px) { .sf-side { gap: 5px; } .sf-side button { height: 50px; } }
