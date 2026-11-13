@@ -170,12 +170,35 @@ export default async function farm(view, who) {
   const man = { x: home ? home.x + 1.5 : 8, y: home ? home.y + 2.6 : 8, tx: 0, ty: 0, wait: 900, go: false };
   const blocked = (gx, gy) => gx < 0.25 || gy < 0.25 || gx > N - 0.25 || gy > N - 0.25 || F.objs.some((o) => { const Ty = cfg.TYPES[o.t]; return gx > o.x - 0.22 && gx < o.x + Ty.w + 0.22 && gy > o.y - 0.22 && gy < o.y + Ty.h + 0.22; });
   const clear = (ax, ay, bx, by) => { const n = Math.ceil(Math.hypot(bx - ax, by - ay) * 3); for (let i = 1; i <= n; i++) if (blocked(ax + ((bx - ax) * i) / n, ay + ((by - ay) * i) / n)) return false; return true; };
+  // Yürüyüş: zıplama yok. Kalkışta hızlanır, varırken yavaşlar; adım kareleri gidilen yola göre döner, gidiş yönüne bakar.
+  let fdt = 33; // son karenin süresi (ms)
   function stepW(man, dt, v) {
-    if (man.go) { const dx = man.tx - man.x; const dy = man.ty - man.y; const d = Math.hypot(dx, dy); const st = dt * v;
-      if (d <= st) { man.x = man.tx; man.y = man.ty; man.go = false; man.wait = 900 + Math.random() * 2600; } else { man.x += (dx / d) * st; man.y += (dy / d) * st; } return; }
+    if (man.go) { const dx = man.tx - man.x; const dy = man.ty - man.y; const d = Math.hypot(dx, dy);
+      man.sp = (man.sp || 0) + (v * Math.min(1, d / 0.55 + 0.12) - (man.sp || 0)) * Math.min(1, dt / 240); const st = dt * man.sp;
+      if (d <= Math.max(st, 0.015)) { man.x = man.tx; man.y = man.ty; man.go = false; man.sp = 0; man.wait = 900 + Math.random() * 2600; } else { man.x += (dx / d) * st; man.y += (dy / d) * st; } return; }
     man.wait -= dt; if (man.wait > 0) return; const stuck = blocked(man.x, man.y);
     for (let i = 0; i < 10; i++) { const a = Math.random() * 6.283; const r = 1.5 + Math.random() * 5; const tx = man.x + Math.cos(a) * r; const ty = man.y + Math.sin(a) * r; if (!blocked(tx, ty) && (stuck || clear(man.x, man.y, tx, ty))) { man.tx = tx; man.ty = ty; man.go = true; return; } }
     man.wait = 1200;
+  }
+  function gait(w, x, y) { // konum değişiminden hız, bakış yönü ve adım sayacı
+    if (w.gx == null) { w.gx = x; w.gy = y; w.gd = 0; w.gf = false; w.gv = 0; }
+    const dx = x - w.gx; const dy = y - w.gy; w.gx = x; w.gy = y; const d = Math.hypot(dx, dy);
+    w.gv += (d / Math.max(16, fdt) - w.gv) * 0.35;
+    if (d > 0.0004 && d < 2) { w.gd += d; const sv = dx - dy; if (Math.abs(sv) > d * 0.3) w.gf = sv < 0; }
+    return w;
+  }
+  function walker(base, w, x, y, sx, sy, step = 0.2) { // durunca sabit poz, yürürken adım kareleri
+    gait(w, x, y); let k = base;
+    if (w.gv > 0.00008) { const ph = Math.floor(w.gd / step) % 4; const f = ph === 0 ? `${base}_1` : ph === 2 ? `${base}_2` : base; if (HAS(A.atlas, f)) k = f; }
+    sp(k, sx, sy, 1, 1, 1, w.gf);
+  }
+  const herd = new Map(); // ağıldaki hayvanlar: yerlerinin çevresinde ağır ağır gezinir, arada durur
+  function graze(key, bx, by, dt) {
+    let h = herd.get(key); if (!h) { h = { x: bx, y: by, tx: bx, ty: by, wait: Math.random() * 4000, go: false, sp: 0 }; herd.set(key, h); }
+    if (h.go) { const dx = h.tx - h.x; const dy = h.ty - h.y; const d = Math.hypot(dx, dy); h.sp += (0.00034 * Math.min(1, d / 0.12 + 0.2) - h.sp) * Math.min(1, dt / 300); const st = dt * h.sp;
+      if (d <= Math.max(st, 0.008)) { h.go = false; h.sp = 0; h.wait = 1500 + Math.random() * 5000; } else { h.x += (dx / d) * st; h.y += (dy / d) * st; } }
+    else { h.wait -= dt; if (h.wait <= 0) { const a = Math.random() * 6.283; const r = 0.08 + Math.random() * 0.2; h.tx = bx + Math.cos(a) * r; h.ty = by + Math.sin(a) * r * 0.8; h.go = true; } }
+    return h;
   }
   const petW = { x: man.x + 1, y: man.y + 0.6, tx: 0, ty: 0, wait: 400, go: false };
   const starPath = (x, y, r) => { g.beginPath(); for (let i = 0; i < 10; i++) { const an = -Math.PI / 2 + (i * Math.PI) / 5; const q = i % 2 ? r * 0.45 : r; g[i ? 'lineTo' : 'moveTo'](x + Math.cos(an) * q, y + Math.sin(an) * q); } g.closePath(); };
@@ -209,10 +232,11 @@ export default async function farm(view, who) {
   const free = (t, x, y, skip) => { const Ty = cfg.TYPES[t]; if (x < 0 || y < 0 || x + Ty.w > N || y + Ty.h > N) return false;
     return !F.objs.some((o) => o.id !== skip && x < o.x + cfg.TYPES[o.t].w && o.x < x + Ty.w && y < o.y + cfg.TYPES[o.t].h && o.y < y + Ty.h); };
 
-  function sp(k, sx, sy, kx = 1, ky = kx, alpha = 1) {
+  function sp(k, sx, sy, kx = 1, ky = kx, alpha = 1, flip = false) {
     if (!HAS(A.atlas, k)) return; const a = A.atlas[k]; const z = cam.z;
     if (alpha !== 1) g.globalAlpha = alpha;
-    g.drawImage(A[a[0]], a[1], a[2], a[3], a[4], sx - a[5] * z * kx, sy - a[6] * z * ky, a[3] * z * kx, a[4] * z * ky);
+    if (flip) { g.save(); g.translate(sx, sy); g.scale(-1, 1); g.drawImage(A[a[0]], a[1], a[2], a[3], a[4], -a[5] * z * kx, -a[6] * z * ky, a[3] * z * kx, a[4] * z * ky); g.restore(); }
+    else g.drawImage(A[a[0]], a[1], a[2], a[3], a[4], sx - a[5] * z * kx, sy - a[6] * z * ky, a[3] * z * kx, a[4] * z * ky);
     if (alpha !== 1) g.globalAlpha = 1;
   }
   function ico(k0, x, y, s, alpha = 1) { const gold = k0.startsWith('i_g_'); const k = gold ? `i_${k0.slice(4)}` : k0; if (!HAS(A.atlas, k)) return; const a = A.atlas[k]; const f = s / Math.max(a[3], a[4]); g.globalAlpha = alpha; g.drawImage(A[a[0]], a[1], a[2], a[3], a[4], x - (a[3] * f) / 2, y - (a[4] * f) / 2, a[3] * f, a[4] * f); g.globalAlpha = 1;
@@ -223,7 +247,7 @@ export default async function farm(view, who) {
     const rr = (dy) => { if (g.roundRect) g.roundRect(sx - w / 2, y - h / 2 + dy, w, h, h / 2); else g.rect(sx - w / 2, y - h / 2 + dy, w, h); };
     g.fillStyle = 'rgba(40,25,10,.2)'; g.beginPath(); rr(3); g.fill(); g.fillStyle = '#fffdf3'; g.beginPath(); rr(0); g.fill(); g.beginPath(); g.moveTo(sx - 6, y + h / 2 - 1); g.lineTo(sx, y + h / 2 + 7); g.lineTo(sx + 6, y + h / 2 - 1); g.fill();
     g.fillStyle = '#3a220c'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, sx, y + 1); g.restore(); }
-  function walkTo(w, dt, v) { if (!w.walk) return; const dx = w.tx - w.x; const dy = w.ty - w.y; const d = Math.hypot(dx, dy); const st = dt * v; if (d <= st) { w.x = w.tx; w.y = w.ty; w.walk = false; } else { w.x += (dx / d) * st; w.y += (dy / d) * st; } }
+  function walkTo(w, dt, v) { if (!w.walk) return; const dx = w.tx - w.x; const dy = w.ty - w.y; const d = Math.hypot(dx, dy); w.sp = (w.sp || 0) + (v * Math.min(1, d / 0.55 + 0.12) - (w.sp || 0)) * Math.min(1, dt / 240); const st = dt * w.sp; if (d <= Math.max(st, 0.015)) { w.x = w.tx; w.y = w.ty; w.walk = false; w.sp = 0; } else { w.x += (dx / d) * st; w.y += (dy / d) * st; } }
   function drop(x, y, r) { g.save(); g.fillStyle = '#3aa8ee'; g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y - r * 1.5); g.bezierCurveTo(x + r * 1.3, y, x + r, y + r, x, y + r); g.bezierCurveTo(x - r, y + r, x - r * 1.3, y, x, y - r * 1.5); g.fill(); g.stroke(); g.fillStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.arc(x - r * 0.3, y + r * 0.2, r * 0.22, 0, 7); g.fill(); g.restore(); }
   function star(x, y, r) { g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5; const rr = i % 2 ? r * 0.46 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fillStyle = '#ffd23f'; g.strokeStyle = '#b97a0c'; g.lineWidth = 1.5; g.lineJoin = 'round'; g.stroke(); g.fill(); }
   function label(txt, x, y, size = 13, fill = '#fff') { font(`800 ${Math.round(size * 2) / 2}px "Bricolage Grotesque", system-ui, sans-serif`); g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.strokeStyle = 'rgba(58,34,12,.9)'; g.lineWidth = size * 0.3; g.strokeText(txt, x, y); g.fillStyle = fill; g.fillText(txt, x, y); }
@@ -268,9 +292,9 @@ export default async function farm(view, who) {
     if (o.t === 'mill') sp(`rotor_${(F.q?.mill || []).some((q) => q.end > now) ? Math.floor(T / 90) % 6 : 0}`, sx, sy, k);
     if (Ty.kind === 'pen') {
       const P = cfg.PENS[o.t]; const list = F.pens?.[o.t] || []; let ready = 0; let hungry = 0;
-      list.forEach((an, i) => { const [dx, dy] = SPOTS[o.t][i] || [0, 0]; const [ax, ay] = toScr(cx + dx + Math.sin(T / 2300 + i * 2.1 + o.x) * 0.13, cy + dy + Math.cos(T / 2900 + i * 1.3) * 0.11); const fed = an.at && now - an.at < P.t;
+      list.forEach((an, i) => { const [dx, dy] = SPOTS[o.t][i] || [0, 0]; const h = graze(`${o.id}:${i}`, cx + dx, cy + dy, fdt); const [ax, ay] = toScr(h.x, h.y); const fed = an.at && now - an.at < P.t;
         if (!an.at) hungry++; else if (!fed) ready++;
-        sp(P.animal, ax, ay - (fed ? Math.abs(Math.sin(T / 300 + i * 2)) * 10 * z : 0)); });
+        walker(P.animal, h, h.x, h.y, ax, ay, 0.07); });
       if (ready) bubbles.push([sx, top, `i_${P.out}`, {}]); else if (hungry && !visit) bubbles.push([sx, top, `i_${P.feed}`, { dim: !(inv()[P.feed] > 0) }]);
     }
     if (Ty.kind === 'build' && !visit) { const q = F.q?.[o.t] || []; if (q.length) { const r = cfg.RECIPES[o.t][q[0].r]; const left = q[0].end - now; bubbles.push([sx, top, `i_${q[0].r}`, left <= 0 ? {} : { dim: true, p: 1 - left / r.t, still: true }]); } }
@@ -310,15 +334,15 @@ export default async function farm(view, who) {
   }
   function drawDyn(e, now, op) {
     const z = cam.z; const kind = e[1];
-    if (kind === 0) { const [sx, sy] = toScr(man.x, man.y); sp(F.fit && F.fit !== 'a' ? `farmer_${F.fit}` : 'farmer', sx, sy - (man.go ? Math.abs(Math.sin(T / 110)) * 5 * z : 0)); man.sx = sx; man.sy = sy;
+    if (kind === 0) { const [sx, sy] = toScr(man.x, man.y); walker(F.fit && F.fit !== 'a' ? `farmer_${F.fit}` : 'farmer', man, man.x, man.y, sx, sy); man.sx = sx; man.sy = sy;
       if (visit && op) { label(op.user.name || op.user.username, sx, sy - 128 * z - 8, 12); emoteAt(op, sx, sy - 128 * z - 28); } else if (!visit && myEmo) emoteAt(myEmo, sx, sy - 128 * z - 14); return; }
-    if (kind === 1) { const [sx, sy] = toScr(petW.x, petW.y); sp(F.pet.t, sx, sy - (petW.go ? Math.abs(Math.sin(T / 80)) * 4 * z : 0)); petW.sx = sx; petW.sy = sy - 30 * z;
+    if (kind === 1) { const [sx, sy] = toScr(petW.x, petW.y); walker(F.pet.t, petW, petW.x, petW.y, sx, sy, 0.13); petW.sx = sx; petW.sy = sy - 30 * z;
       if (!visit && cfg.PETS[F.pet.t] && (!F.pet.fed || now - F.pet.fed >= cfg.PET_T)) bubbles.push([sx, sy - 62 * z, F.pet.fed ? 'i_gift' : `i_${cfg.PETS[F.pet.t].food[0]}`, {}]); return; }
-    if (kind === 2) { const r = e[2]; const v = r.v; const [sx, sy] = toScr(r.x, r.y); sp(v.look, sx, sy - (r.walking ? Math.abs(Math.sin(T / 120)) * 5 * z : Math.abs(Math.sin(T / 900 + v.sx)) * 1.5 * z)); npcHit.push([sx, sy - 50 * z, v]);
+    if (kind === 2) { const r = e[2]; const v = r.v; const [sx, sy] = toScr(r.x, r.y); walker(v.look, v.gw || (v.gw = {}), r.x, r.y, sx, sy); npcHit.push([sx, sy - 50 * z, v]);
       if (!r.walking) { const enough = (inv()[v.k] || 0) >= v.n; bubbles.push([sx, sy - 118 * z, ik(v.k), { dim: !visit && !enough, cnt: v.n }]); } return; }
     const p = e[2]; const x = p === meW ? p.x : p.dx; const y = p === meW ? p.y : p.dy; const [sx, sy] = toScr(x, y);
     if (sx < -100 || sx > W + 100 || sy < -60 || sy > H + 200) return;
-    sp(p.fit && p.fit !== 'a' ? `farmer_${p.fit}` : 'farmer', sx, sy - ((p.go || p.walk) ? Math.abs(Math.sin(T / 110)) * 5 * z : 0));
+    walker(p.fit && p.fit !== 'a' ? `farmer_${p.fit}` : 'farmer', p.gw || (p.gw = {}), x, y, sx, sy);
     label(p === meW ? 'Sen' : (p.user.name || p.user.username), sx, sy - 128 * z - 8, 12, p === meW ? '#ffe98a' : '#fff'); emoteAt(p, sx, sy - 128 * z - 28);
   }
   // akıcılık ölçümü: kareler uzun süre geç gelirse hafif grafiğe geçilir
@@ -327,7 +351,7 @@ export default async function farm(view, who) {
   function frame(ts) {
     raf = requestAnimationFrame(frame);
     const gap = panel && !mode ? 110 : lowQ ? 40 : 30; if (ts - last < gap || !W) return; // pencere açıkken sahne yavaş yenilenir
-    const dt = Math.min(120, ts - last);
+    const dt = Math.min(120, ts - last); fdt = dt;
     if (!panel && !lowQ && dt < 500) { if (!shownAt) shownAt = ts; if (ts - shownAt > 4000) { slowEma = slowEma * 0.95 + (ts - last) * 0.05; if (slowEma > 52) { if (++slowN > 90) setLowQ(true, true); } else slowN = Math.max(0, slowN - 2); } }
     let op = null; if (visit) for (const p of peers.values()) if (p.owner) { op = p; break; }
     if (op) { man.x += (op.x - man.x) * Math.min(1, dt / 400); man.y += (op.y - man.y) * Math.min(1, dt / 400); man.go = Math.hypot(op.x - man.x, op.y - man.y) > 0.05; } else stepW(man, dt, 0.0011);

@@ -6,7 +6,11 @@ export function loadArt(onp) {
   let n = 0; const step = () => onp?.(++n / 4);
   const img = (name) => new Promise((res, rej) => { const i = new Image(); i.onload = () => { step(); res(i); }; i.onerror = () => rej(new Error('Oyun görselleri yüklenemedi. Bağlantını kontrol et.')); i.src = `/img/farm/${name}.webp${AV}`; });
   ART = Promise.all([fetch(`/img/farm/atlas.json${AV}`).then((r) => r.json()).then((j) => { step(); return j; }), img('obj'), img('item'), img('grass')])
-    .then(([atlas, obj, item, grass]) => ({ atlas, obj, item, grass })).catch((e) => { ART = null; throw e; });
+    .then(([atlas, obj, item, grass]) => { const A = { atlas, obj, item, grass };
+      // yürüyüş kareleri ayrı atlasta; yüklenemezse oyun sabit pozlarla çalışmaya devam eder
+      return Promise.all([fetch(`/img/farm/walk.json${AV}`).then((r) => r.json()), new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = `/img/farm/walk.webp${AV}`; })])
+        .then(([wj, wi]) => { A.walk = wi; for (const k of Object.keys(wj)) if (!Object.prototype.hasOwnProperty.call(atlas, k)) atlas[k] = wj[k]; return A; }).catch(() => A); })
+    .catch((e) => { ART = null; throw e; });
   return ART;
 }
 
@@ -30,7 +34,7 @@ export function drawMini(cv, snap, A, { anim = true } = {}) {
   const sp = (x, k, sx, sy) => { if (!has(A.atlas, k)) return; const a = A.atlas[k]; x.drawImage(A[a[0]], a[1], a[2], a[3], a[4], sx - a[5] * z, sy - a[6] * z, a[3] * z, a[4] * z); };
   const actors = (T) => { // çiftçi, evcil hayvan ve ağıldaki hayvanlar
     const out = []; const mx = man.x + (anim ? Math.sin(T / 2600) * 1.2 : 0); const my = man.y + (anim ? Math.cos(T / 3100) * 0.5 : 0);
-    out.push([mx + my, snap.fit && snap.fit !== 'a' ? `farmer_${snap.fit}` : 'farmer', mx, my, anim ? Math.abs(Math.sin(T / 120)) * 3 * z : 0]);
+    out.push([mx + my, snap.fit && snap.fit !== 'a' ? `farmer_${snap.fit}` : 'farmer', mx, my, 0]);
     if (snap.pet) out.push([mx + my + 1.3, snap.pet, mx + 0.8, my + 0.5, 0]);
     for (const [t, x, y, , w = 1, h = 1] of objs) { const an = snap.a?.[t]; if (!Array.isArray(an) || !SPOTS[t]) continue; for (let i = 0; i < Math.min(4, an[1]); i++) { const [dx, dy] = SPOTS[t][i] || [0, 0]; out.push([0, an[0], x + w / 2 + dx + (anim ? Math.sin(T / 2300 + i * 2.1) * 0.12 : 0), y + h / 2 + dy, 0]); } }
     return out;
