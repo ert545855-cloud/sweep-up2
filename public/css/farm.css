@@ -149,3 +149,12 @@
 .sf-unl { width: 100%; padding: 10px; border-radius: 18px; background: #fff; border: 3px solid #ead9ae; text-align: center; } .sf-unl > small { font-weight: 800; font-size: 12.5px; color: #8a6a42; }
 .sf-unl > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 6px; } .sf-unl span { display: grid; justify-items: center; gap: 2px; width: 76px; } .sf-unl em { font-style: normal; font-size: 11.5px; font-weight: 800; line-height: 1.1; }
 .sf-lvc .sf-btn { margin-top: 6px; min-width: 160px; }
+
+/* ayarlar */
+.sf-set { display: grid; gap: 8px; }
+.sf-tg { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border-radius: 18px; background: #fff; border: 3px solid #ead9ae; box-shadow: 0 3px 0 #dcc892; text-align: left; }
+.sf-tg span { flex: 1; display: grid; gap: 2px; } .sf-tg b { font-size: 15.5px; font-weight: 800; } .sf-tg small { font-size: 12px; font-weight: 600; color: #8a6a42; line-height: 1.3; }
+.sf-tg i { position: relative; width: 52px; height: 30px; flex: none; border-radius: 99px; background: #d9c9a0; border: 2.5px solid var(--wood); transition: background .2s; }
+.sf-tg i::after { content: ""; position: absolute; top: 1.5px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 2px 3px rgba(40,25,10,.35); transition: transform .2s cubic-bezier(.2,.9,.3,1.3); }
+.sf-tg.on i { background: var(--green); } .sf-tg.on i::after { transform: translateX(21px); }
+.sf-sndb { margin-left: 2px; }

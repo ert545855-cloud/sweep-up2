@@ -122,7 +122,7 @@ module.exports = function farm(app, ctx) {
     }
   }
   const out = (f) => ({ lvl: f.lvl, xp: f.xp, need: need(f.lvl), coins: f.coins, inv: f.inv, cap: barnCap(f.bl), capUp: barnUpCost(f.bl), objs: f.objs, pens: f.pens, q: f.q, orders: f.orders,
-    maxPlots: maxPlots(f.lvl), helpsLeft: f.helpDay === day() ? Math.max(0, HELPS - f.helpN) : HELPS, now: now() });
+    maxPlots: maxPlots(f.lvl), notif: !f.noNotif, helpsLeft: f.helpDay === day() ? Math.max(0, HELPS - f.helpN) : HELPS, now: now() });
 
   const ACT = {
     plant(f, b, fx) {
@@ -209,14 +209,15 @@ module.exports = function farm(app, ctx) {
       const n = Math.floor(+b.n); if (!ITEMS[b.item] || !(n > 0) || (f.inv[b.item] || 0) < n) throw E('Satılacak ürün yok.');
       take(f, { [b.item]: n }); const c = n * ITEMS[b.item][1]; f.coins += c; fx.push({ t: 'coins', n: c });
     },
+    notif(f, b) { if (b.on) delete f.noNotif; else f.noNotif = 1; }, // "tarlan hazır" bildirimi aç/kapat
     barn(f) { const c = barnUpCost(f.bl); if (f.coins < c) throw E('Altının yetmiyor.'); f.coins -= c; f.bl = (f.bl || 0) + 1; },
   };
 
-  app.get('/api/farm', auth, (req, res) => res.json({ cfg: CFG, farm: out(load(req.user.id)) }));
+  app.get('/api/farm', auth, (req, res) => { const f = load(req.user.id); f.seen = now(); save(f); res.json({ cfg: CFG, farm: out(f) }); });
   app.post('/api/farm/act', auth, (req, res) => {
     const f = load(req.user.id); const fn = ACT[req.body?.a]; const fx = [];
     if (!fn) return res.status(400).json({ error: 'Bilinmeyen işlem.' });
-    try { const extra = fn(f, req.body, fx) || {}; touch(f); save(f); res.json({ farm: out(f), fx, ...extra }); } catch (e) { if (!e.status) throw e; res.status(e.status).json({ error: e.message, farm: out(f) }); }
+    try { const extra = fn(f, req.body, fx) || {}; touch(f); f.seen = now(); save(f); res.json({ farm: out(f), fx, ...extra }); } catch (e) { if (!e.status) throw e; res.status(e.status).json({ error: e.message, farm: out(f) }); }
   });
   // komşular: takip ettiklerinin çiftlikleri + en iyi çiftçiler
   app.get('/api/farm/neighbors', auth, (req, res) => {
@@ -248,6 +249,25 @@ module.exports = function farm(app, ctx) {
     if (first) notify(f.id, { type: 'farm', fromId: me.id, text: `${req.user.username} çiftliğine uğradı ve ekinlerini suladı.`, url: '/#/farm' });
     res.json({ farm: visitOut(f, me), fx });
   });
+
+  // "Tarlan hazır" bildirimi: ekili bütün tarlalar olgunlaştıysa ve oyuncu en az 10 dakikadır çiftliğe bakmadıysa
+  // bir kez haber verilir. Aynı hasat için tekrar gönderilmez; günde en çok 2 bildirim.
+  const AWAY = 10 * MIN; const STALE = 12 * 60 * MIN; const DAILY = 2;
+  function scan() {
+    const t = now(); let sent = 0;
+    for (const f of store.all('farms')) {
+      if (f.noNotif) continue;
+      let last = 0; let ready = 0; let growing = false;
+      for (const o of f.objs) { const c = o.t === 'plot' && CROPS[o.crop]; if (!c) continue; const end = o.at + c.t; if (end > t) { growing = true; break; } ready++; if (end > last) last = end; }
+      if (growing || !ready || last <= (f.nT || 0) || (f.seen || 0) >= last || t - (f.seen || 0) < AWAY || t - last > STALE) continue;
+      if (f.nDay === day() && (f.nN || 0) >= DAILY) continue;
+      f.nN = f.nDay === day() ? (f.nN || 0) + 1 : 1; f.nDay = day(); f.nT = last; save(f); sent++;
+      notify(f.id, { type: 'farm', title: 'SwipeFarm', text: `Tarlan hazır! ${ready} tarlada ekin hasat bekliyor.`, url: '/#/farm', tag: 'farm-ready' });
+    }
+    return sent;
+  }
+  setInterval(() => { try { scan(); } catch (e) { console.error('farm scan', e.message); } }, MIN).unref?.();
+  module.exports._scan = scan;
 };
 module.exports.CFG = CFG;
 module.exports.need = need;
