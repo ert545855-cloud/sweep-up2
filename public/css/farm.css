@@ -1,6 +1,11 @@
 /* SwipeFarm: oyun ekranı. Krem paneller, ahşap çerçeve, dolgun düğmeler. */
 .sf { position: fixed; inset: 0; z-index: 6; overflow: hidden; background: #6fb04a; color: #4a2c12; font-family: var(--display, system-ui), system-ui, sans-serif; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
-  --cream: #fff6dc; --cream2: #f6e7bd; --wood: #8a5a33; --woodd: #5b3718; --green: #62b63f; --greend: #3f8f26; --gold: #ffc933; --goldd: #d99a12; --red: #e0483e; }
+  --cream: #fff6dc; --cream2: #f6e7bd; --wood: #8a5a33; --woodd: #5b3718; --green: #62b63f; --greend: #3f8f26; --gold: #ffc933; --goldd: #d99a12; --red: #e0483e;
+  --st: env(safe-area-inset-top, 0px); --sr: env(safe-area-inset-right, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); container-type: size; }
+/* yatay oyun: telefon dik tutulurken sahne 90° döner (genişlik, yükseklik ve sol kenar farm.js'te verilir) */
+.sf.rot { inset: 0 auto auto auto; transform-origin: 0 0; transform: rotate(90deg);
+  --st: env(safe-area-inset-right, 0px); --sr: env(safe-area-inset-bottom, 0px); --sb: env(safe-area-inset-left, 0px); --sl: env(safe-area-inset-top, 0px); }
+.sf.rot .sf-pb, .sf.rot .sf-sl { touch-action: none; }
 .sf button { font: inherit; color: inherit; }
 .sf-cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
 .sf-sp { display: inline-block; flex: none; background-repeat: no-repeat; vertical-align: middle; }
@@ -9,14 +14,14 @@
 
 /* açılış */
 .sf-load { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; text-align: center; background: radial-gradient(120% 90% at 50% 20%, #a8e06a, #5fae3e 70%, #3f8f3a); color: #fff; }
-.sf-load img { width: min(72vw, 320px); height: auto; filter: drop-shadow(0 14px 18px rgba(20,60,10,.35)); }
+.sf-load img { width: min(72vw, 320px); width: min(60cqw, 320px); height: auto; max-height: 46cqh; object-fit: contain; filter: drop-shadow(0 14px 18px rgba(20,60,10,.35)); }
 .sf-load h1 { margin: 0; font-size: 38px; font-weight: 800; letter-spacing: -.02em; text-shadow: 0 3px 0 #2f7a22, 0 8px 18px rgba(0,0,0,.25); }
 .sf-load p { margin: 0; font-weight: 700; opacity: .95; }
-.sf-lb { width: min(64vw, 260px); height: 16px; border-radius: 99px; background: rgba(30,80,20,.45); border: 3px solid #fff; overflow: hidden; }
+.sf-lb { width: min(64vw, 260px); width: min(64cqw, 260px); height: 16px; border-radius: 99px; background: rgba(30,80,20,.45); border: 3px solid #fff; overflow: hidden; }
 .sf-lb i { display: block; height: 100%; width: 6%; background: linear-gradient(#ffe36b, #ffb81f); border-radius: 99px; transition: width .25s; }
 
 /* üst çubuk */
-.sf-top { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top, 0px) + 10px) 10px 0; pointer-events: none; }
+.sf-top { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 7px; padding: calc(var(--st) + 8px) calc(var(--sr) + 10px) 0 calc(var(--sl) + 10px); pointer-events: none; }
 .sf-top > * { pointer-events: auto; }
 .sf-rb { width: 42px; height: 42px; flex: none; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(#fffaf0, var(--cream2)); border: 3px solid var(--wood); box-shadow: 0 3px 0 var(--woodd), 0 6px 12px rgba(40,25,10,.3); color: var(--woodd); }
 .sf-rb svg { width: 20px; height: 20px; stroke-width: 2.6; }
@@ -38,10 +43,12 @@
 .sf-dropi { width: 16px; height: 20px; margin-left: 5px; background: #3aa8ee; border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%; clip-path: polygon(50% 0, 100% 62%, 86% 92%, 50% 100%, 14% 92%, 0 62%); }
 
 /* yan düğmeler */
-.sf-side { position: absolute; right: 8px; top: calc(env(safe-area-inset-top, 0px) + 70px); display: grid; gap: 9px; }
-.sf-side button { position: relative; width: 60px; height: 60px; display: grid; place-items: center; align-content: center; gap: 0; border-radius: 18px; background: linear-gradient(#fffaf0, var(--cream2)); border: 3px solid var(--wood); box-shadow: 0 4px 0 var(--woodd), 0 8px 14px rgba(40,25,10,.3); transition: transform .12s; }
-.sf-side button > svg { width: 24px; height: 24px; color: var(--wood); stroke-width: 2.4; margin: 5px 0 3px; }
-.sf-side small { font-size: 10.5px; font-weight: 800; color: var(--woodd); line-height: 1; margin-top: 1px; }
+.sf-side { position: absolute; right: calc(var(--sr) + 8px); top: calc(var(--st) + 62px); display: grid; gap: 7px; }
+.sf-sideL { right: auto; left: calc(var(--sl) + 8px); }
+.sf-side button[hidden] { display: none; }
+.sf-side button { position: relative; width: 56px; height: 54px; display: grid; place-items: center; align-content: center; gap: 0; border-radius: 16px; background: linear-gradient(#fffaf0, var(--cream2)); border: 3px solid var(--wood); box-shadow: 0 4px 0 var(--woodd), 0 8px 14px rgba(40,25,10,.3); transition: transform .12s; }
+.sf-side button > svg { width: 22px; height: 22px; color: var(--wood); stroke-width: 2.4; margin: 5px 0 3px; }
+.sf-side small { font-size: 10px; font-weight: 800; color: var(--woodd); line-height: 1; margin-top: 1px; }
 .sf-badge { position: absolute; top: -7px; right: -7px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 99px; background: var(--red); border: 2.5px solid #fff; color: #fff; font-style: normal; font-size: 12px; font-weight: 800; display: grid; place-items: center; box-shadow: 0 2px 5px rgba(0,0,0,.3); animation: sf-bob 1.2s infinite; }
 @keyframes sf-bob { 50% { transform: translateY(-3px); } }
 
@@ -57,7 +64,7 @@
 .sf-x svg { width: 16px; height: 16px; stroke-width: 3.2; }
 
 /* alt çubuk */
-.sf-bot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 10px calc(env(safe-area-inset-bottom, 0px) + 12px); pointer-events: none; display: grid; justify-items: center; }
+.sf-bot { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 calc(var(--sr) + 10px) calc(var(--sb) + 10px) calc(var(--sl) + 10px); pointer-events: none; display: grid; justify-items: center; }
 .sf-bot > * { pointer-events: auto; }
 .sf-hint { max-width: 360px; padding: 10px 16px; border-radius: 16px; background: rgba(58,34,12,.86); color: #fff; font-weight: 700; font-size: 14px; text-align: center; line-height: 1.3; box-shadow: 0 6px 16px rgba(0,0,0,.25); animation: sf-up .35s cubic-bezier(.2,.9,.3,1.3); }
 @keyframes sf-up { from { transform: translateY(24px); opacity: 0; } }
@@ -75,7 +82,8 @@
 /* panel */
 .sf-dim { position: absolute; inset: 0; background: rgba(30,18,6,.45); animation: sf-fade .2s; }
 @keyframes sf-fade { from { opacity: 0; } }
-.sf-panel { position: absolute; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); max-width: 520px; margin: 0 auto; max-height: 76%; display: flex; flex-direction: column; border-radius: 26px; background: var(--cream); border: 4px solid var(--wood); box-shadow: 0 6px 0 var(--woodd), 0 20px 40px rgba(20,10,0,.45); animation: sf-up .32s cubic-bezier(.2,.9,.3,1.2); }
+.sf-layer:not(:empty) { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr); place-items: center; padding: calc(var(--st) + 26px) calc(var(--sr) + 12px) calc(var(--sb) + 10px) calc(var(--sl) + 12px); }
+.sf-panel { position: relative; width: 100%; max-width: 600px; min-height: 0; max-height: 100%; display: flex; flex-direction: column; border-radius: 26px; background: var(--cream); border: 4px solid var(--wood); box-shadow: 0 6px 0 var(--woodd), 0 20px 40px rgba(20,10,0,.45); animation: sf-up .32s cubic-bezier(.2,.9,.3,1.2); }
 .sf-ph { position: relative; display: flex; align-items: center; justify-content: center; margin: -18px 44px 0; height: 42px; border-radius: 14px; background: linear-gradient(#ef6a5c, #d8433a); border: 3px solid #fff; box-shadow: 0 4px 0 #a82a22, 0 8px 14px rgba(40,25,10,.3); }
 .sf-ph b { color: #fff; font-size: 18px; font-weight: 800; text-shadow: 0 2px 0 rgba(110,20,10,.5); }
 .sf-ph .sf-x { position: absolute; right: -40px; top: 2px; }
@@ -109,7 +117,7 @@
 .sf-stp button { min-width: 36px; height: 36px; padding: 0 8px; border-radius: 12px; background: #fff; border: 2.5px solid var(--wood); font-weight: 800; font-size: 14px; box-shadow: 0 2px 0 var(--woodd); }
 .sf-sell .sf-btn { grid-column: 1 / -1; }
 
-.sf-shopg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+.sf-shopg { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin-bottom: 10px; }
 .sf-shop { display: grid; justify-items: center; gap: 2px; padding: 8px 4px 9px; border-radius: 18px; background: #fff; border: 3px solid #ead9ae; box-shadow: 0 3px 0 #dcc892; }
 .sf-shi { height: 62px; display: grid; place-items: center; } .sf-shop b { font-size: 12.5px; font-weight: 800; line-height: 1.15; text-align: center; }
 .sf-shop small { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; font-weight: 800; color: #9a6a08; }
@@ -158,3 +166,51 @@
 .sf-tg i::after { content: ""; position: absolute; top: 1.5px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 2px 3px rgba(40,25,10,.35); transition: transform .2s cubic-bezier(.2,.9,.3,1.3); }
 .sf-tg.on i { background: var(--green); } .sf-tg.on i::after { transform: translateX(21px); }
 .sf-sndb { margin-left: 2px; }
+
+/* yatay ekran: alt çubuk yan düğmelerin arasında kalır, pencereler alçak ekrana sığar */
+.sf.land .sf-seeds, .sf.land .sf-place { max-width: min(520px, calc(100% - 150px)); }
+.sf.land .sf-hint { max-width: min(420px, calc(100% - 150px)); }
+.sf.land .sf-sl { padding-bottom: 9px; } .sf.land .sf-seed { padding: 5px 4px; }
+@container (max-height: 460px) {
+  .sf-lvl { padding: 46px 20px 8px; } .sf-lvc { width: min(100%, 420px); gap: 5px; padding: 12px 16px 14px; }
+  .sf-bigstar { width: 84px; height: 84px; margin-top: -54px; } .sf-bigstar b { font-size: 30px; margin-top: 6px; } .sf-lvc h2 { font-size: 24px; }
+  .sf-unl { padding: 6px 8px; } .sf-unl > div { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; } .sf-unl span { flex: none; width: 70px; }
+  .sf-lvc .sf-btn { min-height: 40px; margin-top: 2px; }
+}
+
+/* oyun içi bildirim */
+.sf-toast { position: absolute; left: 50%; top: calc(var(--st) + 62px); max-width: min(440px, calc(100% - 160px)); padding: 9px 16px; border-radius: 14px; background: rgba(58,34,12,.92); color: #fff; font-weight: 700; font-size: 13.5px; line-height: 1.3; text-align: center; box-shadow: 0 6px 16px rgba(0,0,0,.3); pointer-events: none; opacity: 0; transform: translate(-50%, -8px); transition: opacity .2s, transform .2s; z-index: 5; }
+.sf-toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* jeton */
+.sf-jet b { color: #6a35d6; }
+.sf-btn.violet { background: linear-gradient(#b592ff, #8a5cf0); box-shadow: inset 0 2px 0 rgba(255,255,255,.4), 0 4px 0 #5a32b8, 0 7px 12px rgba(40,25,10,.25); text-shadow: 0 1.5px 0 rgba(50,20,120,.5); }
+.sf-btn.violet:active { box-shadow: inset 0 2px 0 rgba(255,255,255,.4), 0 1px 0 #5a32b8; }
+.sf-shop small.jt { color: #6a35d6; } .sf-shop small.ok, small.ok { color: var(--greend); font-weight: 800; font-size: 12px; }
+.sf-shop small.lk { text-align: center; line-height: 1.15; font-size: 10.5px; }
+
+/* arazi genişletme */
+.sf-exp { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 8px 12px; border-radius: 18px; background: #fff8dc; border: 3px solid var(--gold); }
+
+/* günlük ödül */
+.sf-days { display: grid; grid-template-columns: repeat(auto-fit, minmax(66px, 1fr)); gap: 7px; margin-bottom: 12px; }
+.sf-day { position: relative; display: grid; justify-items: center; align-content: start; gap: 4px; min-height: 92px; padding: 7px 3px 8px; border-radius: 16px; background: #fff; border: 3px solid #ead9ae; box-shadow: 0 3px 0 #dcc892; }
+.sf-day > small { font-size: 11px; font-weight: 800; color: #8a6a42; } .sf-day > div { display: grid; justify-items: center; gap: 2px; } .sf-day span { display: grid; justify-items: center; font-size: 12.5px; font-weight: 800; }
+.sf-day.done { background: #f1ffe6; border-color: #b9e09f; box-shadow: none; } .sf-day.done > div { opacity: .45; }
+.sf-day.done::after { content: ""; position: absolute; right: 6px; top: 6px; width: 7px; height: 12px; border: solid var(--greend); border-width: 0 3px 3px 0; transform: rotate(42deg); }
+.sf-day.now { border-color: var(--gold); background: #fff8dc; box-shadow: 0 3px 0 var(--goldd); animation: sf-bob 1.2s infinite; }
+
+/* sıralama */
+.sf-rk { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin: 0 4px 8px; font-size: 13px; font-weight: 700; color: #8a6a42; } .sf-rk b { color: var(--woodd); }
+.sf-prz { display: flex; gap: 8px; margin-bottom: 10px; } .sf-prz span { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 4px; border-radius: 14px; background: #fff8dc; border: 2.5px solid var(--gold); font-size: 13.5px; }
+.sf-tabs { display: flex; gap: 6px; margin-bottom: 10px; padding: 4px; border-radius: 14px; background: #e9d8ab; }
+.sf-tabs button { flex: 1; min-height: 36px; padding: 0 6px; border: 0; border-radius: 11px; background: none; font-weight: 800; font-size: 13.5px; color: #8a6a42; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sf-tabs button.on { background: #fff; color: var(--woodd); box-shadow: 0 2px 0 #cdb681; }
+.sf-rank.r1 { background: var(--gold); } .sf-rank.r2 { background: #d5dbe3; color: #4b5563; } .sf-rank.r3 { background: #e2a06a; color: #5c2f0c; } .sf-rank { background: #efe2bb; color: #8a6a42; }
+.sf-sc { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; font-size: 14.5px; } .sf-nb.me { border-color: var(--gold); background: #fff8dc; }
+.sf-capb.sm { height: 20px; border-width: 2.5px; } .sf-capb.sm i { background: linear-gradient(#8fdd62, var(--green)); } .sf-capb.sm b { font-size: 11.5px; color: var(--woodd); text-shadow: 0 1px 0 rgba(255,255,255,.7); }
+.sf-note.top { margin: 0 6px 10px; }
+button.sf-slot { padding: 0; font: inherit; } .sf-q { flex-wrap: wrap; }
+
+/* koleksiyon ödülü */
+.sf-decs { display: grid; place-items: center; height: 96px; filter: drop-shadow(0 6px 6px rgba(40,25,10,.35)); animation: sf-bob 1.6s infinite; } .sf-lvc.dec .sf-note { margin: 0; }
