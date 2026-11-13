@@ -315,7 +315,36 @@ document.addEventListener('error', (e) => {
   }
 }, true);
 
+// Klavye açılınca yazma alanı klavyenin altında kalmasın.
+// Android'de sayfa klavye kadar küçülür (viewport: interactive-widget=resizes-content). iOS'ta küçülmez: görünür alan
+// ölçülür, sohbet --vvh ile kısalır, sabit pencereler (alt sayfalar, hikâye, canlı yayın, oyunlar) yazılan alan
+// klavyenin üstüne çıkana kadar yukarı kaldırılır, sıradan sayfalarda alan ekrana kaydırılır.
+function keyboardFit() {
+  const vv = window.visualViewport; const root = document.documentElement; let lifted = null; let timer = 0; let base = window.innerHeight; let bw = window.innerWidth;
+  const editable = (el) => !!el?.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=button]):not([type=submit]):not([type=color]), textarea, [contenteditable=""], [contenteditable="true"]');
+  const unlift = () => { if (lifted) { lifted.el.style.translate = ''; lifted = null; } };
+  function fit() {
+    if (window.innerWidth !== bw) { bw = window.innerWidth; base = window.innerHeight; } base = Math.max(base, window.innerHeight);
+    const h = vv ? vv.height : window.innerHeight; const top = vv ? vv.offsetTop : 0; const el = document.activeElement; const typing = editable(el);
+    const kb = Math.max(0, window.innerHeight - h - top); const over = typing && kb > 100; // klavye sayfanın üstüne bindi (iOS)
+    root.style.setProperty('--vvh', `${Math.round(h)}px`); root.style.setProperty('--kb', `${over ? Math.round(kb) : 0}px`);
+    root.classList.toggle('kb-open', over || (typing && base - window.innerHeight > 150));
+    if (!over) { unlift(); if (typing && root.classList.contains('kb-open')) { const r = el.getBoundingClientRect(); if (r.bottom > h - 8) el.scrollIntoView({ block: 'center' }); } return; }
+    let fx = el; while (fx && fx !== document.body && getComputedStyle(fx).position !== 'fixed') fx = fx.parentElement;
+    if (fx && fx !== document.body) {
+      if (lifted && lifted.el !== fx) unlift();
+      const cur = lifted ? lifted.by : 0; const by = Math.max(0, Math.round(el.getBoundingClientRect().bottom + 14 - (top + h) + cur));
+      if (by !== cur) { fx.style.translate = by ? `0 ${-by}px` : ''; lifted = by ? { el: fx, by } : null; }
+    } else { unlift(); if (el.closest('.chat')) window.scrollTo(0, 0); else { const r = el.getBoundingClientRect(); if (r.bottom > top + h - 10 || r.top < top + 50) el.scrollIntoView({ block: 'center' }); } }
+  }
+  const later = () => { clearTimeout(timer); fit(); timer = setTimeout(fit, 330); };
+  vv?.addEventListener('resize', later); vv?.addEventListener('scroll', later); window.addEventListener('resize', later);
+  document.addEventListener('focusin', later); document.addEventListener('focusout', () => setTimeout(fit, 80));
+  fit();
+}
+
 async function boot() {
+  try { keyboardFit(); } catch { /* eski tarayıcı: varsayılan davranış */ }
   await initI18n().catch(() => {});
   try { const t = localStorage.getItem('su_theme'); if (t && t !== 'system') document.documentElement.dataset.theme = t; } catch {}
   try { applySkin(localStorage.getItem('su_skin') || 'gunbatimi', { save: false }); } catch {}

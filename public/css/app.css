@@ -409,7 +409,11 @@ input[type=range] { width: 100%; accent-color: var(--uv); }
 .chat-item .unread-n { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--grad); color: var(--on-uv); font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; }
 .chat-item .typing { color: var(--mint); font-weight: 600; }
 
-.chat { display: flex; flex-direction: column; height: 100dvh; }
+.chat { display: flex; flex-direction: column; height: 100dvh; height: var(--vvh, 100dvh); }
+/* klavye açıkken: alt menü yazma alanının üstüne binmesin, alt sayfalar görünür alana sığsın */
+html.kb-open #tabbar { display: none; }
+html.kb-open .sheet { max-height: calc(var(--vvh, 86dvh) - 12px); }
+html.kb-open .chat .composer { padding-bottom: 8px; }
 .chat .topbar .who { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .chat .topbar .who .n { font-weight: 700; font-size: 15.5px; }
 .chat .topbar .who .s { font-size: 12.5px; color: var(--muted); }
