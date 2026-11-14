@@ -14,6 +14,7 @@ export default async function swipe(view) {
       <button class="ib soft flt" aria-label="Filtreler">${icon('sliders')}</button>
     </header>
     <div class="swipe-wrap">
+      <div class="tn-row"><button class="tn-chip" type="button" aria-pressed="false"><i></i><span>Bu akşam müsaitim</span></button><span class="tn-pass" hidden></span></div>
       <div class="deck" aria-live="polite"><div class="spinner" style="margin-top:30vh"></div></div>
       <div class="swipe-btns">
         <button class="sm undo" aria-label="Geri al" style="color:#f5b400">${icon('undo')}</button>
@@ -25,6 +26,14 @@ export default async function swipe(view) {
 
   const deckEl = view.querySelector('.deck');
   api('/second-chance/count').then((r) => { const b = view.querySelector('.scn'); if (b && r.n) { b.textContent = r.n; b.hidden = false; } }).catch(() => {});
+  // "Bu akşam müsaitim": 24 saatlik etiket. Açıkken o akşam müsait olanlar destenin başına gelir.
+  const tn = view.querySelector('.tn-chip'); const until = () => state.me?.tonightUntil || 0;
+  const paintTn = () => { const on = until() > Date.now(); tn.classList.toggle('on', on); tn.setAttribute('aria-pressed', String(on)); tn.querySelector('span').textContent = on ? 'Bu akşam müsaitsin' : 'Bu akşam müsaitim';
+    const pc = view.querySelector('.tn-pass'); const city = state.me?.plus ? state.me?.prefs?.passCity : ''; pc.hidden = !city; pc.textContent = city ? `Pasaport: ${city}` : ''; };
+  paintTn();
+  tn.onclick = async () => { const on = !(until() > Date.now()); tn.disabled = true;
+    try { Object.assign(state.me, await api('/me', { method: 'PATCH', body: { tonight: on } })); paintTn(); toast(on ? 'Bu akşam müsait görünüyorsun. Etiket 24 saat sonra kendiliğinden kalkar.' : 'Etiket kaldırıldı.'); deck = await api('/swipe/deck'); render(); }
+    catch (e) { toast(e.message); } tn.disabled = false; };
   let deck = await api('/swipe/deck');
   let history = [];
   let busy = false;
@@ -33,7 +42,7 @@ export default async function swipe(view) {
       ${u.photos.map((p, i) => `<img class="ph" src="${esc(p)}" alt="" style="${i ? 'display:none' : ''}" ${i ? 'loading="lazy"' : ''} draggable="false">`).join('')}
       ${u.photos.length > 1 ? `<div class="segs">${u.photos.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}
       <div class="grad"></div>
-      <div class="tagrow">${u.boosted ? `<span class="boosted">${icon('bolt')}Öne çıkan</span>` : ''}${u.likedYou ? '<span class="liked-you">Seni beğendi</span>' : ''}${u.youLiked ? '<span class="you-liked">Beğendin</span>' : ''}${isOn(u) ? '<span>Çevrimiçi</span>' : ''}</div>
+      <div class="tagrow">${u.boosted ? `<span class="boosted">${icon('bolt')}Öne çıkan</span>` : ''}${u.tonight ? '<span class="tonight">Bu akşam müsait</span>' : ''}${u.likedYou ? '<span class="liked-you">Seni beğendi</span>' : ''}${u.youLiked ? '<span class="you-liked">Beğendin</span>' : ''}${isOn(u) ? '<span>Çevrimiçi</span>' : ''}</div>
       <div class="stamp like">BEĞEN</div><div class="stamp nope">GEÇ</div><div class="stamp super">SÜPER</div>
       <div class="info">
         <h2>${esc(u.name.split(' ')[0])} ${u.age ? `<small>${u.age}</small>` : ''}${tick(u)}</h2>
@@ -51,7 +60,7 @@ export default async function swipe(view) {
     if (!deck.length) {
       deckEl.innerHTML = `<div class="empty"><div class="big">${icon('flame')}</div><h2>Şimdilik bu kadar</h2>Yakında yeni kişiler gelecek. Geçtiklerini tekrar görmek istersen desteyi yenile.
         <p style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn primary reset">Desteyi yenile</button><button class="btn wf">Filtreleri genişlet</button><a class="btn" href="#/ikinci-sans">💫 İkinci şans</a></p></div>`;
-      deckEl.querySelector('.wf').onclick = () => openFilters(async () => { deck = await api('/swipe/deck'); render(); });
+      deckEl.querySelector('.wf').onclick = () => openFilters(async () => { paintTn(); deck = await api('/swipe/deck'); render(); });
       deckEl.querySelector('.reset').onclick = async (e) => {
         const b = e.currentTarget; b.disabled = true; b.textContent = 'Yenileniyor…';
         try {
@@ -197,9 +206,12 @@ export function openFilters(onSave) {
       <input type="range" name="km" min="5" max="505" step="5" value="${p.maxKm || 505}" aria-label="Uzaklık">
       <div class="loc muted" style="font-size:13px">${me.hasLocation ? 'Konumun kayıtlı (yaklaşık 1 km hassasiyetle).' : 'Uzaklığa göre görmek için konumunu paylaş.'} <button type="button" class="link gl">${me.hasLocation ? 'Konumu güncelle' : 'Konumumu kullan'}</button></div></div>
     <label class="it vo-it"><span class="grow"><b>Yalnızca doğrulanmışlar</b><div class="sub muted" style="font-size:12.5px">Selfie ile doğrulanmış profilleri göster</div></span><input type="checkbox" class="sw" name="vo" ${p.verifiedOnly ? 'checked' : ''}></label>
+    <label class="it vo-it"><span class="grow"><b>Yalnızca bu akşam müsait olanlar</b><div class="sub muted" style="font-size:12.5px">“Bu akşam müsaitim” etiketini açanları göster</div></span><input type="checkbox" class="sw" name="tn" ${p.tonightOnly ? 'checked' : ''}></label>
+    <label class="pass-l">Pasaport <span class="muted" style="font-size:12.5px">(SwipeUp+) başka bir şehirde kaydır</span><select class="field" name="pc" ${me.plus ? '' : 'disabled'}><option value="">${me.plus ? 'Kapalı: kendi çevrem' : 'SwipeUp+ ile açılır'}</option>${p.passCity ? `<option value="${esc(p.passCity)}" selected>${esc(p.passCity)}</option>` : ''}</select></label>
     <button class="btn primary block">Kaydet</button></form>`, {
     onMount(sh, close) {
       const f = sh.querySelector('form');
+      if (me.plus) api('/passport/cities').then((r) => { const cur = f.pc.value; f.pc.innerHTML = `<option value="">Kapalı: kendi çevrem</option>${r.cities.map((c) => `<option value="${esc(c.name)}" ${c.name === cur ? 'selected' : ''}>${esc(c.name)} · ${c.n} kişi</option>`).join('')}`; if (cur && !r.cities.some((c) => c.name === cur)) f.pc.insertAdjacentHTML('beforeend', `<option value="${esc(cur)}" selected>${esc(cur)}</option>`); }).catch(() => {});
       let location;
       const sync = () => {
         let a = +f.a1.value; let b = +f.a2.value; if (a > b) [a, b] = [b, a];
@@ -224,7 +236,7 @@ export function openFilters(onSave) {
         e.preventDefault();
         let a = +f.a1.value; let b = +f.a2.value; if (a > b) [a, b] = [b, a];
         try {
-          const u = await api('/me', { method: 'PATCH', body: { lookingFor: f.lf.value, prefs: { ageMin: a, ageMax: b, maxKm: +f.km.value > 500 ? null : +f.km.value, verifiedOnly: f.vo.checked }, ...(location ? { location, ...(consentLocation ? { consentLocation: true } : {}) } : {}) } });
+          const u = await api('/me', { method: 'PATCH', body: { lookingFor: f.lf.value, prefs: { ageMin: a, ageMax: b, maxKm: +f.km.value > 500 ? null : +f.km.value, verifiedOnly: f.vo.checked, tonightOnly: f.tn.checked, passCity: f.pc.value }, ...(location ? { location, ...(consentLocation ? { consentLocation: true } : {}) } : {}) } });
           Object.assign(state.me, u); close(); onSave?.();
         } catch (er) { toast(er.message); }
       };

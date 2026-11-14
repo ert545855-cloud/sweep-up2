@@ -92,7 +92,7 @@ function pub(u, viewerId) {
   const self = viewerId === u.id;
   // Yalnızca hesabın sahibinin görebileceği alanlar (başkasının profiline bakan bunları almaz)
   if (!self) ['paid', 'plusUntil', 'boostUntil', 'lastFreeBoost', 'lastSwipe', 'viewersSeenAt', 'verifyPose', 'banReason', 'bannedUntil', 'bannedAt', 'status', 'warned',
-    'passChangedByUser', 'prefs', 'consentAt', 'burcWeek', 'autoWeek', 'loginStreak', 'skin', 'logo', 'isBot'].forEach((k) => { delete rest[k]; });
+    'passChangedByUser', 'prefs', 'consentAt', 'burcWeek', 'autoWeek', 'loginStreak', 'skin', 'logo', 'isBot', 'tonightUntil'].forEach((k) => { delete rest[k]; });
   const hidden = !self && priv(u).hideLastSeen;
   const fdoc = viewerId && !self ? store.get('follows', `${viewerId}_${u.id}`) : null;
   return {
@@ -101,7 +101,7 @@ function pub(u, viewerId) {
     online: hidden ? false : isOnline(u.id),
     lastSeen: hidden ? null : u.lastSeen,
     live: lives.has(u.id),
-    plus: isPlus(u), verified: !!u.verified, level: featureCtx.levelOf?.(u) || null,
+    plus: isPlus(u), verified: !!u.verified, level: featureCtx.levelOf?.(u) || null, tonight: (u.tonightUntil || 0) > now(), // "Bu akşam müsaitim": 24 saatlik etiket
     ...(self ? { closeFriendsCount: (closeFriends || []).length } : {}),
     age: self ? u.age ?? null : shownAge(u), ageHidden: !!priv(u).hideAge, tags: tagsOf(u),
     prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
@@ -785,11 +785,14 @@ app.patch('/api/me', auth, (req, res) => {
     patch.logo = LOGOS.includes(b.logo) ? b.logo : 'klasik';
   }
   if (b.zodiac !== undefined) patch.zodiac = ['koc', 'boga', 'ikizler', 'yengec', 'aslan', 'basak', 'terazi', 'akrep', 'yay', 'oglak', 'kova', 'balik'].includes(b.zodiac) ? b.zodiac : null;
+  if (b.tonight !== undefined) patch.tonightUntil = b.tonight ? now() + 24 * 3600 * 1000 : 0;
   if (b.prefs) {
     const ageMin = Math.max(18, Math.min(99, parseInt(b.prefs.ageMin, 10) || 18));
     const ageMax = Math.max(ageMin, Math.min(99, parseInt(b.prefs.ageMax, 10) || 99));
     const maxKm = b.prefs.maxKm ? Math.max(1, Math.min(500, parseInt(b.prefs.maxKm, 10))) : null;
-    patch.prefs = { ageMin, ageMax, maxKm, verifiedOnly: !!b.prefs.verifiedOnly };
+    // Pasaport (SwipeUp+): başka bir şehirde kaydır. tonightOnly: yalnızca "bu akşam müsaitim" diyenler.
+    const passCity = isPlus(req.user) ? String(b.prefs.passCity || '').replace(/[<>]/g, '').trim().slice(0, 40) : '';
+    patch.prefs = { ageMin, ageMax, maxKm, verifiedOnly: !!b.prefs.verifiedOnly, tonightOnly: !!b.prefs.tonightOnly, passCity };
   }
   featureCtx.readProfileExtras?.(b, patch);
   if (b.location === null) { patch.lat = null; patch.lng = null; }
@@ -1521,16 +1524,27 @@ app.get('/api/swipe/deck', auth, (req, res) => {
   const pool = deck.length;
   if (me.lookingFor && me.lookingFor !== 'all') deck = deck.filter((u) => u.gender === me.lookingFor || !u.gender);
   deck = deck.filter((u) => !u.age || (u.age >= prefs.ageMin && u.age <= prefs.ageMax));
-  if (prefs.maxKm && me.lat != null) deck = deck.filter((u) => { const d = distance(me, u); return d == null || d <= prefs.maxKm; });
+  const pass = prefs.passCity && isPlus(me) ? cityKey(prefs.passCity) : ''; // pasaport açıkken uzaklık yerine seçilen şehir geçerli
+  if (pass) deck = deck.filter((u) => cityKey(u.city) === pass);
+  else if (prefs.maxKm && me.lat != null) deck = deck.filter((u) => { const d = distance(me, u); return d == null || d <= prefs.maxKm; });
   if (prefs.verifiedOnly) deck = deck.filter((u) => u.verified);
+  if (prefs.tonightOnly) deck = deck.filter((u) => (u.tonightUntil || 0) > now());
   const likedMe = new Set(store.filter('swipes', (s) => s.to === me.id && s.dir !== 'left').map((s) => s.from));
   rankPeople(deck);
   const t = now();
   deck.sort((a, b) => ((b.boostUntil || 0) > t) - ((a.boostUntil || 0) > t));
+  if ((me.tonightUntil || 0) > t) deck.sort((a, b) => ((b.tonightUntil || 0) > t) - ((a.tonightUntil || 0) > t)); // ben de müsaitsem, müsait olanlar öne
   const items = deck.slice(0, 40).map((u) => ({ ...cardOut(me, u, likedMe.has(u.id)), youLiked: youLiked.has(u.id) }));
   // meta=1: deste boşsa nedenini de söyle (filtrelere takılan kişi sayısı)
   if (req.query.meta === '1') return res.json({ items, hidden: Math.max(0, pool - deck.length) });
   res.json(items);
+});
+const cityKey = (c) => String(c || '').trim().toLocaleLowerCase('tr-TR');
+// Pasaport için şehir listesi: en çok üyesi olan şehirler
+app.get('/api/passport/cities', auth, (req, res) => {
+  const n = new Map(); const name = new Map();
+  for (const u of store.filter('users', (x) => x.city && isActive(x) && !SPECIAL.has(x.role))) { const k = cityKey(u.city); if (k.length < 2) continue; n.set(k, (n.get(k) || 0) + 1); if (!name.has(k)) name.set(k, String(u.city).trim()); }
+  res.json({ plus: isPlus(req.user), current: req.user.prefs?.passCity || '', cities: [...n.entries()].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([k, c]) => ({ name: name.get(k), n: c })) });
 });
 function cardOut(me, u, likedYou) {
   const posts = store.filter('posts', (p) => p.userId === u.id && p.type === 'image' && canSee(me.id, u)).slice(0, 3).map((p) => p.media);
@@ -1538,7 +1552,7 @@ function cardOut(me, u, likedYou) {
   return {
     ...brief(u), age: shownAge(u), city: u.city, bio: u.bio, interests: u.interests || [], tags: tagsOf(u),
     distanceKm: distance(me, u), likedYou: eco.isPlus(me) ? likedYou : false,
-    boosted: (u.boostUntil || 0) > now(),
+    boosted: (u.boostUntil || 0) > now(), tonight: (u.tonightUntil || 0) > now(),
     photos: photos.length ? photos : [u.avatar],
     voice: u.voice || null, badges: (u.badges || []).filter((b) => !b.hidden).map(({ no, ...b }) => b), prompts: (u.prompts || []).map((p) => ({ ...p, q: socialMod.PROMPTS.find((x) => x[0] === p.id)?.[1] || '' })),
   };
