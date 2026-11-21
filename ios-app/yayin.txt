@@ -1,4 +1,4 @@
 1.0
 # Bu dosya değişince iOS uygulaması imzalanıp App Store Connect (TestFlight) için yüklenir (.github/workflows/ios-testflight.yml).
 # İlk satır sürüm (App Store’da görünen). Aynı sürümle yeniden yüklemek için alttaki satırı değiştirmek yeterli; build numarası kendiliğinden artar.
-# yükleme: 2
+# yükleme: 3 (simge sayısı)

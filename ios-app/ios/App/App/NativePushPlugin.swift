@@ -8,6 +8,7 @@ import UserNotifications
 // Web tarafı: window.Capacitor.Plugins.NativePush (bkz. depo kökünde public/js/push.js)
 //   status()   → { permission: "granted" | "denied" | "prompt" }
 //   register() → izin ister (ilk kez), { token, env } döner; env: Xcode'dan çalıştırılan (Debug) yapıda "sandbox", TestFlight / App Store'da "production"
+//   setBadge({ count }) → uygulama simgesindeki kırmızı sayı (0 = kaldırılır); okunmamış bildirim + mesaj sayısı
 //   olay "tap" → { url } : bildirime dokunulunca açılacak sayfa
 // Çalışması için Signing & Capabilities'te "Push Notifications" yeteneği gerekir (App.entitlements → aps-environment; ücretli ekip).
 // Capacitor köprüsü açılınca bildirim temsilcisini kendi yönlendiricisine (NotificationRouter) alır; uzak bildirimleri
@@ -75,7 +76,8 @@ public class NativePushPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "NativePush"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "status", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "register", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "register", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setBadge", returnType: CAPPluginReturnPromise)
     ]
 
     override public func load() {
@@ -100,6 +102,19 @@ public class NativePushPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func status(_ call: CAPPluginCall) {
         UNUserNotificationCenter.current().getNotificationSettings { s in
             call.resolve(["permission": NativePushPlugin.name(s.authorizationStatus)])
+        }
+    }
+
+    // Simgedeki sayı: sunucu bildirimle birlikte (aps.badge) yazar; uygulama açıkken okununca web tarafı günceller
+    @objc func setBadge(_ call: CAPPluginCall) {
+        let n = max(0, call.getInt("count") ?? 0)
+        DispatchQueue.main.async {
+            if #available(iOS 16.0, *) {
+                UNUserNotificationCenter.current().setBadgeCount(n) { _ in call.resolve() }
+            } else {
+                UIApplication.shared.applicationIconBadgeNumber = n
+                call.resolve()
+            }
         }
     }
 

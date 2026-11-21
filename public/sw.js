@@ -1,5 +1,5 @@
 // SwipeUp service worker: anlık bildirimler + çevrimdışı kabuk
-const CACHE = 'swipeup-v126';
+const CACHE = 'swipeup-v127';
 const SHELL = ['/', '/css/app.css', '/js/app.js', '/js/core.js', '/js/icons.js', '/js/components.js', '/icons/icon-192.png', '/icons/mark.png', '/js/music.js', '/js/update.js', '/js/event.js', '/fonts/fonts.css'];
 
 self.addEventListener('install', (e) => {
@@ -27,6 +27,8 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data.json(); } catch { d = { title: 'SwipeUp', body: e.data?.text() }; }
+  // Ana ekrana eklenmiş uygulamanın simgesindeki sayı (iPhone'da iOS 16.4+, Android Chrome)
+  if (Number.isInteger(d.badge) && self.navigator.setAppBadge) { try { (d.badge ? self.navigator.setAppBadge(d.badge) : self.navigator.clearAppBadge()).catch(() => {}); } catch { /* desteklenmiyor */ } }
   e.waitUntil(self.registration.showNotification(d.title || 'SwipeUp', {
     body: d.body || '',
     icon: d.icon || '/icons/icon-192.png',

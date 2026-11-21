@@ -143,6 +143,12 @@ tabbar.addEventListener('click', (e) => {
   }
 });
 on('badges', () => renderTabbar(tabbar.dataset.active));
+// Uygulama simgesindeki kırmızı sayı: okununca azalsın (iPhone uygulamasında NativePush, ana ekran uygulamasında setAppBadge)
+on('badges', (b) => {
+  const n = Math.min(999, (b?.notifications || 0) + (b?.messages || 0));
+  try { const np = window.Capacitor?.Plugins?.NativePush; if (np?.setBadge) { np.setBadge({ count: n }).catch(() => {}); return; } } catch { /* eski uygulama sürümü */ }
+  try { if (navigator.setAppBadge) (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {}); } catch { /* desteklenmiyor */ }
+});
 
 function showBan(ban) {
   state.ban = ban;

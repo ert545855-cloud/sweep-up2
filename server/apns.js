@@ -44,7 +44,7 @@ function create(store) {
   function send(dev, payload, opts = {}) {
     const c = cfg();
     if (!ready()) return Promise.reject(Object.assign(new Error('APNs anahtarı yok'), { statusCode: 0, body: 'APNs anahtarı yok' }));
-    const aps = { alert: { title: String(payload.title || 'SwipeUp').slice(0, 120), body: String(payload.body || '').slice(0, 600) }, sound: 'default', ...(payload.tag ? { 'thread-id': String(payload.tag).slice(0, 64) } : {}), ...(payload.call ? { 'interruption-level': 'active' } : {}) };
+    const aps = { alert: { title: String(payload.title || 'SwipeUp').slice(0, 120), body: String(payload.body || '').slice(0, 600) }, sound: 'default', ...(payload.tag ? { 'thread-id': String(payload.tag).slice(0, 64) } : {}), ...(Number.isInteger(payload.badge) && payload.badge >= 0 ? { badge: payload.badge } : {}), ...(payload.call ? { 'interruption-level': 'active' } : {}) };
     const body = JSON.stringify({ aps, url: payload.url || '/#/notifications', uid: payload.uid || null });
     const headers = {
       ':method': 'POST', ':path': `/3/device/${dev.token}`, authorization: `bearer ${token(c)}`,

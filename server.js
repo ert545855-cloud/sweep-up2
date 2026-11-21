@@ -261,6 +261,7 @@ async function notify(userId, n) {
     uid: userId,
   };
   const subs = pushTargets(userId);
+  if (subs.length) { try { body.badge = Math.min(999, unreadCounts(userId).icon); } catch { /* sayı alınamazsa simge güncellenmez */ } }
   // Bu cihazda başka hesap da kayıtlıysa bildirimin hangi hesaba geldiği yazılır
   const key = (x) => x.apns?.token || x.sub?.endpoint;
   const shared = (s) => store.filter('pushSubs', (x) => key(x) === key(s) && x.userId !== userId).length > 0;
@@ -2083,11 +2084,16 @@ app.post('/api/notifications/read', auth, (req, res) => {
   store.filter('notifications', (n) => n.userId === req.user.id && !n.read).forEach((n) => store.update('notifications', n.id, { read: true }));
   res.json({ ok: true });
 });
-app.get('/api/badges', auth, (req, res) => {
-  const me = req.user.id;
+// Uygulama simgesindeki kırmızı sayı: okunmamış bildirimler + okunmamış mesajı olan sohbetler (alt çubuktaki rozetlerle aynı)
+function unreadCounts(me) {
   const notifs = store.filter('notifications', (n) => n.userId === me && !n.read).length;
   const chats = new Set(store.filter('chats', (c) => c.members.includes(me)).map((c) => c.id));
   const msgs = store.filter('messages', (m) => chats.has(m.chatId) && m.from !== me && !m.system && !hasRead(m, me) && !(m.hiddenFor || []).includes(me) && !(m.expiresAt && m.expiresAt < now()));
+  return { notifs, chats, msgs, icon: notifs + new Set(msgs.map((m) => m.chatId)).size };
+}
+app.get('/api/badges', auth, (req, res) => {
+  const me = req.user.id;
+  const { notifs, chats, msgs } = unreadCounts(me);
   const mySwipes = new Set(store.filter('swipes', (s) => s.from === me).map((s) => s.to));
   const likes = store.filter('swipes', (s) => s.to === me && s.dir !== 'left' && !mySwipes.has(s.from)).length;
   const fal = req.user.role === 'falci' ? store.filter('messages', (m) => m.fal?.status === 'pending' && chats.has(m.chatId)).length : 0;
