@@ -521,7 +521,7 @@ export default async function kupa(view, id) {
     else if (SU(m)) shove(nowMs);
     else if (m === 'doner') spin(dt, t);
     if (!SU(m) && m !== 'bayrak' && m !== 'halat') bump(nowMs); /* bayrakta oyuncular birbirinin içinden geçer: kovalayan bot insanın önünü kesmesin */
-    else if (m === 'sakla') { // bahçenin içinde kal, engellerin içinden geçme (daire - kutu çarpışması)
+    if (m === 'sakla') { // bahçenin içinde kal, engellerin içinden geçme (daire - kutu çarpışması)
       const L = c.h - 0.5; me.x = Math.max(-L, Math.min(L, me.x)); me.z = Math.max(-L, Math.min(L, me.z));
       for (const [x, z, w, d] of c.walls) {
         const nx = Math.max(x - w / 2, Math.min(x + w / 2, me.x)); const nz = Math.max(z - d / 2, Math.min(z + d / 2, me.z)); const dx = me.x - nx; const dz = me.z - nz; const dist = Math.hypot(dx, dz); if (dist >= PR) continue;
@@ -563,8 +563,10 @@ export default async function kupa(view, id) {
     const soft = v.mode === 'kosu' || v.mode === 'lav';
     chars.forEach((c, i) => {
       if (i === v.me || !c.g.visible || !v.players[i]?.alive || c.fl === 2) return; const p = c.g.position;
-      const dx = me.x - p.x; const dz = me.z - p.z; const d = Math.hypot(dx, dz); if (d > 0.84 || d < 0.001 || Math.abs(me.y - p.y) > 0.8) return;
-      const nx = dx / d; const nz = dz / d; const push = (0.84 - d) * (soft ? 0.25 : 0.55); me.x += nx * push; me.z += nz * push;
+      let dx = me.x - p.x; let dz = me.z - p.z; let d = Math.hypot(dx, dz); if (d > 0.9 || Math.abs(me.y - p.y) > 0.8) return;
+      const ov = 0.9 - d; // iç içe geçme miktarı
+      if (d < 0.001) { const a = Math.random() * Math.PI * 2; dx = Math.cos(a); dz = Math.sin(a); d = 1; } // tam üst üste: rastgele yöne ayrıl
+      const nx = dx / d; const nz = dz / d; const push = ov * (soft ? 0.7 : 1); me.x += nx * push; me.z += nz * push; // iç içe geçmeyi tamamen çöz (eskiden yarısı: koşarken karakterler birbirine giriyordu)
       if (soft || me.stun > 0) return;
       const vn = (me.vx - (c.v?.[0] || 0)) * nx + (me.vz - (c.v?.[1] || 0)) * nz; if (vn > -1.5) return; // eksi: birbirine doğru
       const j = Math.min(5, -vn * 1.35); me.vx += nx * j; me.vz += nz * j;

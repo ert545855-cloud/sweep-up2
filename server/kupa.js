@@ -307,6 +307,7 @@ module.exports = function kupa(app, ctx) {
     }
     MODE_TICK[r.mode]?.(r, t, dt);
     if (r.phase !== 'play') return;
+    if (SPREAD_MORE.has(r.mode)) spread(r); // botlar birbirinin ve oyuncuların içinden geçmesin (diğer oyunlarda kendi turunda yapılıyor)
     if (r.mode !== 'kosu') for (const p of alive(r)) { if (!p.bot && now() - Math.max(p.seen || 0, r.playAt) > 12000) { if (process.env.KUPA_DEBUG) console.log('[kupa] hareketsiz elendi', p.name, r.mode); elim(r, p); if (r.phase !== 'play') return; } }
     if (r.mode === 'zemin') { // çöken karonun üstündeki botlar düşer
       for (const p of alive(r)) { const b = p.b; if (!p.bot || !b || b.fly) continue; const on = b.mv && (now() - b.mv.t0) / b.mv.dur >= 0.5 ? b.mv.to : b.ti; const f = r.tiles.get(on); if (f && f <= now()) { b.fly = [0, -1, 0]; elim(r, p); if (r.phase !== 'play') return; } }
@@ -721,11 +722,12 @@ module.exports = function kupa(app, ctx) {
   function spread(r) { // aynı hedefe koşan botlar üst üste binmesin
     const al = alive(r).filter((p) => !p.b?.fly);
     for (let i = 0; i < al.length; i++) for (let j = i + 1; j < al.length; j++) {
-      const A = al[i]; const B = al[j]; if (!A.bot && !B.bot) continue;
+      const A = al[i]; const B = al[j]; if (!A.bot && !B.bot) continue; if (Math.abs((A.y || 0) - (B.y || 0)) > 0.8) continue; // farklı yükseklikte (zıplama, kule basamağı) iç içe sayılmaz
       let dx = B.x - A.x; let dz = B.z - A.z; let d = Math.hypot(dx, dz); if (d >= 0.9) continue; if (d < 0.01) { dx = Math.random() - 0.5; dz = Math.random() - 0.5; d = Math.hypot(dx, dz) || 1; }
       const push = (0.9 - d) / d / (A.bot && B.bot ? 2 : 1); if (A.bot) { A.x -= dx * push; A.z -= dz * push; } if (B.bot) { B.x += dx * push; B.z += dz * push; }
     }
   }
+  const SPREAD_MORE = new Set(['cubuk', 'kosu', 'renk', 'hafiza', 'lav', 'sakla', 'kartopu']); // zemin (karo adımları), halat, sandalye, sumo/buz hariç
   const BOT = { cubuk: botCubuk, zemin: botZemin, kosu: botKosu, kuyruk: botTag, bomba: botTag, sumo: botSumo, doner: botDoner, bayrak: botBayrak, renk: botRenk, lav: botLav, futbol: botFut, sakla: botSakla, hafiza: botRenk, buz: botSumo, halat: botHal, sandalye: botSd, kartopu: botKar, ...VEH.bot };
   const MODE_TICK = { sandalye: sdTick, kartopu: karTick, hafiza: (r, t) => renkTick(r, t), buz: (r) => sumoTick(r), halat: halTick, kuyruk: (r) => { spread(r); tagTick(r); }, bomba: (r) => { spread(r); tagTick(r); }, sumo: sumoTick, doner: (r) => spread(r), bayrak: (r) => { spread(r); bayTick(r); }, renk: renkTick, futbol: (r, t, dt) => { spread(r); futTick(r, t, dt); }, sakla: saklaTick, ...VEH.tick };
 
