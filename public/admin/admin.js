@@ -1029,6 +1029,7 @@ VIEWS.orders = async (main) => {
       <button class="btn sm mh-dl">${icon('download')} İndir</button></div></div>
     <div class="panel rv-p" hidden style="margin-bottom:14px"><div class="ph"><h3>İade incelemeleri <span class="chip bad rv-n"></span></h3><span class="muted" style="font-size:12.5px">Mağazadan iade alınan jetonların harcanmış kısmı</span></div><div class="pb rv-b"></div></div>
     <details class="panel iap-p" hidden><summary class="pb" style="cursor:pointer"><b>Mağaza içi satın alma</b> <span class="muted iap-st" style="font-size:12.5px"></span></summary><div class="pb iap-b"></div></details>
+    <details class="panel asc-p" hidden style="margin-top:10px"><summary class="pb" style="cursor:pointer"><b>App Store ürünleri ve fiyatları</b> <span class="muted asc-st" style="font-size:12.5px"></span></summary><div class="pb asc-b"></div></details>
     <div class="tabs">${[['open', 'Bekleyen'], ['approved', 'Onaylanan'], ['store', 'App Store / Google Play'], ['havale', 'Havale/EFT'], ['refunded', 'İade edilen'], ['rejected', 'Reddedilen'], ['all', 'Tümü']].map(([k, l], i) => `<button data-s="${k}" class="${i ? '' : 'on'}">${l}</button>`).join('')}</div>
     <div class="panel"><div class="tw lst"><div class="spin"></div></div></div>`;
   const lst = main.querySelector('.lst');
@@ -1056,6 +1057,45 @@ VIEWS.orders = async (main) => {
     ip.querySelectorAll('.iap-del').forEach((b) => { b.onclick = async () => { if (!confirm('Anahtar kaldırılsın mı? Uygulamada o mağazadan satış durur.')) return; try { iapPaint(await api(`/iap/${b.dataset.k}`, { method: 'DELETE' })); } catch (er) { toast(er.message); } }; });
   };
   api('/iap').then(iapPaint).catch(() => {});
+  // App Store Connect: ürünleri aç, fiyatları paneldeki fiyattan eşitle (yalnız sahip görür)
+  const ap = main.querySelector('.asc-p'); let apT = null;
+  const trl = (v) => (v == null ? '—' : `₺${(+v).toFixed(2).replace('.', ',')}`);
+  const ascPaint = (r) => {
+    ap.hidden = false; clearTimeout(apT);
+    const bad = r.items.filter((x) => x.err).length; const miss = r.items.filter((x) => !x.state).length;
+    ap.querySelector('.asc-st').textContent = !r.on ? 'bağlı değil' : r.running ? 'eşitleniyor…' : bad ? `${bad} üründe hata` : miss ? 'eşitlenmedi' : 'eşit';
+    ap.querySelector('.asc-b').innerHTML = !r.on ? `
+      <p class="muted" style="font-size:13px;margin:0 0 8px">Bağlayınca jeton paketleri ve SwipeUp+ süreleri App Store'da <b>kendiliğinden açılır</b>, Türkçe adı ve açıklaması yazılır; buradaki fiyat değişince App Store fiyatı da birkaç saniye içinde güncellenir. App Store Connect'e girmen gerekmez.</p>
+      <p class="muted" style="font-size:12.5px;margin:0 0 8px">App Store Connect → Kullanıcılar ve Erişim → Entegrasyonlar → <b>Ekip Anahtarları</b> (App Store Connect API) → rolü <b>Uygulama Yöneticisi</b> ya da <b>Yönetici</b> olan bir anahtar oluştur, .p8 dosyasını indir. Bu, yukarıdaki “Uygulama İçi Satın Alma” anahtarından farklıdır; uygulamayı yüklemek için açtığın anahtarı da kullanabilirsin.</p>
+      <form class="asc-k" style="display:flex;flex-direction:column;gap:6px"><div class="row" style="gap:6px;flex-wrap:wrap"><input class="field" name="keyId" placeholder="Key ID (10 karakter)" style="flex:1"><input class="field" name="issuerId" placeholder="Issuer ID" style="flex:2"></div>
+        <textarea class="field mono" name="key" rows="4" placeholder="-----BEGIN PRIVATE KEY-----"></textarea><div><button class="btn sm primary">Bağla</button></div></form>` : `
+      <p class="muted" style="font-size:12.5px;margin:0 0 8px">Bağlı: <span class="mono">${esc(r.keyId)}</span> · ${esc(r.bundleId)}${r.last ? ` · son eşitleme ${dt(r.last.at)}` : ''}. Apple yalnız hazır fiyat basamaklarını kabul eder; en yakın basamak seçilir (ör. ₺100 → ₺99,99). Diğer ülkelerin fiyatını Apple kurla hesaplar.</p>
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <label class="muted" style="font-size:12.5px">App Store fiyat farkı %<input class="field asc-mk" type="number" min="0" max="100" step="0.5" value="${r.markup}" style="width:80px;margin-left:6px"></label>
+        <label class="muted" style="font-size:12.5px"><input type="checkbox" class="asc-au" ${r.auto ? 'checked' : ''}> Fiyat değişince otomatik gönder</label>
+        <button class="btn sm primary asc-go" ${r.running ? 'disabled' : ''}>${r.running ? 'Eşitleniyor…' : 'Şimdi eşitle'}</button>
+        <button class="btn sm asc-del danger">Bağlantıyı kaldır</button></div>
+      <p class="muted" style="font-size:12px;margin:0 0 8px">Fark yüzdesi: Apple'ın komisyonunu karşılamak için App Store fiyatını sitedekinden bu kadar yüksek tutar (ör. 15 → ₺100'lük paket ₺114,99). Sitedeki ve Google Play'deki fiyat değişmez.</p>
+      <div class="tw"><table class="tbl"><thead><tr><th>Ürün</th><th>Panel fiyatı</th><th>App Store</th><th>Durum</th></tr></thead><tbody>${r.items.map((x) => `<tr><td><b>${esc(x.title)}</b><div class="muted mono" style="font-size:11.5px">${esc(x.sku)}</div></td><td>${trl(x.price)}${x.target !== x.price ? `<div class="muted" style="font-size:11.5px">hedef ${trl(x.target)}</div>` : ''}</td><td>${trl(x.apple)}${x.pending && x.apple != null ? ' <span class="chip">bekliyor</span>' : ''}</td><td>${x.err ? `<span class="chip bad">hata</span> <span class="muted" style="font-size:12px">${esc(x.err)}</span>` : x.state ? `<span class="chip ${x.stateKey === 'APPROVED' ? 'ok' : ''}">${esc(x.state)}</span>` : '<span class="muted">henüz açılmadı</span>'}</td></tr>`).join('')}</tbody></table></div>
+      <h4 style="margin:14px 0 6px">İnceleme görseli ${r.shot ? `<span class="chip ok">yüklendi</span> <span class="muted" style="font-size:12px">${dt(r.shot.at)}</span>` : '<span class="chip">yok</span>'}</h4>
+      <p class="muted" style="font-size:12.5px;margin:0 0 6px">Apple her ürün için satın alma ekranının bir görüntüsünü ister. Uygulamada Mağaza sayfasının ekran görüntüsünü bir kez seç; bütün ürünlere eklenir.</p>
+      <input type="file" class="asc-shot" accept="image/png,image/jpeg">
+      ${r.last?.log?.length ? `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer;font-size:12.5px">Son eşitleme kaydı</summary><ul style="font-size:12.5px;margin:6px 0 0;padding-left:18px">${r.last.log.map((l) => `<li${l.err ? ' style="color:var(--bad,#c33)"' : ''}><span class="mono">${esc(l.sku)}</span> ${esc(l.text)}</li>`).join('')}</ul></details>` : ''}`;
+    const kf = ap.querySelector('.asc-k');
+    if (kf) kf.onsubmit = async (e) => { e.preventDefault(); const b = kf.querySelector('button'); b.disabled = true; try { ascPaint(await api('/asc/key', { body: { keyId: kf.keyId.value, issuerId: kf.issuerId.value, key: kf.key.value } })); toast('App Store Connect bağlandı. Şimdi “Şimdi eşitle”ye bas.'); } catch (er) { toast(er.message); b.disabled = false; } };
+    const q = (c) => ap.querySelector(c);
+    if (q('.asc-go')) q('.asc-go').onclick = async () => { try { ascPaint(await api('/asc/sync', { body: {} })); } catch (er) { toast(er.message); } };
+    if (q('.asc-mk')) q('.asc-mk').onchange = async (e) => { try { ascPaint(await api('/asc/settings', { body: { markup: e.target.value } })); toast('Fark kaydedildi; otomatik gönderim açıksa App Store fiyatları güncelleniyor.'); } catch (er) { toast(er.message); } };
+    if (q('.asc-au')) q('.asc-au').onchange = async (e) => { try { ascPaint(await api('/asc/settings', { body: { auto: e.target.checked } })); } catch (er) { toast(er.message); } };
+    if (q('.asc-del')) q('.asc-del').onclick = async () => { if (!confirm('App Store Connect bağlantısı kaldırılsın mı? Ürünler App Store’da kalır, sadece fiyatlar artık buradan güncellenmez.')) return; try { ascPaint(await api('/asc/key', { method: 'DELETE' })); } catch (er) { toast(er.message); } };
+    if (q('.asc-shot')) q('.asc-shot').onchange = (e) => { const f = e.target.files?.[0]; if (!f) return; const img = new Image(); const u = URL.createObjectURL(f); // sunucuya 1 MB altında gitsin: uzun kenar en çok 1600 px, JPG
+      img.onload = async () => { const k = Math.min(1, 1600 / Math.max(img.width, img.height)); const cv = document.createElement('canvas'); cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(u);
+        if (Math.min(cv.width, cv.height) < 640) { toast('Görsel çok küçük: en az 640 piksel genişlikte bir ekran görüntüsü seç.'); return; }
+        try { ascPaint(await api('/asc/shot', { body: { data: cv.toDataURL('image/jpeg', 0.85) } })); toast('Görsel kaydedildi, ürünlere ekleniyor.'); } catch (er) { toast(er.message); } };
+      img.onerror = () => toast('Görsel açılamadı.'); img.src = u; };
+    if (r.running) apT = setTimeout(() => api('/asc').then(ascPaint).catch(() => {}), 2500);
+  };
+  api('/asc').then(ascPaint).catch(() => {});
   // Mağaza iadesi: harcanmış jetonlar borç yazıldı; hediye olarak gittiyse alıcının kazancı ödeme öncesi kontrol edilir
   const rv = main.querySelector('.rv-p');
   const rvPaint = (r) => {

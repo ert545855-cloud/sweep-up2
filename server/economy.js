@@ -100,7 +100,8 @@ module.exports = function economy(store) {
   }
   setTimeout(snapshot, 4000); setInterval(snapshot, 3600000).unref?.();
   const priceHistory = (id) => store.get('price_history', id)?.days || {};
-  const save = (patch) => { const r = store.put('settings', { ...(store.get('settings', 'economy') || {}), ...patch, id: 'economy' }); snapshot(); return r; };
+  const saveHooks = []; const onSave = (fn) => saveHooks.push(fn); // ör. App Store fiyat eşitlemesi
+  const save = (patch) => { const r = store.put('settings', { ...(store.get('settings', 'economy') || {}), ...patch, id: 'economy' }); snapshot(); saveHooks.forEach((fn) => { try { fn(patch); } catch (e) { console.error('[economy] kayıt kancası', e.message); } }); return r; };
   const isPlus = (u) => !!u && (u.plusUntil || 0) > Date.now();
   const today = () => new Date().toISOString().slice(0, 10);
 
@@ -183,5 +184,5 @@ module.exports = function economy(store) {
     if (p) return { kind: 'plus', id, title: `SwipeUp+ ${p.days} gün`, days: p.days, price: p.now, ...(p.was ? { was: p.was, off: p.off, saleUntil: p.saleUntil } : {}) };
     return null;
   }
-  return { DEFAULTS, get, save, isPlus, addCoins, spend, chargeBack, earn, grantPlus, quota, product, today, priceHistory, lowestBefore, ymd };
+  return { DEFAULTS, get, save, onSave, isPlus, addCoins, spend, chargeBack, earn, grantPlus, quota, product, today, priceHistory, lowestBefore, ymd };
 };

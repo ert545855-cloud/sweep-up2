@@ -2331,6 +2331,7 @@ require('./server/minigames')(app, featureCtx); // sohbet içi mini oyunlar: XOX
 require('./server/kupa')(app, featureCtx); // Parti Kupası (3D)
 require('./server/farm')(app, featureCtx); // SwipeFarm: çiftlik oyunu
 require('./server/iap')(app, featureCtx);
+require('./server/ascsync')(app, featureCtx); // App Store Connect: ürünleri aç, fiyatları panelden eşitle
 require('./server/apns').routes(app, { ...featureCtx, apns: APNS }); // iPhone uygulaması bildirim jetonu + anahtar ayarı
 // Apple ile giriş (web / Android): Services ID ve dönüş adresi yönetim panelinden de girilebilir (sunucu ayar dosyası önceliklidir)
 oidc.configure(() => { const a = store.get('meta', 'secrets')?.appleWeb || {}; return { appleClientId: a.clientId, appleRedirect: a.redirect }; });
