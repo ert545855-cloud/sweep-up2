@@ -4625,3 +4625,21 @@ html.land-game #fx-layer { display: none; }
   .mwrap, .msg { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 }
 .emoji-pop, .sheet .it, .sheet button, .sheet .grab { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* Orta genişlik (tablet, küçük pencere ya da yakınlaştırılmış tarayıcı, 700–999 px): uygulama tüm genişliğe
+   yayılmasın, telefondaki gibi ortada 600 px'lik sütunda dursun. Yan yatırılmış telefonlar (alçak ekran) hariç. */
+@media (min-width: 700px) and (max-width: 999.98px) and (min-height: 600px) {
+  :root { --app-max: 600px; }
+  html, body { background: var(--surface); }
+  :root[data-skin] body { background: var(--page); background-attachment: fixed; }
+  #app { box-shadow: 0 0 0 1px var(--line); overflow-x: clip; }
+  body.dark-ui { --app-max: min(600px, calc(100dvh * 9 / 16)); }
+  body.dark-ui #app { box-shadow: none; }
+  :root[data-game] { --app-max: 100%; }
+  :root[data-game] #app { max-width: 100%; box-shadow: none; }
+}
+/* Geniş ekranda paylaşımlar ekrana sığsın: 4:5 görsel, pencere yüksekliğinden taşmayacak genişlikte ortalanır
+   (13" dizüstünde ~470 px, Instagram'ın bilgisayar akışı gibi). Telefonda değişiklik yok. */
+@media (min-width: 700px) and (min-height: 600px) {
+  #view .post { max-width: min(calc(100% - 24px), calc((100dvh - 190px) * 4 / 5)); margin-inline: auto; }
+}
