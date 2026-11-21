@@ -463,7 +463,7 @@ export function sheet(title, bodyHtml, { onMount, footer, onClose } = {}) {
   const sh = el(`<div class="sheet${title ? '' : ' no-t'}" role="dialog" aria-modal="true"><div class="grab"></div><button type="button" class="sh-x" aria-label="Kapat">${icon('close')}</button>
     ${title ? `<div class="sh-t">${esc(title)}</div>` : ''}<div class="sh-b">${bodyHtml}</div>${footer || ''}</div>`);
   let closed = false;
-  const close = () => { if (closed) return; closed = true; bg.remove(); sh.remove(); window.removeEventListener('hashchange', close); onClose?.(); };
+  const close = () => { if (closed) return; closed = true; if (sh.contains(document.activeElement)) document.activeElement.blur(); /* iPhone: yazarken kapatılınca klavye ekranda asılı kalmasın */ bg.remove(); sh.remove(); window.removeEventListener('hashchange', close); onClose?.(); };
   bg.onclick = close;
   // X: arka plana dokunmakla aynı (arka plana bağlı başka dinleyiciler de çalışsın, ör. hikayeyi devam ettir)
   sh.querySelector('.sh-x').onclick = () => bg.click();

@@ -390,6 +390,7 @@ function keyboardFit() {
   const vv = window.visualViewport; const root = document.documentElement; let lifted = null; let timer = 0; let base = window.innerHeight; let bw = window.innerWidth;
   const editable = (el) => !!el?.matches?.('input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=button]):not([type=submit]):not([type=color]), textarea, [contenteditable=""], [contenteditable="true"]');
   const unlift = () => { if (lifted) { lifted.el.style.translate = ''; lifted = null; } };
+  const inSheet = (el) => !!el?.closest?.('.sheet');
   function fit() {
     if (window.innerWidth !== bw) { bw = window.innerWidth; base = window.innerHeight; } base = Math.max(base, window.innerHeight);
     const h = vv ? vv.height : window.innerHeight; const top = vv ? vv.offsetTop : 0; const el = document.activeElement; const typing = editable(el);
@@ -399,6 +400,10 @@ function keyboardFit() {
     if (!over) { unlift(); if (typing && root.classList.contains('kb-open')) { const r = el.getBoundingClientRect(); if (r.bottom > h - 8) el.scrollIntoView({ block: 'center' }); } return; }
     let fx = el; while (fx && fx !== document.body && getComputedStyle(fx).position !== 'fixed') fx = fx.parentElement;
     // Sohbet ekranı klavye açıkken görünür alana sabitlenir (CSS: html.kb-open .chat); ayrıca kaldırılmaz
+    if (lifted && !lifted.el.isConnected) lifted = null; // kapanan pencere
+    // Alt sayfa (yorumlar vb.): CSS ile klavyenin hemen üstüne oturur (html.kb-open .sheet { bottom: var(--kb) });
+    // ölçüp kaydırmaya gerek yok, açılış animasyonu sırasında yanlış ölçülmez. Yazılan alan sayfanın içinde görünür tutulur.
+    if (inSheet(el)) { unlift(); requestAnimationFrame(() => { try { el.scrollIntoView({ block: 'nearest' }); } catch { /* eski tarayıcı */ } }); return; }
     if (fx && fx !== document.body && !fx.classList.contains('chat')) {
       if (lifted && lifted.el !== fx) unlift();
       const cur = lifted ? lifted.by : 0; const by = Math.max(0, Math.round(el.getBoundingClientRect().bottom + 14 - (top + h) + cur));

@@ -4643,3 +4643,6 @@ html.land-game #fx-layer { display: none; }
 @media (min-width: 700px) and (min-height: 600px) {
   #view .post { max-width: min(calc(100% - 24px), calc((100dvh - 190px) * 4 / 5)); margin-inline: auto; }
 }
+
+/* Alt sayfada yazarken (iPhone): sayfa klavyenin hemen üstüne oturur, başlık görünür alanın içinde kalır */
+html.kb-open .sheet { bottom: var(--kb, 0px); transition: bottom .12s ease-out; }
