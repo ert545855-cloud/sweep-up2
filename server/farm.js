@@ -158,7 +158,7 @@ const barnUpCost = (bl) => 100 * ((bl || 0) + 1);
 const orderSlots = (l) => (l < 6 ? 3 : l < 10 ? 4 : 5);
 const HELPS = 5; const SKIP_WAIT = 3 * MIN;
 const WHO = ['Ayşe Teyze', 'Bakkal Rıza', 'Pastacı Selin', 'Muhtar Kemal', 'Kahveci Deniz', 'Aşçı Zeynep', 'Manav Orhan', 'Öğretmen Elif', 'Fırıncı Cem', 'Komşu Nermin'];
-const CFG = { N, CROPS, ITEMS, TYPES, RECIPES, PENS, PROD, XPN, HELPS, DAILY7, RUSH_MIN, RUSH_MAX, STALL_SLOTS, WEEK_PRIZE, COOP_COINS, UPG, QUESTS, PETS, PET_T, FITS, WHEEL, SPIN_GEM, EV_STEPS, PAIR_STEPS, CLUB_PRIZE, BOAT_LVL,
+const CFG = { N, CROPS, ITEMS, TYPES, RECIPES, PENS, PROD, XPN, HELPS, DAILY7, RUSH_MIN, RUSH_MAX, STALL_SLOTS, WEEK_PRIZE, COOP_COINS, UPG, QUESTS, PETS, PET_T, FITS, WHEEL, WHEEL_W, SPIN_GEM, EV_STEPS, PAIR_STEPS, CLUB_PRIZE, BOAT_LVL,
   RARE, CAT, WX: Object.fromEntries(Object.entries(WX).map(([k, v]) => [k, v.name])), VIS_LVL, VIS_FAST, TUT_N, TUT_RW, INV_LVL, INV_RW, PLUS_STALL, CONTEST_PRIZE, CONTEST_VOTES, CONTEST_LVL, EMOTES, TRADE_MAX, GOLD_W };
 
 module.exports = function farm(app, ctx) {

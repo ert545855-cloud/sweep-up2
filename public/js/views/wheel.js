@@ -5,6 +5,8 @@ import { api, esc, toast, state, emit } from '../core.js';
 const WIN = [['#ff6aa2', '#e0336f'], ['#ffb547', '#f07b12'], ['#9a6bff', '#5b21b6'], ['#3fd9bd', '#109a82'], ['#6aa5ff', '#2f5fe0'], ['#ff7a7a', '#d93a3a'], ['#ffd84a', '#d99a00'], ['#c86bff', '#8a1fd1']];
 const PAS = ['#3a2160', '#24113f'];
 
+const pctTr = (v) => `%${(+v < 1 && +v > 0 ? (+v).toFixed(1) : String(Math.round(+v * 10) / 10)).replace('.', ',')}`;
+
 function wheelSvg(slices) {
   const n = slices.length; const R = 150; const a = (2 * Math.PI) / n;
   const pt = (ang, r) => [R + r * Math.sin(ang), R - r * Math.cos(ang)];
@@ -48,7 +50,8 @@ export default async function wheel(view) {
     box.innerHTML = `<p class="wh-sub">Her hafta bir kez çevir, çark her <b>cuma</b> yenilenir.</p>
       <div class="wh-stage"><div class="wh-wrap">${rimSvg()}<div class="wh-disc"><div class="wh-rot" style="transform:rotate(${rot}deg)">${wheelSvg(w.slices)}</div></div><div class="wh-hub"><img src="/img/wheel/gift.svg" alt=""></div>${PIN}</div><div class="wh-base"></div></div>
       ${w.canSpin ? '<button class="btn primary block wh-go">Çevir!</button>' : `<div class="wh-last">${last ? `<div class="row" style="gap:10px;justify-content:center"><img class="wh-li" src="${esc(last.prize?.img || '/img/wheel/pas.svg')}" alt=""><b>${esc(last.text)}</b></div>` : ''}<small>Sıradaki çevirme hakkın: <b>${left()}</b> sonra (cuma)</small></div>`}
-      <div class="wh-list"><h3 class="shop-h">Hediyeler</h3><div class="wh-prz">${prizes().map((s) => `<div class="wh-pz"><img src="${esc(s.img)}" alt=""><span>${esc(s.label)}</span></div>`).join('')}</div></div>`;
+      <div class="wh-list"><h3 class="shop-h">Hediyeler</h3><div class="wh-prz">${prizes().map((s) => `<div class="wh-pz"><img src="${esc(s.img)}" alt=""><span>${esc(s.label)}</span></div>`).join('')}</div></div>
+      ${w.odds ? `<details class="sf-odds wh-odds"><summary>Çıkma ihtimalleri</summary><ul>${w.odds.map((o) => `<li><span>${esc(o.label)}</span><b>${pctTr(o.chance)}</b></li>`).join('')}<li><span>Pas (hediye yok)</span><b>${pctTr(w.pas)}</b></li></ul><small>Çevirme ücretsizdir, haftada bir hak verilir.</small></details>` : ''}`;
     box.querySelector('.wh-go')?.addEventListener('click', spin);
   };
   async function spin(e) {

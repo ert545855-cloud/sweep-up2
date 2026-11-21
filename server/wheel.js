@@ -50,7 +50,9 @@ module.exports = function wheel(app, ctx) {
   };
   const view = (u) => {
     const c = cfg(); const s = spinOf(u.id);
-    return { enabled: c.enabled, slices: visual(c), canSpin: c.enabled && !s && !['falci', 'official'].includes(u.role), last: s ? { ...s, prize: s.prize ? { ...s.prize, img: imgOf(s.prize) } : null } : null, nextAt: weekStart() + 7 * 86400000 };
+    return { enabled: c.enabled, slices: visual(c), canSpin: c.enabled && !s && !['falci', 'official'].includes(u.role), last: s ? { ...s, prize: s.prize ? { ...s.prize, img: imgOf(s.prize) } : null } : null, nextAt: weekStart() + 7 * 86400000,
+      // Çıkma ihtimalleri (yüzde) kullanıcıya açıkça gösterilir
+      odds: c.slices.map((x) => ({ label: x.label, chance: +x.chance || 0 })), pas: Math.max(0, 100 - winChance(c)) };
   };
   app.get('/api/wheel', auth, (req, res) => res.json(view(req.user)));
   app.post('/api/wheel/spin', auth, (req, res) => {

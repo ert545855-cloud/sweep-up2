@@ -639,7 +639,13 @@ export default async function farm(view, who) {
   const wheelBody = () => { const n = F.wheel.n; const W8 = cfg.WHEEL; const fr = F.wheel.free || 1;
     return `<div class="sf-wh"><div class="sf-wheel"><i style="transform:rotate(${ps.deg || 0}deg)">${W8.map((P, i) => `<span style="transform:rotate(${i * 45 + 22.5}deg) translateY(-66px)">${prize(P, 24)}</span>`).join('')}</i><em></em></div>
       <div class="sf-whr"><b>Şans çarkı</b><small>${fr > 1 ? `SwipeUp+ üyesi olarak her gün ${fr} çevirme ücretsiz.` : 'Her gün bir çevirme ücretsiz. SwipeUp+ üyelerine bir çevirme daha ücretsiz.'} Sonraki çevirme ${cfg.SPIN_GEM} jeton.</small>
-      <button class="sf-btn ${n === fr ? 'violet' : 'gold'}" data-a="spin" ${n > fr || ps.spinning ? 'disabled' : ''}>${n < fr ? (n ? 'Ücretsiz çevir (SwipeUp+)' : 'Ücretsiz çevir') : n === fr ? `Tekrar çevir · ${spr('i_jeton', 16)} ${cfg.SPIN_GEM}` : 'Yarın yine gel'}</button></div></div>`; };
+      <button class="sf-btn ${n === fr ? 'violet' : 'gold'}" data-a="spin" ${n > fr || ps.spinning ? 'disabled' : ''}>${n < fr ? (n ? 'Ücretsiz çevir (SwipeUp+)' : 'Ücretsiz çevir') : n === fr ? `Tekrar çevir · ${spr('i_jeton', 16)} ${cfg.SPIN_GEM}` : 'Yarın yine gel'}</button></div></div>
+      ${odds()}`; };
+  // Çıkma ihtimalleri: ücretli çevirmeden önce görünür olmalı (App Store kuralı 3.1.1, rastgele ödüller)
+  const odds = () => { const W = cfg.WHEEL_W; if (!W) return ''; const tot = W.reduce((a, c) => a + c, 0);
+    const nm = (P) => (P.coins ? `${P.coins} altın` : P.item ? `${P.item[1]} × ${(cfg.ITEMS?.[P.item[0]] || [P.item[0]])[0]}` : P.xp ? `${P.xp} XP` : P.seed ? `${P.seed} nadir tohum` : '');
+    const pct = (w) => { const v = (w * 100) / tot; return `%${v < 1 ? v.toFixed(1) : Math.round(v)}`.replace('.', ','); };
+    return `<details class="sf-odds"><summary>Çıkma ihtimalleri</summary><ul>${cfg.WHEEL.map((P, i) => `<li><span>${esc(nm(P))}</span><b>${pct(W[i])}</b></li>`).join('')}</ul><small>Her çevirmede ödüllerden biri kesin çıkar; ihtimaller ücretsiz ve jetonlu çevirmede aynıdır.</small></details>`; };
   const eventBody = () => { const E = F.event; if (!E) return '<p class="sf-empty">Şu an şenlik yok.</p>';
     return `<div class="sf-rk"><span><b>${esc(E.name)}</b> · bitmesine ${fmtD(E.ends - tnow())}</span><span>Şenlik puanın <b>${E.pts}</b></span></div>
       <div class="sf-recs">${E.steps.map((x, i) => `<div class="sf-rec ${x.got ? 'fin' : ''}">${x.decor ? spr(x.decor, 46) : spr('i_coin', 40)}<div class="sf-ri"><b>${x.decor ? esc(cfg.TYPES[x.decor].name) : `${x.coins} altın`}</b>${x.got ? '' : bar(Math.min(E.pts, x.pts), x.pts)}</div>${x.got ? '<small class="ok">Alındı</small>' : `<button class="sf-btn sm gold" data-a="evClaim" data-i="${i}" ${E.pts >= x.pts ? '' : 'disabled'}>Al</button>`}</div>`).join('')}</div>
