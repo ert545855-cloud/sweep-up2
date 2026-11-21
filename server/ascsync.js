@@ -82,6 +82,24 @@ module.exports = function ascsync(app, ctx) {
     await call(`/v1/inAppPurchaseAppStoreReviewScreenshots/${c.data.id}`, { method: 'PATCH', body: { data: { type: 'inAppPurchaseAppStoreReviewScreenshots', id: c.data.id, attributes: { uploaded: true, sourceFileChecksum: crypto.createHash('md5').update(buf).digest('hex') } } } });
   }
 
+  // Ürün "Eksik bilgi"de kalıyorsa neyin eksik olduğunu Apple'dan oku
+  async function missing(iapId) {
+    const m = [];
+    const chk = async (label, fn) => { try { const r = await fn(); if (r) m.push(r === true ? label : `${label}: ${r}`); } catch (e) { m.push(`${label} okunamadı (${e.message.replace(/^App Store Connect: /, '')})`); } };
+    await chk('Türkçe ad/açıklama', async () => !(await all(`/v2/inAppPurchases/${iapId}/inAppPurchaseLocalizations?limit=50`)).length);
+    await chk('fiyat', async () => { const j = await call(`/v2/inAppPurchases/${iapId}/iapPriceSchedule`); return !j.data; });
+    await chk('ülkeler', async () => { const j = await call(`/v2/inAppPurchases/${iapId}/inAppPurchaseAvailability`); return !j.data; });
+    await chk('inceleme görseli', async () => {
+      const j = await call(`/v2/inAppPurchases/${iapId}/appStoreReviewScreenshot`);
+      if (!j.data) return 'yüklenmemiş';
+      const d = j.data.attributes?.assetDeliveryState;
+      if (d?.state === 'FAILED') return `Apple reddetti (${(d.errors || []).map((x) => x.description || x.code).join(', ') || 'geçersiz görsel'})`;
+      if (d && d.state !== 'COMPLETE') return `Apple işliyor (${d.state})`;
+      return false;
+    });
+    return m;
+  }
+
   // ---- Eşitleme ----
   let running = null; let again = false;
   async function syncOnce(force) {
@@ -126,10 +144,11 @@ module.exports = function ascsync(app, ctx) {
         // İnceleme ekran görüntüsü (panelden bir kez yüklenir, her ürüne eklenir)
         if (shot?.b64 && rec.shot !== shot.hash) {
           let has = false;
-          try { has = !!(await call(`/v2/inAppPurchases/${iap.id}/appStoreReviewScreenshot`)).data; } catch { /* yoksa yüklenir */ }
+          try { const cur = (await call(`/v2/inAppPurchases/${iap.id}/appStoreReviewScreenshot`)).data; has = !!cur && cur.attributes?.assetDeliveryState?.state !== 'FAILED'; if (cur && !has) await call(`/v1/inAppPurchaseAppStoreReviewScreenshots/${cur.id}`, { method: 'DELETE' }).catch(() => {}); } catch { /* yoksa yüklenir */ }
           if (!has || force) { await uploadShot(iap.id, shot); done.push('inceleme görseli yüklendi'); }
           rec.shot = shot.hash;
         }
+        rec.miss = await missing(iap.id);
         rec.err = null;
       } catch (e) { rec.err = e.message; done.push(`HATA: ${e.message}`); }
       synced[it.sku] = rec; saveSt({ synced });
@@ -159,7 +178,7 @@ module.exports = function ascsync(app, ctx) {
     const a = sec(); const S = st(); const shot = store.get('meta', 'ascshot');
     return { on: !!a?.key, keyId: a?.keyId || null, issuerId: a?.issuerId || null, appId: a?.appId || null, bundleId: bundle(), at: a?.at || null, markup: +S.markup || 0, auto: S.auto !== false, running: !!running,
       shot: shot ? { name: shot.name, at: shot.at } : null, last: S.last || null,
-      items: items().map((it) => { const r = S.synced[it.sku] || {}; return { sku: it.sku, title: it.ref, price: it.price, target: it.target, apple: r.apple ?? null, state: r.state ? (STATE[r.state] || r.state) : null, stateKey: r.state || null, err: r.err || null, pending: r.target !== it.target }; }) };
+      items: items().map((it) => { const r = S.synced[it.sku] || {}; return { sku: it.sku, title: it.ref, price: it.price, target: it.target, apple: r.apple ?? null, state: r.state ? (STATE[r.state] || r.state) : null, stateKey: r.state || null, err: r.err || null, miss: r.state === 'MISSING_METADATA' ? (r.miss || []) : [], pending: r.target !== it.target }; }) };
   };
   app.get('/api/admin/asc', ...gate, (req, res) => res.json(status()));
   app.post('/api/admin/asc/key', ...gate, ctx.wrap(async (req, res) => {
