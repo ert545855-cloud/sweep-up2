@@ -523,6 +523,7 @@ ${meta}</div>`;
   function openMenu(m, wrap) {
     if (m.deleted || document.querySelector('#sheet-root .sheet')) return; // uzun basma + contextmenu aynı anda gelmesin
     document.querySelector('.emoji-pop')?.remove();
+    try { window.getSelection()?.removeAllRanges(); } catch { /* seçim yok */ } // iPhone'un kendi Kopyala/Araştır balonu menünün üstünde kalmasın
     const r = wrap.getBoundingClientRect();
     const pop = el(`<div class="emoji-pop">${EMOJIS.map((e) => `<button class="${m.reactions?.[state.me.id] === e ? 'on' : ''}">${e}</button>`).join('')}</div>`);
     document.body.append(pop);

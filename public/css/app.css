@@ -4618,3 +4618,10 @@ html.land-game #fx-layer { display: none; }
 .sf-odds li { display: flex; justify-content: space-between; gap: 8px; }
 .sf-odds small { display: block; font-size: 11.5px; opacity: .8; line-height: 1.35; }
 .wh-odds { margin: 14px 16px 24px; background: var(--surface); border-color: var(--line); color: var(--text); }
+
+/* Dokunmatik ekranda mesaja uzun basınca iPhone'un metin seçimi ve "Kopyala / Araştır / Çeviri" balonu açılmasın:
+   uzun basma bizim menüyü açar (menüde Kopyala var). Fareyle masaüstünde metin seçilebilir kalır. */
+@media (hover: none) and (pointer: coarse) {
+  .mwrap, .msg { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+}
+.emoji-pop, .sheet .it, .sheet button, .sheet .grab { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
