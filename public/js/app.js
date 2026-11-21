@@ -265,7 +265,7 @@ function wireRealtime() {
     if (location.hash === '#/notifications') return;
     const href = notifHref(n);
     if (n.type === 'order' || n.type === 'verify') api('/me').then((m) => Object.assign(state.me, m)).catch(() => {});
-    toast(n.text, { ms: ['announce', 'warning', 'order', 'verify'].includes(n.type) ? 8000 : 3500, title: n.type === 'liked' ? 'Yeni beğeni' : n.from?.name || 'SwipeUp', img: n.type === 'liked' ? null : n.from?.avatar, href });
+    toast(n.text, { ms: ['announce', 'warning', 'order', 'verify', 'game'].includes(n.type) ? 8000 : 3500, title: n.type === 'liked' ? 'Yeni beğeni' : n.from?.name || 'SwipeUp', img: n.type === 'liked' ? null : n.from?.avatar, href });
   });
   on('likes:new', () => refreshBadges());
   // Panelden yapılan değişiklikler: ayarlar ve hesap sayfa yenilemeden tazelenir
