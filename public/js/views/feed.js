@@ -27,7 +27,7 @@ export default async function feed(view) {
     <div class="stories" aria-label="Hikayeler ve canlı yayınlar"></div>
     <div class="maint-slot"></div>
     <div class="event-slot"></div>
-    <section class="promo-rail" aria-label="Senin için"><div class="pr-track"></div><div class="pr-dots" aria-hidden="true"></div></section>
+    <section class="promo-rail" aria-label="Senin için"><div class="pr-track"></div><button class="pr-nav prev" aria-label="Önceki" hidden></button><button class="pr-nav next" aria-label="Sonraki" hidden></button><div class="pr-dots"></div></section>
     <a class="fal-hero" href="#/fal"><span class="zs">☕️</span><div class="grow"><b>${state.me.role === 'falci' ? `Fal kuyruğu${state.badges.fal ? ` · ${state.badges.fal} bekliyor` : ''}` : 'Falcı Teyze’ye fal baktır'}</b><p>${state.me.role === 'falci' ? 'Gelen fal isteklerini gör ve cevapla.' : 'Kahve falı, tarot, burç ve aşk uyumu. Cevabı mesaj kutuna gelir.'}</p></div>${icon('chevDown', '', 'style="transform:rotate(-90deg)"')}</a>
     <nav class="sc-row" aria-label="Kısayollar">${SHORTCUTS.filter((x) => state.me.role !== 'falci' || x[3]).map(([k, href, label]) => `<a class="sc" href="${href}">${k === 'farm' ? '<img class="egi sc-ic" src="/img/farm/icon.webp" width="54" height="54" alt="" decoding="async">' : egi(k, 54, 'sc-ic')}${k === 'seri' ? `<b class="sc-n">${state.me.loginStreak?.count || 0}</b>` : ''}<small>${label}</small></a>`).join('')}</nav>
     <div class="vn-friends"></div>
@@ -110,14 +110,24 @@ export default async function feed(view) {
     track.innerHTML = list.join('');
     railEl.hidden = !list.length;
     railEl.classList.toggle('one', list.length < 2);
-    dots.innerHTML = list.length > 1 ? list.map(() => '<i></i>').join('') : '';
+    dots.innerHTML = list.length > 1 ? list.map((_, k) => `<i role="button" tabindex="0" aria-label="${k + 1}. kart"></i>`).join('') : '';
     syncDots();
   };
+  // Kartlar arasında geçiş: telefonda kaydırarak; bilgisayarda (fare) noktalara ya da yandaki oklara tıklayarak
+  const step = () => (track.firstElementChild?.offsetWidth || 1) + 10;
+  const goTo = (k) => track.scrollTo({ left: Math.max(0, k) * step(), behavior: 'smooth' });
+  const prevB = railEl.querySelector('.pr-nav.prev'); const nextB = railEl.querySelector('.pr-nav.next');
+  prevB.innerHTML = icon('back'); nextB.innerHTML = icon('back'); // sonraki: CSS ile ters çevrilir
   const syncDots = () => {
-    const w = track.firstElementChild?.offsetWidth || 1; const i = Math.round(track.scrollLeft / (w + 10));
+    const i = Math.round(track.scrollLeft / step()); const n = track.children.length;
     dots.querySelectorAll('i').forEach((d, k) => d.classList.toggle('on', k === i));
+    prevB.hidden = n < 2 || track.scrollLeft < 8; nextB.hidden = n < 2 || track.scrollLeft + track.clientWidth > track.scrollWidth - 8;
   };
   track.addEventListener('scroll', syncDots, { passive: true });
+  dots.addEventListener('click', (e) => { const d = e.target.closest('i'); if (d) goTo([...dots.children].indexOf(d)); });
+  dots.addEventListener('keydown', (e) => { const d = e.target.closest('i'); if (d && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); goTo([...dots.children].indexOf(d)); } });
+  prevB.onclick = () => goTo(Math.round(track.scrollLeft / step()) - 1);
+  nextB.onclick = () => goTo(Math.round(track.scrollLeft / step()) + 1);
   paintRail();
   const paintQs = async () => {
     const q = await api('/quests').catch(() => null);

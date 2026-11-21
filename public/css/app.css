@@ -4646,3 +4646,16 @@ html.land-game #fx-layer { display: none; }
 
 /* Alt sayfada yazarken (iPhone): sayfa klavyenin hemen üstüne oturur, başlık görünür alanın içinde kalır */
 html.kb-open .sheet { bottom: var(--kb, 0px); transition: bottom .12s ease-out; }
+
+/* Ana sayfa kart şeridi: noktalar tıklanır; fareli cihazlarda (bilgisayar) iki yanda ok düğmeleri */
+.promo-rail { position: relative; }
+.pr-dots i { cursor: pointer; }
+.pr-nav { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .pr-dots { gap: 7px; } .pr-dots i { width: 8px; height: 8px; border-radius: 4px; } .pr-dots i.on { width: 20px; }
+  .pr-nav:not([hidden]) { display: grid; place-items: center; position: absolute; top: calc(50% - 14px); transform: translateY(-50%); z-index: 2; width: 36px; height: 36px; border-radius: 50%; background: var(--bg); color: var(--text); box-shadow: 0 4px 14px -4px rgba(0,0,0,.35), 0 0 0 1px var(--line); opacity: .92; transition: opacity .15s, transform .15s; }
+  .pr-nav:hover { opacity: 1; transform: translateY(-50%) scale(1.06); }
+  .pr-nav svg { width: 20px; height: 20px; }
+  .pr-nav.prev { left: 6px; } .pr-nav.next { right: 6px; }
+}
+.pr-nav.next svg { transform: scaleX(-1); }
