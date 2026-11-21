@@ -2392,6 +2392,8 @@ document.addEventListener('error', (e) => {
 }, true);
 window.addEventListener('hashchange', render);
 render();
+// Telefonda en üstteyken aşağı çekince sayfa yenilenir (ana uygulamadaki ile aynı)
+import('/js/ptr.js').then((m) => m.initPtr({ enabled: () => !!S.token && !document.querySelector('.drawer.on, .drawer.open, dialog[open]'), refresh: () => Promise.all([render(), refreshCounts?.()]) })).catch(() => {});
 setInterval(() => { if (S.token && document.visibilityState === 'visible') refreshCounts(); }, 20000);
 
 // ---- Yeni sürüm: panel kendini yeniler (yazı yazılıyorsa düğmeyle) ----
