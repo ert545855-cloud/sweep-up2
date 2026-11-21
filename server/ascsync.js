@@ -59,8 +59,8 @@ module.exports = function ascsync(app, ctx) {
     const s = eco.get(); const m = 1 + (+st().markup || 0) / 100;
     const r2 = (x) => Math.round(x * 100) / 100;
     return [
-      ...s.coinPacks.map((p) => ({ sku: PFX + p.id, id: p.id, ref: `${p.coins} jeton`, name: `${p.coins} Jeton`.slice(0, 30), desc: `SwipeUp içinde harcanacak ${p.coins} jeton`.slice(0, 45), note: `Satın alınca ${p.coins} jeton hesaba hemen eklenir (Mağaza → Jeton).`, price: eco.product(p.id)?.price ?? p.price })),
-      ...s.plusPlans.map((p) => ({ sku: PFX + p.id, id: p.id, ref: `SwipeUp+ ${p.days} gün`, name: `SwipeUp+ ${p.days} Gün`.slice(0, 30), desc: `${p.days} gün SwipeUp+, otomatik yenilenmez`.slice(0, 45), note: `Satın alınca ${p.days} gün SwipeUp+ üyeliği hesaba eklenir; otomatik yenilenmez.`, price: eco.product(p.id)?.price ?? p.price })),
+      ...s.coinPacks.map((p) => ({ sku: PFX + p.id, id: p.id, kind: 'coins', ref: `${p.coins} jeton`, name: `${p.coins} Jeton`.slice(0, 30), desc: `SwipeUp içinde harcanacak ${p.coins} jeton`.slice(0, 45), note: `Satın alınca ${p.coins} jeton hesaba hemen eklenir (Mağaza → Jeton).`, price: eco.product(p.id)?.price ?? p.price })),
+      ...s.plusPlans.map((p) => ({ sku: PFX + p.id, id: p.id, kind: 'plus', ref: `SwipeUp+ ${p.days} gün`, name: `SwipeUp+ ${p.days} Gün`.slice(0, 30), desc: `${p.days} gün SwipeUp+, otomatik yenilenmez`.slice(0, 45), note: `Satın alınca ${p.days} gün SwipeUp+ üyeliği hesaba eklenir; otomatik yenilenmez.`, price: eco.product(p.id)?.price ?? p.price })),
     ].map((x) => ({ ...x, target: r2(x.price * m) }));
   }
   // Apple yalnız hazır fiyat basamaklarını kabul eder: hedefe en yakın basamak (eşitlikte düşük olan)
@@ -107,7 +107,7 @@ module.exports = function ascsync(app, ctx) {
     const aid = await appId(); const S = st(); const synced = { ...S.synced }; const log = [];
     const list = await all(`/v1/apps/${aid}/inAppPurchasesV2?limit=200`);
     const byPid = new Map(list.map((x) => [x.attributes.productId, x]));
-    const shot = store.get('meta', 'ascshot');
+    const shots = { coins: store.get('meta', 'ascshot'), plus: store.get('meta', 'ascshot_plus') || store.get('meta', 'ascshot') }; // SwipeUp+ görseli yoksa jetonunki kullanılır
     let terr = null;
     for (const it of items()) {
       const rec = { ...(synced[it.sku] || {}) }; const done = [];
@@ -143,6 +143,7 @@ module.exports = function ascsync(app, ctx) {
           Object.assign(rec, { target: it.target, pp: n.p.id, apple: n.v });
         }
         // İnceleme ekran görüntüsü (panelden bir kez yüklenir, her ürüne eklenir)
+        const shot = shots[it.kind];
         if (shot?.b64 && rec.shot !== shot.hash) {
           let has = false;
           try { const cur = (await call(`/v2/inAppPurchases/${iap.id}/appStoreReviewScreenshot`)).data; if (cur) await call(`/v1/inAppPurchaseAppStoreReviewScreenshots/${cur.id}`, { method: 'DELETE' }); } catch { /* yoksa doğrudan yüklenir */ } // görsel değişti: eskisi (ya da reddedileni) silinir
@@ -176,9 +177,9 @@ module.exports = function ascsync(app, ctx) {
   const audit = (req, text, det) => A.audit?.(req.admin, text, null, det);
   const STATE = { MISSING_METADATA: 'Eksik bilgi', READY_TO_SUBMIT: 'Gönderime hazır', WAITING_FOR_REVIEW: 'İncelemede', IN_REVIEW: 'İncelemede', APPROVED: 'Onaylandı', DEVELOPER_ACTION_NEEDED: 'Düzeltme gerekli', REJECTED: 'Reddedildi', PENDING_BINARY_APPROVAL: 'Uygulamayla incelenecek', DEVELOPER_REMOVED_FROM_SALE: 'Satıştan kaldırıldı', REMOVED_FROM_SALE: 'Satıştan kaldırıldı' };
   const status = () => {
-    const a = sec(); const S = st(); const shot = store.get('meta', 'ascshot');
+    const a = sec(); const S = st(); const sh = (x) => (x ? { name: x.name, at: x.at, size: x.w ? `${x.w}×${x.h}` : null } : null);
     return { on: !!a?.key, keyId: a?.keyId || null, issuerId: a?.issuerId || null, appId: a?.appId || null, bundleId: bundle(), at: a?.at || null, markup: +S.markup || 0, auto: S.auto !== false, running: !!running,
-      shot: shot ? { name: shot.name, at: shot.at, size: shot.w ? `${shot.w}×${shot.h}` : null } : null, last: S.last || null,
+      shot: sh(store.get('meta', 'ascshot')), shotPlus: sh(store.get('meta', 'ascshot_plus')), last: S.last || null,
       items: items().map((it) => { const r = S.synced[it.sku] || {}; return { sku: it.sku, title: it.ref, price: it.price, target: it.target, apple: r.apple ?? null, state: r.state ? (STATE[r.state] || r.state) : null, stateKey: r.state || null, err: r.err || null, miss: r.state === 'MISSING_METADATA' ? (r.miss || []) : [], pending: r.target !== it.target }; }) };
   };
   app.get('/api/admin/asc', ...gate, (req, res) => res.json(status()));
@@ -219,8 +220,8 @@ module.exports = function ascsync(app, ctx) {
     if (!d) return res.status(400).json({ error: 'PNG ya da JPG bir ekran görüntüsü seç.' });
     const okSize = SIZES.some((x) => { const [w, h] = x.split('x').map(Number); return (d.w === w && d.h === h) || (d.w === h && d.h === w); });
     if (!okSize) return res.status(400).json({ error: `Bu görsel ${d.w}×${d.h}; Apple telefonun kendi ekran görüntüsünü ister (ör. 1179×2556). Düzenlenmemiş, kırpılmamış bir ekran görüntüsü seç.` });
-    store.put('meta', { id: 'ascshot', b64: buf.toString('base64'), name: `inceleme.${d.t}`, hash: crypto.createHash('sha1').update(buf).digest('hex'), w: d.w, h: d.h, at: now() });
-    audit(req, 'App Store inceleme görselini yükledi', `${d.w}x${d.h}`); soon(); res.json(status());
+    store.put('meta', { id: req.query?.kind === 'plus' ? 'ascshot_plus' : 'ascshot', b64: buf.toString('base64'), name: `inceleme.${d.t}`, hash: crypto.createHash('sha1').update(buf).digest('hex'), w: d.w, h: d.h, at: now() });
+    audit(req, 'App Store inceleme görselini yükledi', `${req.query?.kind === 'plus' ? 'SwipeUp+' : 'jeton'} ${d.w}x${d.h}`); soon(); res.json(status());
   });
   app.post('/api/admin/asc/sync', ...gate, (req, res) => {
     if (!sec()) return res.status(400).json({ error: 'Önce App Store Connect anahtarını kaydet.' });
