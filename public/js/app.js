@@ -1,4 +1,5 @@
 import './errlog.js'; // en önce: açılışta oluşan hatalar da yakalansın
+import { initHScroll } from './hscroll.js';
 import { remember, accountSheet, switchFromUrl } from './accounts.js';
 import { icon } from './icons.js';
 import { initNav } from './nav.js';
@@ -497,6 +498,7 @@ async function boot() {
     if (r) import(`./views/${r[1]}.js`).catch(() => {});
   } catch { /* yok */ }
   try { keyboardFit(); } catch { /* eski tarayıcı: varsayılan davranış */ }
+  try { initHScroll(); } catch { /* bilgisayarda yana kayan şerit okları; telefonda bir şey yapmaz */ }
   await initI18n().catch(() => {});
   try { const t = localStorage.getItem('su_theme'); if (t && t !== 'system') document.documentElement.dataset.theme = t; } catch {}
   try { applySkin(localStorage.getItem('su_skin') || 'gunbatimi', { save: false }); } catch {}

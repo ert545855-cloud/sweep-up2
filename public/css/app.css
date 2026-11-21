@@ -4659,3 +4659,21 @@ html.kb-open .sheet { bottom: var(--kb, 0px); transition: bottom .12s ease-out; 
   .pr-nav.prev { left: 6px; } .pr-nav.next { right: 6px; }
 }
 .pr-nav.next svg { transform: scaleX(-1); }
+
+/* Bilgisayarda yana kayan şeritlerin okları (hscroll.js) */
+.hnav { position: fixed; z-index: 60; width: 34px; height: 34px; margin-top: -17px; border-radius: 50%; display: grid; place-items: center; background: var(--bg); color: var(--text); box-shadow: 0 4px 14px -4px rgba(0,0,0,.4), 0 0 0 1px var(--line); opacity: .94; cursor: pointer; transition: opacity .15s, transform .15s; }
+.hnav[hidden] { display: none; }
+.hnav:hover { opacity: 1; transform: scale(1.08); }
+.hnav svg { width: 18px; height: 18px; }
+.hnav.next svg { transform: scaleX(-1); }
+html.hdrag, html.hdrag * { cursor: grabbing !important; user-select: none !important; }
+
+/* Vitrin: bilgisayarda sağda önceki/sonraki video düğmeleri (fareyle; telefonda gizli) */
+.reels-nav { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .reels-nav { display: grid; gap: 12px; position: fixed; z-index: 26; top: 50%; transform: translateY(-50%); right: max(16px, calc(50% - var(--app-max) / 2 - 64px)); }
+  .reels-nav button { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.14); color: #fff; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .reels-nav button:hover { background: rgba(255,255,255,.26); }
+  .reels-nav button svg { width: 22px; height: 22px; transform: rotate(90deg); }
+  .reels-nav button + button svg { transform: rotate(-90deg); }
+}

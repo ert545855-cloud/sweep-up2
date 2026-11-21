@@ -120,10 +120,22 @@ export default async function reels(view, focusId) {
     paint(t.dataset.t === 'fol' ? all.filter((r) => fol.has(r.user.id)) : all);
   };
 
+  // Bilgisayarda: ↑/↓ (ve Page Up/Down, boşluk) ile önceki/sonraki video; sağda yukarı/aşağı düğmeleri
+  const move = (d) => box.scrollBy({ top: d * box.clientHeight, behavior: 'smooth' });
+  const onKey = (e) => {
+    if (e.target.closest?.('input, textarea, [contenteditable]') || document.querySelector('.sheet')) return;
+    if (e.key === 'ArrowDown' || e.key === 'PageDown' || (e.key === ' ' && !e.shiftKey)) { e.preventDefault(); move(1); }
+    else if (e.key === 'ArrowUp' || e.key === 'PageUp' || (e.key === ' ' && e.shiftKey)) { e.preventDefault(); move(-1); }
+  };
+  document.addEventListener('keydown', onKey);
+  const nav = document.createElement('div'); nav.className = 'reels-nav';
+  nav.innerHTML = `<button aria-label="Önceki video">${icon('back')}</button><button aria-label="Sonraki video">${icon('back')}</button>`;
+  nav.children[0].onclick = () => move(-1); nav.children[1].onclick = () => move(1);
+  view.append(nav);
   const off = on('post:likes', ({ id, likeCount }) => {
     const r = all.find((x) => x.id === id); if (!r) return;
     r.likeCount = likeCount;
     paintLike(box.querySelector(`[data-id="${CSS.escape(id)}"] .like`), r);
   });
-  return () => { io?.disconnect(); off(); edits.forEach((f) => f()); box.querySelectorAll('video').forEach((v) => { v.pause(); v.removeAttribute('src'); v.load(); }); };
+  return () => { document.removeEventListener('keydown', onKey); nav.remove(); io?.disconnect(); off(); edits.forEach((f) => f()); box.querySelectorAll('video').forEach((v) => { v.pause(); v.removeAttribute('src'); v.load(); }); };
 }
