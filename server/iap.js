@@ -255,5 +255,5 @@ module.exports = function iap(app, ctx) {
     const k = req.params.kind === 'apple' ? 'apple' : 'google'; store.update('meta', 'secrets', { iap: { ...sec(), [k]: null } }); if (k === 'google') gTok = null;
     audit(req, `${k === 'google' ? 'Google Play' : 'App Store'} satın alma anahtarını kaldırdı`); res.json(status());
   });
-  ctx.iap = { catalog, enabled: () => ({ google: !!sec().google?.sa, apple: !!sec().apple?.key }) };
+  ctx.iap = { catalog, enabled: () => ({ google: !!sec().google?.sa, apple: !!sec().apple?.key }), google: { token: () => googleToken(), pkg, on: () => !!sec().google?.sa } }; // google: Play ürün eşitlemesi (server/playsync.js) aynı hizmet hesabını kullanır
 };

@@ -2034,6 +2034,7 @@ VIEWS.settings = async (main) => {
     <details class="panel asw-p" hidden style="margin-bottom:14px"><summary class="pb" style="cursor:pointer"><b>Apple ile giriş (web / Android)</b> <span class="muted asw-st" style="font-size:12.5px"></span></summary><div class="pb asw-b"></div></details>
     <details class="panel iap-p" hidden style="margin-bottom:14px"><summary class="pb" style="cursor:pointer"><b>Mağaza içi satın alma</b> <span class="muted iap-st" style="font-size:12.5px"></span></summary><div class="pb iap-b"></div></details>
     <details class="panel asc-p" hidden style="margin-bottom:14px"><summary class="pb" style="cursor:pointer"><b>App Store ürünleri ve fiyatları</b> <span class="muted asc-st" style="font-size:12.5px"></span></summary><div class="pb asc-b"></div></details>
+    <details class="panel gps-p" hidden style="margin-bottom:14px"><summary class="pb" style="cursor:pointer"><b>Google Play ürünleri ve fiyatları</b> <span class="muted gps-st" style="font-size:12.5px"></span></summary><div class="pb gps-b"></div></details>
     <form class="grid g2 eco">
       <div class="panel"><div class="ph"><h3>Havale / EFT bilgileri</h3></div><div class="pb fgrid">
         <label>IBAN<input class="field" name="iban" value="${esc(e.bank.iban)}" placeholder="TR00 0000 0000 0000 0000 0000 00"></label>
@@ -2160,6 +2161,28 @@ VIEWS.settings = async (main) => {
     if (r.running) apT = setTimeout(() => api('/asc').then(ascPaint).catch(() => {}), 2500);
   };
   api('/asc').then(ascPaint).catch(() => {});
+  // Google Play: ürünleri aç, fiyatları paneldeki fiyattan eşitle (Mağaza içi satın alma'daki hizmet hesabıyla)
+  const gp = main.querySelector('.gps-p'); let gpT = null;
+  const gpsPaint = (r) => {
+    gp.hidden = false; clearTimeout(gpT);
+    const bad = r.items.filter((x) => x.err).length; const miss = r.items.filter((x) => !x.state).length;
+    gp.querySelector('.gps-st').textContent = !r.on ? 'Google Play anahtarı yok' : r.running ? 'eşitleniyor…' : bad ? `${bad} üründe hata` : miss ? 'eşitlenmedi' : 'eşit';
+    gp.querySelector('.gps-b').innerHTML = `
+      <p class="muted" style="font-size:13px;margin:0 0 8px">Jeton paketleri ve SwipeUp+ süreleri Play Console'da <b>kendiliğinden açılır</b>, Türkçe adı ve açıklaması yazılır; buradaki fiyat değişince Play fiyatı da güncellenir. Türkiye fiyatı birebir, diğer ülkelerinki Google'ın kur çevirisiyle.</p>
+      ${!r.on ? '<p class="muted" style="font-size:12.5px;margin:0">Önce yukarıdaki <b>Mağaza içi satın alma → Google Play</b> kısmına hizmet hesabı anahtarını kaydet. Play Console → Kullanıcılar ve izinler’de bu hesaba <b>Mağaza varlığını yönetme</b> izni de ver. Uygulama Play Console’a en az bir kez yüklenmiş (dahili test yeterli) ve ödeme profili açılmış olmalı.</p>' : `
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+        <label class="muted" style="font-size:12.5px">Google Play fiyat farkı %<input class="field gps-mk" type="number" min="0" max="100" step="0.5" value="${r.markup}" style="width:80px;margin-left:6px"></label>
+        <label class="muted" style="font-size:12.5px"><input type="checkbox" class="gps-au" ${r.auto ? 'checked' : ''}> Fiyat değişince otomatik gönder</label>
+        <button class="btn sm primary gps-go" ${r.running ? 'disabled' : ''}>${r.running ? 'Eşitleniyor…' : 'Şimdi eşitle'}</button></div>
+      <div class="tw"><table class="tbl"><thead><tr><th>Ürün</th><th>Panel fiyatı</th><th>Google Play</th><th>Durum</th></tr></thead><tbody>${r.items.map((x) => `<tr><td><b>${esc(x.title)}</b><div class="muted mono" style="font-size:11.5px">${esc(x.sku)}</div></td><td>${trl(x.price)}${x.target !== x.price ? `<div class="muted" style="font-size:11.5px">hedef ${trl(x.target)}</div>` : ''}</td><td>${trl(x.play)}${x.pending && x.play != null ? ' <span class="chip">bekliyor</span>' : ''}</td><td>${x.err ? `<span class="chip bad">hata</span> <span class="muted" style="font-size:12px">${esc(x.err)}</span>` : x.state ? `<span class="chip ${x.stateKey === 'ACTIVE' ? 'ok' : ''}">${esc(x.state)}</span>` : '<span class="muted">henüz açılmadı</span>'}</td></tr>`).join('')}</tbody></table></div>
+      ${r.last?.log?.length ? `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer;font-size:12.5px">Son eşitleme kaydı (${dt(r.last.at)})</summary><ul style="font-size:12.5px;margin:6px 0 0;padding-left:18px">${r.last.log.map((l) => `<li${l.err ? ' style="color:var(--bad,#c33)"' : ''}><span class="mono">${esc(l.sku)}</span> ${esc(l.text)}</li>`).join('')}</ul></details>` : ''}`}`;
+    const q = (c) => gp.querySelector(c);
+    if (q('.gps-go')) q('.gps-go').onclick = async () => { try { gpsPaint(await api('/play/sync', { body: {} })); } catch (er) { toast(er.message); } };
+    if (q('.gps-mk')) q('.gps-mk').onchange = async (e) => { try { gpsPaint(await api('/play/settings', { body: { markup: e.target.value } })); toast('Fark kaydedildi.'); } catch (er) { toast(er.message); } };
+    if (q('.gps-au')) q('.gps-au').onchange = async (e) => { try { gpsPaint(await api('/play/settings', { body: { auto: e.target.checked } })); } catch (er) { toast(er.message); } };
+    if (r.running) gpT = setTimeout(() => api('/play').then(gpsPaint).catch(() => {}), 2500);
+  };
+  api('/play').then(gpsPaint).catch(() => {});
   if (evs) wireEventPanel(main, evs);
   roomsPanel(main.querySelector('.rooms-panel'), owner);
   const f = main.querySelector('form');
