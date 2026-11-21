@@ -4,6 +4,7 @@
 // Anahtar: App Store Connect → Kullanıcılar ve Erişim → Entegrasyonlar → Ekip Anahtarları (rol: Uygulama Yöneticisi ya da Yönetici).
 // Bu, satın alma doğrulamasındaki "Uygulama İçi Satın Alma" anahtarından ayrıdır. Anahtar meta/secrets.asc'ta durur, depoya yazılmaz.
 const crypto = require('crypto');
+const express = require('express');
 
 const BASE = process.env.ASC_BASE || 'https://api.appstoreconnect.apple.com';
 const PFX = 'swipeup.';
@@ -144,8 +145,8 @@ module.exports = function ascsync(app, ctx) {
         // İnceleme ekran görüntüsü (panelden bir kez yüklenir, her ürüne eklenir)
         if (shot?.b64 && rec.shot !== shot.hash) {
           let has = false;
-          try { const cur = (await call(`/v2/inAppPurchases/${iap.id}/appStoreReviewScreenshot`)).data; has = !!cur && cur.attributes?.assetDeliveryState?.state !== 'FAILED'; if (cur && !has) await call(`/v1/inAppPurchaseAppStoreReviewScreenshots/${cur.id}`, { method: 'DELETE' }).catch(() => {}); } catch { /* yoksa yüklenir */ }
-          if (!has || force) { await uploadShot(iap.id, shot); done.push('inceleme görseli yüklendi'); }
+          try { const cur = (await call(`/v2/inAppPurchases/${iap.id}/appStoreReviewScreenshot`)).data; if (cur) await call(`/v1/inAppPurchaseAppStoreReviewScreenshots/${cur.id}`, { method: 'DELETE' }); } catch { /* yoksa doğrudan yüklenir */ } // görsel değişti: eskisi (ya da reddedileni) silinir
+          if (!has) { await uploadShot(iap.id, shot); done.push('inceleme görseli yüklendi'); }
           rec.shot = shot.hash;
         }
         rec.miss = await missing(iap.id);
@@ -177,7 +178,7 @@ module.exports = function ascsync(app, ctx) {
   const status = () => {
     const a = sec(); const S = st(); const shot = store.get('meta', 'ascshot');
     return { on: !!a?.key, keyId: a?.keyId || null, issuerId: a?.issuerId || null, appId: a?.appId || null, bundleId: bundle(), at: a?.at || null, markup: +S.markup || 0, auto: S.auto !== false, running: !!running,
-      shot: shot ? { name: shot.name, at: shot.at } : null, last: S.last || null,
+      shot: shot ? { name: shot.name, at: shot.at, size: shot.w ? `${shot.w}×${shot.h}` : null } : null, last: S.last || null,
       items: items().map((it) => { const r = S.synced[it.sku] || {}; return { sku: it.sku, title: it.ref, price: it.price, target: it.target, apple: r.apple ?? null, state: r.state ? (STATE[r.state] || r.state) : null, stateKey: r.state || null, err: r.err || null, miss: r.state === 'MISSING_METADATA' ? (r.miss || []) : [], pending: r.target !== it.target }; }) };
   };
   app.get('/api/admin/asc', ...gate, (req, res) => res.json(status()));
@@ -198,12 +199,28 @@ module.exports = function ascsync(app, ctx) {
     saveSt(p); audit(req, 'App Store fiyat ayarını değiştirdi', JSON.stringify(p)); if (p.markup !== undefined) soon();
     res.json(status());
   });
-  app.post('/api/admin/asc/shot', ...gate, (req, res) => {
-    const m = /^data:image\/(png|jpe?g);base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body?.data || ''));
-    if (!m) return res.status(400).json({ error: 'PNG ya da JPG bir ekran görüntüsü seç.' });
-    const buf = Buffer.from(m[2], 'base64'); if (buf.length > 6e6) return res.status(400).json({ error: 'Görsel en çok 6 MB olabilir.' });
-    store.put('meta', { id: 'ascshot', b64: m[2], name: `inceleme.${m[1] === 'png' ? 'png' : 'jpg'}`, hash: crypto.createHash('sha1').update(buf).digest('hex'), at: now() });
-    audit(req, 'App Store inceleme görselini yükledi'); soon(); res.json(status());
+  // İnceleme görseli: telefon ekran görüntüsü olduğu gibi (küçültmeden) gelir; Apple yalnız cihaz ekran boyutlarını kabul eder
+  const dims = (buf) => {
+    if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47) return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20), t: 'png' };
+    if (buf[0] === 0xff && buf[1] === 0xd8) {
+      for (let i = 2; i + 9 < buf.length;) {
+        if (buf[i] !== 0xff) { i++; continue; }
+        const m = buf[i + 1]; const len = buf.readUInt16BE(i + 2);
+        if (m >= 0xc0 && m <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(m)) return { w: buf.readUInt16BE(i + 7), h: buf.readUInt16BE(i + 5), t: 'jpg' };
+        i += 2 + len;
+      }
+    }
+    return null;
+  };
+  const SIZES = ['1320x2868', '1290x2796', '1260x2736', '1206x2622', '1179x2556', '1284x2778', '1242x2688', '1170x2532', '1125x2436', '1080x2340', '1242x2208', '750x1334', '640x1136', '2064x2752', '2048x2732', '1668x2388', '1640x2360', '1668x2224', '1536x2048'];
+  app.post('/api/admin/asc/shot', ...gate, express.raw({ type: ['image/png', 'image/jpeg'], limit: '10mb' }), (req, res) => {
+    const buf = Buffer.isBuffer(req.body) ? req.body : null;
+    const d = buf && dims(buf);
+    if (!d) return res.status(400).json({ error: 'PNG ya da JPG bir ekran görüntüsü seç.' });
+    const okSize = SIZES.some((x) => { const [w, h] = x.split('x').map(Number); return (d.w === w && d.h === h) || (d.w === h && d.h === w); });
+    if (!okSize) return res.status(400).json({ error: `Bu görsel ${d.w}×${d.h}; Apple telefonun kendi ekran görüntüsünü ister (ör. 1179×2556). Düzenlenmemiş, kırpılmamış bir ekran görüntüsü seç.` });
+    store.put('meta', { id: 'ascshot', b64: buf.toString('base64'), name: `inceleme.${d.t}`, hash: crypto.createHash('sha1').update(buf).digest('hex'), w: d.w, h: d.h, at: now() });
+    audit(req, 'App Store inceleme görselini yükledi', `${d.w}x${d.h}`); soon(); res.json(status());
   });
   app.post('/api/admin/asc/sync', ...gate, (req, res) => {
     if (!sec()) return res.status(400).json({ error: 'Önce App Store Connect anahtarını kaydet.' });
